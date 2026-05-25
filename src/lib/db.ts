@@ -38,6 +38,7 @@ export interface Match {
   result: 'WIN' | 'LOSS';
   videoUrl?: string;
   ratingChange: number;
+  aiAnalysis?: any; // Shot analysis results
   createdAt: Timestamp;
 }
 

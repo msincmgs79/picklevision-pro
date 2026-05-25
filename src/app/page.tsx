@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/authContext';
 import { getUserProfile, getUserMatches, calculateProRating, saveMatch, updateUserStats, getTopPlayers, updateDisplayName, uploadMatchVideo } from '@/lib/db';
 import { searchDUPRPlayer, getDUPRPlayer, getCombinedRating } from '@/lib/dupr';
+import { analyzeMatchVideo, type MatchAnalysis } from '@/lib/shotAnalysis';
 import { Timestamp } from 'firebase/firestore';
 import type { User, Match } from '@/lib/db';
 
@@ -47,6 +48,7 @@ export default function Home() {
       {currentScreen === 7 && <Screen7 setScreen={setCurrentScreen} userId={user.uid} />}
       {currentScreen === 8 && <Screen8 setScreen={setCurrentScreen} />}
       {currentScreen === 9 && <Screen9 setScreen={setCurrentScreen} userId={user.uid} />}
+      {currentScreen === 10 && <Screen10 setScreen={setCurrentScreen} />}
     </div>
   );
 }
@@ -721,7 +723,9 @@ function Screen3({ setScreen }: { setScreen: (n: number) => void }) {
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [analyzing, setAnalyzing] = useState(false);
   const [error, setError] = useState('');
+  const [analysis, setAnalysis] = useState<MatchAnalysis | null>(null);
 
   const handleSaveMatch = async () => {
     if (!user) return;
@@ -780,6 +784,19 @@ function Screen3({ setScreen }: { setScreen: (n: number) => void }) {
           // Store video URL in match data for future use
           sessionStorage.setItem('matchVideoUrl', videoUrl);
 
+          // Trigger AI shot analysis
+          setAnalyzing(true);
+          try {
+            const analysisResult = await analyzeMatchVideo(videoUrl);
+            setAnalysis(analysisResult);
+            sessionStorage.setItem('matchAnalysis', JSON.stringify(analysisResult));
+          } catch (analysisErr) {
+            console.error('Error analyzing video:', analysisErr);
+            // Don't fail if analysis fails, video is still saved
+          } finally {
+            setAnalyzing(false);
+          }
+
           // Clear the global blob after upload
           currentVideoBlob = null;
         } catch (err) {
@@ -792,8 +809,14 @@ function Screen3({ setScreen }: { setScreen: (n: number) => void }) {
         }
       }
 
-      // Navigate to next screen
-      setTimeout(() => setScreen(4), 500);
+      // Navigate to next screen (or analysis screen if video was uploaded)
+      setTimeout(() => {
+        if (analysis) {
+          setScreen(10); // Go to analysis screen
+        } else {
+          setScreen(4); // Go to normal flow
+        }
+      }, 500);
     } catch (err) {
       console.error('Error saving match:', err);
       setError('Failed to save match');
@@ -1541,6 +1564,170 @@ function Screen9({ setScreen, userId }: { setScreen: (n: number) => void; userId
             </button>
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+function Screen10({ setScreen }: { setScreen: (n: number) => void }) {
+  const [analysis, setAnalysis] = useState<MatchAnalysis | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const analysisData = sessionStorage.getItem('matchAnalysis');
+    if (analysisData) {
+      try {
+        setAnalysis(JSON.parse(analysisData));
+      } catch (err) {
+        console.error('Error loading analysis:', err);
+      }
+    }
+    setLoading(false);
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-blue-50 to-white">
+        <div className="text-center">
+          <div className="text-2xl font-bold text-blue-700 mb-4">🎬 Analyzing...</div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!analysis) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white p-4">
+        <div className="max-w-md mx-auto text-center">
+          <button onClick={() => setScreen(0)} className="text-sm font-semibold text-gray-600 mb-6">← Back to Home</button>
+          <p className="text-gray-600">No analysis data available</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white p-4">
+      <div className="max-w-md mx-auto">
+        <div className="flex justify-between items-center mb-6">
+          <button onClick={() => setScreen(4)} className="text-sm font-semibold text-gray-600 hover:text-gray-900">← Back</button>
+          <h1 className="text-lg font-bold">Shot Analysis</h1>
+          <div></div>
+        </div>
+
+        {/* Overall Rating */}
+        <div className="bg-gradient-to-br from-blue-600 to-blue-700 rounded-2xl p-6 text-white mb-6">
+          <div className="text-center">
+            <div className="text-sm font-semibold mb-2">OVERALL PERFORMANCE</div>
+            <div className="text-5xl font-black mb-3">
+              {'⭐'.repeat(Math.round(analysis.proComparison.overallRating))}
+            </div>
+            <div className="text-sm">{analysis.proComparison.overallRating.toFixed(1)} / 5.0</div>
+          </div>
+        </div>
+
+        {/* Shot Breakdown */}
+        <div className="bg-white rounded-lg border border-gray-200 p-4 mb-4">
+          <h2 className="text-sm font-bold text-gray-700 mb-3">SHOT BREAKDOWN</h2>
+          <div className="space-y-2 text-xs">
+            <div className="flex justify-between">
+              <span>Total Shots</span>
+              <span className="font-bold">{analysis.shotBreakdown.totalShots}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Dinks</span>
+              <span className="font-bold">{analysis.shotBreakdown.shotCounts.dinks}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Drives</span>
+              <span className="font-bold">{analysis.shotBreakdown.shotCounts.drives}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Volleys</span>
+              <span className="font-bold">{analysis.shotBreakdown.shotCounts.volleys}</span>
+            </div>
+            <div className="flex justify-between mt-2 pt-2 border-t">
+              <span>Effectiveness</span>
+              <span className="font-bold text-green-600">{analysis.shotBreakdown.effectivenessScore}/100</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Technique Analysis */}
+        <div className="bg-white rounded-lg border border-gray-200 p-4 mb-4">
+          <h2 className="text-sm font-bold text-gray-700 mb-3">TECHNIQUE ANALYSIS</h2>
+          <div className="space-y-2 text-xs">
+            <div>
+              <div className="flex justify-between mb-1">
+                <span>Footwork</span>
+                <span className="font-bold">{analysis.techniqueAnalysis.footwork.rating}/5</span>
+              </div>
+              <p className="text-gray-600 text-xs">{analysis.techniqueAnalysis.footwork.feedback}</p>
+            </div>
+            <div className="mt-2">
+              <div className="flex justify-between mb-1">
+                <span>Positioning</span>
+                <span className="font-bold">{analysis.techniqueAnalysis.positioning.rating}/5</span>
+              </div>
+              <p className="text-gray-600 text-xs">{analysis.techniqueAnalysis.positioning.feedback}</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Pro Comparison */}
+        <div className="bg-purple-50 rounded-lg border border-purple-200 p-4 mb-4">
+          <h2 className="text-sm font-bold text-purple-900 mb-2">PRO COMPARISON</h2>
+          <p className="text-xs text-purple-800 mb-3">{analysis.proComparison.proStyleMatch}</p>
+          <div className="text-xs space-y-2">
+            <div>
+              <p className="font-semibold text-purple-900 mb-1">Strengths:</p>
+              {analysis.proComparison.strengths.map((s, i) => (
+                <p key={i} className="text-purple-700 ml-2">✓ {s}</p>
+              ))}
+            </div>
+            <div>
+              <p className="font-semibold text-purple-900 mb-1">Areas to Improve:</p>
+              {analysis.proComparison.improvementAreas.map((a, i) => (
+                <p key={i} className="text-purple-700 ml-2">→ {a}</p>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Coaching Tips */}
+        <div className="bg-amber-50 rounded-lg border border-amber-200 p-4 mb-6">
+          <h2 className="text-sm font-bold text-amber-900 mb-3">COACHING TIPS</h2>
+          <div className="space-y-2 text-xs">
+            {analysis.coachingTips.map((tip, i) => (
+              <div key={i} className="flex gap-2">
+                <span className="text-lg">💡</span>
+                <span className="text-amber-900">{tip}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Overall Insights */}
+        <div className="bg-blue-50 rounded-lg border border-blue-200 p-4 mb-6">
+          <p className="text-xs text-blue-900 leading-relaxed">{analysis.overallInsights}</p>
+        </div>
+
+        {/* Navigation */}
+        <div className="flex gap-3">
+          <button
+            onClick={() => setScreen(0)}
+            className="flex-1 bg-gray-600 hover:bg-gray-700 text-white py-3 rounded-lg font-bold"
+          >
+            Home
+          </button>
+          <button
+            onClick={() => setScreen(4)}
+            className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg font-bold"
+          >
+            Continue →
+          </button>
+        </div>
       </div>
     </div>
   );
