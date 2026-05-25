@@ -19,6 +19,8 @@ export interface User {
   uid: string;
   email: string;
   displayName?: string;
+  duprId?: string; // DUPR player ID for live ratings
+  duprRating?: number; // Live DUPR rating from DUPR API
   proRating: number;
   wins: number;
   losses: number;

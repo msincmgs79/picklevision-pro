@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/authContext';
 import { getUserProfile, getUserMatches, calculateProRating, saveMatch, updateUserStats, getTopPlayers, updateDisplayName, uploadMatchVideo } from '@/lib/db';
+import { searchDUPRPlayer, getDUPRPlayer, getCombinedRating } from '@/lib/dupr';
 import { Timestamp } from 'firebase/firestore';
 import type { User, Match } from '@/lib/db';
 
@@ -56,6 +57,8 @@ function Screen0({ setScreen, userId }: { setScreen: (n: number) => void; userId
   const [recentMatches, setRecentMatches] = useState<(Match & { id: string })[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
+  const [duprRating, setDuprRating] = useState<number | null>(null);
+  const [syncingDUPR, setSyncingDUPR] = useState(false);
   const { logout } = useAuth();
 
   useEffect(() => {
@@ -64,6 +67,30 @@ function Screen0({ setScreen, userId }: { setScreen: (n: number) => void; userId
         const profile = await getUserProfile(userId);
         if (profile) {
           setUserProfile(profile);
+
+          // Try to fetch DUPR rating
+          if (profile.duprId) {
+            try {
+              const duprPlayer = await getDUPRPlayer(profile.duprId);
+              if (duprPlayer) {
+                const rating = getCombinedRating(duprPlayer);
+                setDuprRating(rating);
+              }
+            } catch (err) {
+              console.error('Error fetching DUPR rating:', err);
+            }
+          } else if (profile.email) {
+            // Try searching by email if no DUPR ID stored
+            try {
+              const duprPlayer = await searchDUPRPlayer(profile.email);
+              if (duprPlayer) {
+                const rating = getCombinedRating(duprPlayer);
+                setDuprRating(rating);
+              }
+            } catch (err) {
+              console.error('Error searching DUPR player:', err);
+            }
+          }
         }
         const matches = await getUserMatches(userId, 5);
         setRecentMatches(matches);
@@ -108,6 +135,28 @@ function Screen0({ setScreen, userId }: { setScreen: (n: number) => void; userId
               📊 Analytics
             </button>
             <button
+              onClick={async () => {
+                if (!userProfile?.email) return;
+                setSyncingDUPR(true);
+                try {
+                  const duprPlayer = await searchDUPRPlayer(userProfile.email);
+                  if (duprPlayer) {
+                    const rating = getCombinedRating(duprPlayer);
+                    setDuprRating(rating);
+                  }
+                } catch (err) {
+                  console.error('Error syncing DUPR:', err);
+                } finally {
+                  setSyncingDUPR(false);
+                }
+              }}
+              disabled={syncingDUPR}
+              className="text-blue-600 hover:text-blue-700 font-semibold text-sm disabled:opacity-50"
+              title="Sync with DUPR"
+            >
+              {syncingDUPR ? '⏳' : '🔄'} DUPR
+            </button>
+            <button
               onClick={() => setScreen(9)}
               className="text-purple-600 hover:text-purple-700 font-semibold text-sm"
             >
@@ -121,13 +170,15 @@ function Screen0({ setScreen, userId }: { setScreen: (n: number) => void; userId
         ) : (
           <>
             <div className="bg-gradient-to-br from-green-600 to-green-700 rounded-3xl p-6 text-white mb-6">
-              <div className="text-sm font-semibold mb-2">YOUR PRO RATING</div>
+              <div className="text-sm font-semibold mb-2">YOUR DUPR RATING</div>
               <div className="text-6xl font-black mb-2">
-                {userProfile?.proRating?.toFixed(2) || '2.00'}
+                {duprRating ? duprRating.toFixed(2) : (userProfile?.proRating?.toFixed(2) || '2.00')}
               </div>
-              <div className="bg-green-500/40 inline-block px-4 py-1 rounded-full text-sm mb-4">
-                ↑ {userProfile?.wins || 0} wins
-              </div>
+              {duprRating && (
+                <div className="bg-green-500/40 inline-block px-2 py-1 rounded-full text-xs mb-3">
+                  🔄 Live from DUPR
+                </div>
+              )}
               <div className="text-sm">
                 {userProfile?.wins || 0} wins • {userProfile?.losses || 0} losses
               </div>
