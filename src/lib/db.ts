@@ -176,3 +176,33 @@ export function calculateProRating(wins: number, losses: number): number {
   const winRate = wins / total;
   return Math.round((2.0 + winRate * 2.0) * 100) / 100; // Rating from 2.0 to 4.0
 }
+
+// Save standalone video
+export async function saveStandaloneVideo(userId: string, videoUrl: string, title?: string) {
+    const videosRef = collection(db, 'videos');
+    const newDocRef = doc(videosRef);
+    const videoData = {
+          userId,
+          videoUrl,
+          title: title || 'Uploaded Video',
+          uploadedAt: Timestamp.now()
+    };
+    await setDoc(newDocRef, videoData);
+    return newDocRef.id;
+}
+
+// Get user's videos (both match videos and standalone uploads)
+export async function getUserVideos(userId: string, limitCount: number = 10) {
+    const videosRef = collection(db, 'videos');
+    const q = query(
+          videosRef,
+          where('userId', '==', userId),
+          orderBy('uploadedAt', 'desc'),
+          limit(limitCount)
+        );
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+    })) as (Video & { id: string })[];
+}
