@@ -101,6 +101,12 @@ function Screen0({ setScreen, userId }: { setScreen: (n: number) => void; userId
               🏆 Leaderboard
             </button>
             <button
+              onClick={() => setScreen(7)}
+              className="text-green-600 hover:text-green-700 font-semibold text-sm"
+            >
+              📊 Analytics
+            </button>
+            <button
               onClick={() => setScreen(9)}
               className="text-purple-600 hover:text-purple-700 font-semibold text-sm"
             >
@@ -126,14 +132,14 @@ function Screen0({ setScreen, userId }: { setScreen: (n: number) => void; userId
               </div>
             </div>
 
-            <div className="flex gap-2 mb-6 border-b border-gray-200">
-              {['matches', 'winrate', 'avgrating'].map((t) => {
-                const labels = { matches: 'MATCHES', winrate: 'WIN RATE', avgrating: 'AVG RATING' };
+            <div className="flex gap-2 mb-6 border-b border-gray-200 overflow-x-auto">
+              {['matches', 'winrate', 'avgrating', 'videos', 'analytics'].map((t) => {
+                const labels = { matches: 'MATCHES', winrate: 'WIN RATE', avgrating: 'AVG RATING', videos: 'VIDEOS', analytics: 'ANALYTICS' };
                 return (
                   <button
                     key={t}
                     onClick={() => setTab(t)}
-                    className={`flex-1 py-3 text-xs font-semibold ${
+                    className={`py-3 text-xs font-semibold whitespace-nowrap ${
                       tab === t
                         ? 'text-green-700 border-b-2 border-green-700'
                         : 'text-gray-400'
@@ -216,6 +222,83 @@ function Screen0({ setScreen, userId }: { setScreen: (n: number) => void; userId
                     <div className="text-xs text-gray-500 mt-4">
                       Based on win/loss record
                     </div>
+                  </div>
+                </>
+              )}
+
+              {tab === 'videos' && (
+                <>
+                  <h3 className="text-xs font-bold text-gray-500 mb-3 uppercase">
+                    Uploaded Videos
+                  </h3>
+                  <div className="space-y-2">
+                    {recentMatches.filter(m => m.videoUrl).length > 0 ? (
+                      recentMatches.filter(m => m.videoUrl).map((match) => (
+                        <div
+                          key={match.id}
+                          className="bg-white p-4 rounded-lg border border-gray-200 flex items-center gap-3"
+                        >
+                          <div className="text-2xl">🎥</div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold text-gray-700 truncate">
+                              vs {match.opponent}
+                            </p>
+                            <p className="text-xs text-gray-500">
+                              {match.date?.toDate?.()?.toLocaleDateString()}
+                            </p>
+                          </div>
+                          <span className={`text-xs font-bold px-2 py-1 rounded ${
+                            match.result === 'WIN' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                          }`}>
+                            {match.result}
+                          </span>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-sm text-gray-500 py-4">No videos uploaded yet. Record a match with video to get started!</p>
+                    )}
+                  </div>
+                </>
+              )}
+
+              {tab === 'analytics' && (
+                <>
+                  <h3 className="text-xs font-bold text-gray-500 mb-3 uppercase">
+                    Quick Analytics
+                  </h3>
+                  <div className="space-y-3">
+                    <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
+                      <p className="text-xs font-semibold text-blue-900 mb-2">CAREER STATS</p>
+                      <div className="grid grid-cols-3 gap-2 text-center">
+                        <div>
+                          <p className="text-lg font-bold text-blue-600">{userProfile?.wins || 0}</p>
+                          <p className="text-xs text-gray-600">Wins</p>
+                        </div>
+                        <div>
+                          <p className="text-lg font-bold text-gray-600">{(userProfile?.wins || 0) + (userProfile?.losses || 0)}</p>
+                          <p className="text-xs text-gray-600">Total</p>
+                        </div>
+                        <div>
+                          <p className="text-lg font-bold text-red-600">{userProfile?.losses || 0}</p>
+                          <p className="text-xs text-gray-600">Losses</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="bg-purple-50 rounded-lg p-4 border border-purple-200">
+                      <p className="text-xs font-semibold text-purple-900 mb-2">RATING PROGRESS</p>
+                      <div className="flex items-center gap-3">
+                        <div className="text-3xl font-bold text-purple-600">{userProfile?.proRating?.toFixed(2)}</div>
+                        <div className="flex-1">
+                          <div className="w-full bg-gray-300 rounded-full h-2">
+                            <div className="bg-purple-600 h-full rounded-full" style={{width: `${((userProfile?.proRating || 2) - 1) / 3 * 100}%`}}></div>
+                          </div>
+                          <p className="text-xs text-gray-600 mt-1">1.0 ← → 4.0</p>
+                        </div>
+                      </div>
+                    </div>
+                    <button onClick={() => setScreen(7)} className="w-full bg-purple-600 hover:bg-purple-700 text-white text-sm font-semibold py-2 rounded-lg">
+                      View Full Analytics →
+                    </button>
                   </div>
                 </>
               )}
