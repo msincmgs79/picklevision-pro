@@ -55,6 +55,7 @@ function Screen0({ setScreen, userId }: { setScreen: (n: number) => void; userId
   const [userProfile, setUserProfile] = useState<User | null>(null);
   const [recentMatches, setRecentMatches] = useState<(Match & { id: string })[]>([]);
   const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
   const { logout } = useAuth();
 
   useEffect(() => {
@@ -229,8 +230,37 @@ function Screen0({ setScreen, userId }: { setScreen: (n: number) => void; userId
               {tab === 'videos' && (
                 <>
                   <h3 className="text-xs font-bold text-gray-500 mb-3 uppercase">
-                    Uploaded Videos
+                    My Videos
                   </h3>
+
+                  <label className="w-full bg-purple-600 hover:bg-purple-700 text-white py-3 rounded-lg font-semibold text-center cursor-pointer block mb-4">
+                    {uploading ? '⏳ Uploading...' : '📁 Upload Video File'}
+                    <input
+                      type="file"
+                      accept="video/*"
+                      disabled={uploading}
+                      onChange={async (e) => {
+                        if (e.target.files?.[0]) {
+                          const file = e.target.files[0];
+                          setUploading(true);
+                          try {
+                            await uploadMatchVideo(userId, `standalone_${Date.now()}`, file, (progress) => {
+                              console.log(`Upload progress: ${Math.round(progress * 100)}%`);
+                            });
+                            alert('✅ Video uploaded successfully!');
+                            // Refresh the page to see the new video
+                            setTimeout(() => window.location.reload(), 500);
+                          } catch (err) {
+                            console.error('Upload failed:', err);
+                            alert('❌ Upload failed. Please try again.');
+                            setUploading(false);
+                          }
+                        }
+                      }}
+                      className="hidden"
+                    />
+                  </label>
+
                   <div className="space-y-2">
                     {recentMatches.filter(m => m.videoUrl).length > 0 ? (
                       recentMatches.filter(m => m.videoUrl).map((match) => (
@@ -255,7 +285,7 @@ function Screen0({ setScreen, userId }: { setScreen: (n: number) => void; userId
                         </div>
                       ))
                     ) : (
-                      <p className="text-sm text-gray-500 py-4">No videos uploaded yet. Record a match with video to get started!</p>
+                      <p className="text-sm text-gray-500 py-4 text-center">No videos yet. Upload or record a match with video!</p>
                     )}
                   </div>
                 </>
@@ -470,10 +500,34 @@ function Screen1({ setScreen }: { setScreen: (n: number) => void }) {
           </div>
 
           <div className="border-t pt-4">
-            <label className="block text-sm font-semibold text-gray-700 mb-2">Match Video (Optional)</label>
+            <label className="block text-sm font-semibold text-gray-700 mb-3">Match Video (Optional)</label>
+
+            <div className="flex gap-2 mb-4">
+              <button
+                onClick={() => setShowVideoRecorder(!showVideoRecorder)}
+                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg font-semibold text-sm"
+              >
+                {showVideoRecorder ? '🎬 Recording' : '🎬 Record Video'}
+              </button>
+              <label className="flex-1 bg-purple-600 hover:bg-purple-700 text-white py-2 rounded-lg font-semibold text-sm cursor-pointer flex items-center justify-center">
+                📁 Upload File
+                <input
+                  type="file"
+                  accept="video/*"
+                  onChange={(e) => {
+                    if (e.target.files?.[0]) {
+                      setVideoBlob(e.target.files[0]);
+                      currentVideoBlob = e.target.files[0];
+                    }
+                  }}
+                  className="hidden"
+                />
+              </label>
+            </div>
+
             {videoBlob ? (
               <div className="bg-green-50 border border-green-300 rounded-lg p-3 mb-3">
-                <p className="text-sm text-green-700 font-semibold">✓ Video recorded ({Math.round(videoBlob.size / 1024 / 1024 * 100) / 100} MB)</p>
+                <p className="text-sm text-green-700 font-semibold">✓ Video selected ({Math.round(videoBlob.size / 1024 / 1024 * 100) / 100} MB)</p>
                 <button
                   onClick={() => {
                     setVideoBlob(null);
