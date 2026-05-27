@@ -1725,4 +1725,38 @@ function Screen10({ setScreen }: { setScreen: (n: number) => void }) {
                 <span>Footwork</span>
                 <span className="font-bold">{analysis.techniqueAnalysis.footwork.rating}/5</span>
               </div>
-    
+              <p className="text-gray-600 text-xs">{analysis.techniqueAnalysis.footwork.feedback}</p>
+            </div>
+            <div className="mt-2">
+              <div className="flex justify-between mb-1">
+                <span>Positioning</span>
+                <span className="font-bold">{analysis.techniqueAnalysis.positioning.rating}/5</span>
+              </div>
+              <p className="text-gray-600 text-xs">{analysis.techniqueAnalysis.positioning.feedback}</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Pro Comparison */}
+        <div className="bg-purple-50 rounded-lg border border-purple-200 p-4 mb-4">
+          <h2 className="text-sm font-bold text-purple-900 mb-2">PRO COMPARISON</h2>
+          <p className="text-xs text-purple-800 mb-3">{analysis.proComparison.proStyleMatch}</p>
+          <div className="text-xs space-y-2">
+            <div>
+              <p className="font-semibold text-purple-900 mb-1">Strengths:</p>
+              {analysis.proComparison.strengths.map((s, i) => (
+                <p key={i} className="text-purple-700 ml-2">✓ {s}</p>
+              ))}
+            </div>
+            <div>
+              <p className="font-semibold text-purple-900 mb-1">Areas to Improve:</p>
+              {analysis.proComparison.improvementAreas.map((area, i) => (
+                <p key={i} className="text-purple-700 ml-2">• {area}</p>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
