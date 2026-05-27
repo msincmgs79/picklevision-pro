@@ -62,6 +62,8 @@ function Screen0({ setScreen, userId }: { setScreen: (n: number) => void; userId
   const [uploading, setUploading] = useState(false);
   const [duprRating, setDuprRating] = useState<number | null>(null);
   const [syncingDUPR, setSyncingDUPR] = useState(false);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [analyzingVideoId, setAnalyzingVideoId] = useState<string | null>(null);
   const { logout } = useAuth();
 
   useEffect(() => {
@@ -356,6 +358,27 @@ function Screen0({ setScreen, userId }: { setScreen: (n: number) => void; userId
                             >
                               Watch
                             </a>
+                            <button
+                              onClick={async () => {
+                                if (analyzing) return;
+                                setAnalyzing(true);
+                                setAnalyzingVideoId(video.id);
+                                try {
+                                  const analysis = await analyzeMatchVideo(video.videoUrl);
+                                  sessionStorage.setItem('matchAnalysis', JSON.stringify(analysis));
+                                  setScreen(10);
+                                } catch (err: any) {
+                                  console.error('Analysis failed:', err);
+                                  alert('❌ Analysis failed: ' + (err?.message || 'Unknown error'));
+                                  setAnalyzing(false);
+                                  setAnalyzingVideoId(null);
+                                }
+                              }}
+                              disabled={analyzing && analyzingVideoId === video.id}
+                              className="text-xs font-bold px-2 py-1 rounded bg-green-100 text-green-700 hover:bg-green-200 disabled:opacity-50"
+                            >
+                              {analyzing && analyzingVideoId === video.id ? '⏳ Analyzing...' : '📊 Analyze'}
+                            </button>
                             <button
                               onClick={async () => {
                                 if (confirm('Are you sure you want to delete this video?')) {
@@ -1702,38 +1725,4 @@ function Screen10({ setScreen }: { setScreen: (n: number) => void }) {
                 <span>Footwork</span>
                 <span className="font-bold">{analysis.techniqueAnalysis.footwork.rating}/5</span>
               </div>
-              <p className="text-gray-600 text-xs">{analysis.techniqueAnalysis.footwork.feedback}</p>
-            </div>
-            <div className="mt-2">
-              <div className="flex justify-between mb-1">
-                <span>Positioning</span>
-                <span className="font-bold">{analysis.techniqueAnalysis.positioning.rating}/5</span>
-              </div>
-              <p className="text-gray-600 text-xs">{analysis.techniqueAnalysis.positioning.feedback}</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Pro Comparison */}
-        <div className="bg-purple-50 rounded-lg border border-purple-200 p-4 mb-4">
-          <h2 className="text-sm font-bold text-purple-900 mb-2">PRO COMPARISON</h2>
-          <p className="text-xs text-purple-800 mb-3">{analysis.proComparison.proStyleMatch}</p>
-          <div className="text-xs space-y-2">
-            <div>
-              <p className="font-semibold text-purple-900 mb-1">Strengths:</p>
-              {analysis.proComparison.strengths.map((s, i) => (
-                <p key={i} className="text-purple-700 ml-2">✓ {s}</p>
-              ))}
-            </div>
-            <div>
-              <p className="font-semibold text-purple-900 mb-1">Areas to Improve:</p>
-              {analysis.proComparison.improvementAreas.map((area, i) => (
-                <p key={i} className="text-purple-700 ml-2">• {area}</p>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
+    
