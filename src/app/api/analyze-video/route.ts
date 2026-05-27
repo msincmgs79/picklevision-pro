@@ -33,7 +33,8 @@ export async function POST(request: NextRequest) {
     // If we got frames, analyze them with Claude Vision
     if (frames.length > 0) {
       try {
-        const content: Anthropic.Messages.ContentBlockParam[] = [];
+        // Build content array with frames and prompt
+        const content: Array<{ type: string; source?: { type: string; media_type: string; data: string }; text?: string }> = [];
         
         // Add extracted frames as images
         for (const frame of frames) {
@@ -44,7 +45,7 @@ export async function POST(request: NextRequest) {
               media_type: 'image/jpeg',
               data: frame,
             },
-          } as Anthropic.Messages.ContentBlockParam);
+          });
         }
 
         // Add analysis prompt
@@ -57,7 +58,7 @@ export async function POST(request: NextRequest) {
 3. Game style: Is it aggressive (drives/smashes) or defensive (dinks/drops)?
 4. Key observations: What are 3-5 key insights about the player's game?
 
-Respond in JSON format:
+Respond in JSON format only:
 {
   "shotCounts": {
     "dinks": number,
@@ -69,15 +70,15 @@ Respond in JSON format:
     "serves": number
   },
   "technique": {
-    "footwork": 1-100,
-    "positioning": 1-100,
-    "consistency": 1-100
+    "footwork": number,
+    "positioning": number,
+    "consistency": number
   },
   "gameStyle": "aggressive|defensive|balanced",
   "insights": ["insight1", "insight2", "insight3"],
   "totalShots": number
 }`,
-        } as Anthropic.Messages.ContentBlockParam);
+        });
 
         // Analyze with Claude Vision
         const analysisResponse = await client.messages.create({
@@ -86,7 +87,7 @@ Respond in JSON format:
           messages: [
             {
               role: 'user',
-              content: content,
+              content: content as Anthropic.Messages.MessageParam['content'],
             }
           ],
         });
