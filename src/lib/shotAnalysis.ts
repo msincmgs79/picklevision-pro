@@ -299,4 +299,46 @@ function generateImprovementAreas(breakdown: ShotBreakdown, technique: Technique
   if (technique.footwork.rating < 4) {
     improvements.push('Improve small step footwork near the net');
   }
-  if (breakd
+  if (breakdown.effectivenessScore < 60) {
+    improvements.push('Work on shot consistency and accuracy');
+  }
+  if (technique.balance.rating < 4) {
+    improvements.push('Maintain better balance through shots');
+  }
+
+  return improvements.length > 0 ? improvements : ['Continue working on consistency'];
+}
+
+function generateCoachingTips(
+  technique: TechniqueAnalysis,
+  breakdown: ShotBreakdown,
+  proComparison: ProComparison
+): string[] {
+  return [
+    technique.footwork.feedback,
+    technique.positioning.feedback,
+    `Focus on ${proComparison.improvementAreas[0] || 'shot consistency'}`,
+    'Always stay ready with your paddle up near the net for quick reactions',
+    'Practice your third shot drops - they can be game changers',
+    'Work on your soft hands to control the kitchen better',
+  ];
+}
+
+function generateOverallInsights(
+  breakdown: ShotBreakdown,
+  technique: TechniqueAnalysis,
+  proComparison: ProComparison
+): string {
+  const avgTechnique = (technique.footwork.rating + technique.positioning.rating +
+    technique.racketTechnique.rating + technique.balance.rating) / 4;
+
+  return `Your match shows ${
+    avgTechnique >= 4 ? 'strong' : 'solid'
+  } fundamental technique with ${
+    breakdown.aggressivenessScore > 50 ? 'an aggressive' : 'a balanced'
+  } playing style. You're playing similarly to ${
+    proComparison.proStyleMatch.split(' - ')[0]
+  }. Focus on ${
+    proComparison.improvementAreas[0] || 'consistency'
+  } to elevate your game to the next level. Keep working on your net game and court positioning.`;
+}
