@@ -320,9 +320,9 @@ function Screen0({ setScreen, userId }: { setScreen: (n: number) => void; userId
                               console.log('Reloading page...');
                               window.location.reload();
                             }, 1500);
-                          } catch (err) {
+                          } catch (err: any) {
                             console.error('Upload failed:', err);
-                            alert('❌ Upload failed: ' + err.message);
+                            alert('❌ Upload failed: ' + (err?.message || 'Unknown error'));
                             setUploading(false);
                           }
                         }
