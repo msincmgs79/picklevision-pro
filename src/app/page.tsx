@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/authContext';
-import { getUserProfile, getUserMatches, calculateProRating, saveMatch, updateUserStats, getTopPlayers, updateDisplayName, uploadMatchVideo, saveStandaloneVideo, getUserVideos } from '@/lib/db';
+import { getUserProfile, getUserMatches, calculateProRating, saveMatch, updateUserStats, getTopPlayers, updateDisplayName, uploadMatchVideo, saveStandaloneVideo, getUserVideos, deleteVideo } from '@/lib/db';
 import { searchDUPRPlayer, getDUPRPlayer, getCombinedRating } from '@/lib/dupr';
 import { analyzeMatchVideo, type MatchAnalysis } from '@/lib/shotAnalysis';
 import { Timestamp } from 'firebase/firestore';
@@ -347,14 +347,33 @@ function Screen0({ setScreen, userId }: { setScreen: (n: number) => void; userId
                               {video.uploadedAt?.toDate?.()?.toLocaleDateString() || 'Recently uploaded'}
                             </p>
                           </div>
-                          <a
-                            href={video.videoUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-xs font-bold px-2 py-1 rounded bg-blue-100 text-blue-700 hover:bg-blue-200"
-                          >
-                            Watch
-                          </a>
+                          <div className="flex gap-2">
+                            <a
+                              href={video.videoUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-xs font-bold px-2 py-1 rounded bg-blue-100 text-blue-700 hover:bg-blue-200"
+                            >
+                              Watch
+                            </a>
+                            <button
+                              onClick={async () => {
+                                if (confirm('Are you sure you want to delete this video?')) {
+                                  try {
+                                    await deleteVideo(video.id, video.videoUrl);
+                                    setUserVideos(userVideos.filter(v => v.id !== video.id));
+                                    alert('✅ Video deleted successfully!');
+                                  } catch (err: any) {
+                                    console.error('Delete failed:', err);
+                                    alert('❌ Delete failed: ' + (err?.message || 'Unknown error'));
+                                  }
+                                }
+                              }}
+                              className="text-xs font-bold px-2 py-1 rounded bg-red-100 text-red-700 hover:bg-red-200"
+                            >
+                              Delete
+                            </button>
+                          </div>
                         </div>
                       ))
                     ) : (
@@ -1708,47 +1727,4 @@ function Screen10({ setScreen }: { setScreen: (n: number) => void }) {
             </div>
             <div>
               <p className="font-semibold text-purple-900 mb-1">Areas to Improve:</p>
-              {analysis.proComparison.improvementAreas.map((a, i) => (
-                <p key={i} className="text-purple-700 ml-2">→ {a}</p>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Coaching Tips */}
-        <div className="bg-amber-50 rounded-lg border border-amber-200 p-4 mb-6">
-          <h2 className="text-sm font-bold text-amber-900 mb-3">COACHING TIPS</h2>
-          <div className="space-y-2 text-xs">
-            {analysis.coachingTips.map((tip, i) => (
-              <div key={i} className="flex gap-2">
-                <span className="text-lg">💡</span>
-                <span className="text-amber-900">{tip}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Overall Insights */}
-        <div className="bg-blue-50 rounded-lg border border-blue-200 p-4 mb-6">
-          <p className="text-xs text-blue-900 leading-relaxed">{analysis.overallInsights}</p>
-        </div>
-
-        {/* Navigation */}
-        <div className="flex gap-3">
-          <button
-            onClick={() => setScreen(0)}
-            className="flex-1 bg-gray-600 hover:bg-gray-700 text-white py-3 rounded-lg font-bold"
-          >
-            Home
-          </button>
-          <button
-            onClick={() => setScreen(4)}
-            className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg font-bold"
-          >
-            Continue →
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
+              {analysis.proComparison.improve

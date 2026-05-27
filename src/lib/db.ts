@@ -9,10 +9,11 @@ import {
   orderBy,
   limit,
   updateDoc,
+  deleteDoc,
   Timestamp
 } from 'firebase/firestore';
 import { db, storage } from './firebase';
-import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
+import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage';
 
 // User data type
 export interface User {
@@ -207,5 +208,4 @@ export async function getUserVideos(
     return querySnapshot.docs.map(doc => ({
           id: doc.id,
           ...doc.data()
-    })) as Array<{ id: string; userId: string; videoUrl: string; title?: string; uploadedAt: Timestamp }>;
-}
+    })) as Array<{ id: string; userId: string; videoUrl: string; title?: string; up
