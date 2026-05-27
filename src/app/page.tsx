@@ -1727,19 +1727,13 @@ function Screen10({ setScreen }: { setScreen: (n: number) => void }) {
             </div>
             <div>
               <p className="font-semibold text-purple-900 mb-1">Areas to Improve:</p>
-              {analysis.proComparison.improvements.map((improvement, i) => (
-                <p key={i} className="text-purple-700 ml-2">• {improvement}</p>
+              {analysis.proComparison.improvementAreas.map((area, i) => (
+                <p key={i} className="text-purple-700 ml-2">• {area}</p>
               ))}
             </div>
           </div>
         </div>
-
-        {/* Next Steps */}
-        <div className="bg-blue-50 rounded-lg border border-blue-200 p-4 mb-6">
-          <h2 className="text-sm font-bold text-blue-900 mb-2">NEXT STEPS</h2>
-          <p className="text-xs text-blue-800">{analysis.proComparison.nextSteps}</p>
-        </div>
       </div>
     </div>
   );
-}
+}                                                                                                                                                                                                                                                                                                          
