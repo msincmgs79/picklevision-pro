@@ -208,4 +208,32 @@ export async function getUserVideos(
     return querySnapshot.docs.map(doc => ({
           id: doc.id,
           ...doc.data()
-    })) as Array<{ id: string; userId: string; videoUrl: string; title?: string; up
+    })) as Array<{ id: string; userId: string; videoUrl: string; title?: string; uploadedAt: Timestamp }>;
+
+// Delete video from Firestore and Cloud Storage
+export async function deleteVideo(videoId: string, videoUrl: string) {
+  try {
+    // Delete Firestore document
+    const videoRef = doc(db, 'videos', videoId);
+    await deleteDoc(videoRef);
+
+    // Delete file from Cloud Storage
+    try {
+      // Extract file path from download URL
+      const url = new URL(videoUrl);
+      const pathParts = url.pathname.split('/o/')[1].split('?')[0];
+      const filePath = decodeURIComponent(pathParts);
+      const storageRef = ref(storage, filePath);
+      await deleteObject(storageRef);
+    } catch (storageError) {
+      console.warn('Could not delete file from Cloud Storage:', storageError);
+      // Continue anyway since Firestore document was deleted
+    }
+
+    return true;
+  } catch (error) {
+    console.error('Error deleting video:', error);
+    throw error;
+  }
+}
+}
