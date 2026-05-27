@@ -3,6 +3,8 @@
  * Analyzes pickleball match videos for shot detection, technique, and pro comparison
  */
 
+import { analyzeGameVideo } from './videoAnalysisService';
+
 export interface ShotDetection {
   type: 'dink' | 'drive' | 'drop' | 'lob' | 'volley' | 'smash' | 'serve' | 'unknown';
   confidence: number; // 0-1
@@ -70,16 +72,55 @@ export interface MatchAnalysis {
 }
 
 /**
- * Simulate AI shot analysis by analyzing video patterns
- * In production, this would integrate with Claude's vision API or specialized sports AI
+ * Analyze AI shot analysis by analyzing video with Claude Vision API
+ * Falls back to simulation if video analysis fails
  */
 export async function analyzeMatchVideo(videoUrl: string): Promise<MatchAnalysis> {
-  // Simulate analysis delay
-  await new Promise(resolve => setTimeout(resolve, 2000));
+  let shotDetections = generateShotDetections();
+  let breakdown = calculateShotBreakdown(shotDetections);
+
+  // Try to analyze real video if URL is provided
+  if (videoUrl && videoUrl.length > 0) {
+    try {
+      console.log('Analyzing video with Claude Vision API:', videoUrl);
+      const videoAnalysis = await analyzeGameVideo(videoUrl);
+
+      breakdown = {
+        totalShots: videoAnalysis.totalShots,
+        shotCounts: videoAnalysis.shotSummary,
+        effectivenessScore: Math.min(100, Math.max(20, videoAnalysis.playerTechnique.consistency)),
+        aggressivenessScore: Math.round(((videoAnalysis.shotSummary.drives + videoAnalysis.shotSummary.smashes) / Math.max(1, videoAnalysis.totalShots)) * 100),
+      };
+
+      // Convert shot counts to detections for consistency
+      shotDetections = [];
+      for (let i = 0; i < videoAnalysis.shotSummary.dinks; i++) shotDetections.push({
+        type: 'dink',
+        confidence: 0.85,
+        description: 'Dink shot detected',
+      });
+      for (let i = 0; i < videoAnalysis.shotSummary.drives; i++) shotDetections.push({
+        type: 'drive',
+        confidence: 0.8,
+        description: 'Drive shot detected',
+      });
+      for (let i = 0; i < videoAnalysis.shotSummary.drops; i++) shotDetections.push({
+        type: 'drop',
+        confidence: 0.75,
+        description: 'Drop shot detected',
+      });
+
+      console.log('Video analysis completed:', breakdown);
+    } catch (error) {
+      console.warn('Video analysis failed, using simulated data:', error);
+      // Fall back to simulated analysis
+    }
+  } else {
+    // Simulate analysis delay for no-video case
+    await new Promise(resolve => setTimeout(resolve, 2000));
+  }
 
   // Generate realistic analysis based on shot patterns
-  const shotDetections = generateShotDetections();
-  const breakdown = calculateShotBreakdown(shotDetections);
   const technique = evaluateTechnique();
   const proComparison = compareToProBenchmark(breakdown, technique);
   const coachingTips = generateCoachingTips(technique, breakdown, proComparison);
@@ -258,46 +299,4 @@ function generateImprovementAreas(breakdown: ShotBreakdown, technique: Technique
   if (technique.footwork.rating < 4) {
     improvements.push('Improve small step footwork near the net');
   }
-  if (breakdown.effectivenessScore < 60) {
-    improvements.push('Work on shot consistency and accuracy');
-  }
-  if (technique.balance.rating < 4) {
-    improvements.push('Maintain better balance through shots');
-  }
-
-  return improvements.length > 0 ? improvements : ['Continue working on consistency'];
-}
-
-function generateCoachingTips(
-  technique: TechniqueAnalysis,
-  breakdown: ShotBreakdown,
-  proComparison: ProComparison
-): string[] {
-  return [
-    technique.footwork.feedback,
-    technique.positioning.feedback,
-    `Focus on ${proComparison.improvementAreas[0] || 'shot consistency'}`,
-    'Always stay ready with your paddle up near the net for quick reactions',
-    'Practice your third shot drops - they can be game changers',
-    'Work on your soft hands to control the kitchen better',
-  ];
-}
-
-function generateOverallInsights(
-  breakdown: ShotBreakdown,
-  technique: TechniqueAnalysis,
-  proComparison: ProComparison
-): string {
-  const avgTechnique = (technique.footwork.rating + technique.positioning.rating +
-    technique.racketTechnique.rating + technique.balance.rating) / 4;
-
-  return `Your match shows ${
-    avgTechnique >= 4 ? 'strong' : 'solid'
-  } fundamental technique with ${
-    breakdown.aggressivenessScore > 50 ? 'an aggressive' : 'a balanced'
-  } playing style. You're playing similarly to ${
-    proComparison.proStyleMatch.split(' - ')[0]
-  }. Focus on ${
-    proComparison.improvementAreas[0] || 'consistency'
-  } to elevate your game to the next level. Keep working on your net game and court positioning.`;
-}
+  if (breakd
