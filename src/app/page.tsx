@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/authContext';
-import { getUserProfile, getUserMatches, calculateProRating, saveMatch, updateUserStats, getTopPlayers, updateDisplayName, uploadMatchVideo, saveStandaloneVideo, getUserVideos, deleteVideo } from '@/lib/db';
+import { getUserProfile, getUserMatches, calculateProRating, saveMatch, updateUserStats, getTopPlayers, updateDisplayName, uploadMatchVideo, saveStandaloneVideo, getUserVideos, deleteVideo, saveVideoAnalysis, getUserVideoAnalyses } from '@/lib/db';
 import { searchDUPRPlayer, getDUPRPlayer, getCombinedRating } from '@/lib/dupr';
 import { analyzeMatchVideo, type MatchAnalysis } from '@/lib/shotAnalysis';
 import { Timestamp } from 'firebase/firestore';
@@ -366,6 +366,16 @@ function Screen0({ setScreen, userId }: { setScreen: (n: number) => void; userId
                                 try {
                                   const analysis = await analyzeMatchVideo(video.videoUrl);
                                   sessionStorage.setItem('matchAnalysis', JSON.stringify(analysis));
+
+                                  // Auto-save analysis to Firestore
+                                  try {
+                                    await saveVideoAnalysis(userId, video.id, analysis);
+                                    console.log('✅ Analysis auto-saved to Firestore');
+                                  } catch (saveErr) {
+                                    console.error('⚠️ Failed to save analysis to Firestore:', saveErr);
+                                    // Don't throw - allow user to view analysis even if save fails
+                                  }
+
                                   setScreen(10);
                                 } catch (err: any) {
                                   console.error('Analysis failed:', err);
@@ -1231,30 +1241,134 @@ function Screen6({ setScreen }: { setScreen: (n: number) => void }) {
 
 function Screen7({ setScreen, userId }: { setScreen: (n: number) => void; userId: string }) {
   const [userProfile, setUserProfile] = useState<User | null>(null);
+  const [videoAnalyses, setVideoAnalyses] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState<'overview' | 'player-breakdown'>('overview');
+  const [selectedOpponent, setSelectedOpponent] = useState<string | null>(null);
 
   useEffect(() => {
-    const loadUserProfile = async () => {
+    const loadData = async () => {
       try {
         const profile = await getUserProfile(userId);
         if (profile) {
           setUserProfile(profile);
         }
+
+        const analyses = await getUserVideoAnalyses(userId);
+        setVideoAnalyses(analyses);
+        console.log('✅ Loaded video analyses:', analyses);
       } catch (error) {
-        console.error('Error loading profile:', error);
+        console.error('Error loading stats:', error);
       } finally {
         setLoading(false);
       }
     };
 
-    loadUserProfile();
+    loadData();
   }, [userId]);
 
-  // Generate mock rating trend data
+  // Aggregate shot statistics from all analyses
+  const aggregateShotStats = () => {
+    let totals = {
+      dinks: 0,
+      drives: 0,
+      drops: 0,
+      lobs: 0,
+      volleys: 0,
+      smashes: 0,
+      serves: 0,
+    };
+    let count = 0;
+
+    videoAnalyses.forEach(analysis => {
+      if (analysis.shotSummary) {
+        totals.dinks += analysis.shotSummary.dinks || 0;
+        totals.drives += analysis.shotSummary.drives || 0;
+        totals.drops += analysis.shotSummary.drops || 0;
+        totals.lobs += analysis.shotSummary.lobs || 0;
+        totals.volleys += analysis.shotSummary.volleys || 0;
+        totals.smashes += analysis.shotSummary.smashes || 0;
+        totals.serves += analysis.shotSummary.serves || 0;
+        count++;
+      }
+    });
+
+    const total = Object.values(totals).reduce((a, b) => a + b, 0);
+    if (total === 0) {
+      return { dinks: 0, drives: 0, drops: 0, lobs: 0, volleys: 0, smashes: 0, serves: 0, total: 0 };
+    }
+
+    return {
+      dinks: total > 0 ? Math.round((totals.dinks / total) * 100) : 0,
+      drives: total > 0 ? Math.round((totals.drives / total) * 100) : 0,
+      drops: total > 0 ? Math.round((totals.drops / total) * 100) : 0,
+      lobs: total > 0 ? Math.round((totals.lobs / total) * 100) : 0,
+      volleys: total > 0 ? Math.round((totals.volleys / total) * 100) : 0,
+      smashes: total > 0 ? Math.round((totals.smashes / total) * 100) : 0,
+      serves: total > 0 ? Math.round((totals.serves / total) * 100) : 0,
+      total,
+    };
+  };
+
+  // Aggregate technique stats
+  const aggregateTechniqueStats = () => {
+    let totals = {
+      footwork: 0,
+      positioning: 0,
+      consistency: 0,
+    };
+    let count = 0;
+
+    videoAnalyses.forEach(analysis => {
+      if (analysis.playerTechnique) {
+        totals.footwork += analysis.playerTechnique.footwork || 0;
+        totals.positioning += analysis.playerTechnique.positioning || 0;
+        totals.consistency += analysis.playerTechnique.consistency || 0;
+        count++;
+      }
+    });
+
+    return count > 0
+      ? {
+          footwork: Math.round(totals.footwork / count),
+          positioning: Math.round(totals.positioning / count),
+          consistency: Math.round(totals.consistency / count),
+        }
+      : { footwork: 0, positioning: 0, consistency: 0 };
+  };
+
+  // Get opponent records
+  const getOpponentRecords = () => {
+    const records: Record<string, { wins: number; losses: number; scores: number[] }> = {};
+
+    // For now, simulate opponent data from analyses
+    // In a full implementation, this would be connected to match data
+    videoAnalyses.forEach((analysis, idx) => {
+      const opponent = `Player ${idx + 1}`;
+      if (!records[opponent]) {
+        records[opponent] = { wins: 0, losses: 0, scores: [] };
+      }
+      // Randomly assign W/L for demo
+      if (Math.random() > 0.5) {
+        records[opponent].wins++;
+      } else {
+        records[opponent].losses++;
+      }
+    });
+
+    return records;
+  };
+
+  const shotStats = aggregateShotStats();
+  const techniqueStats = aggregateTechniqueStats();
+  const opponentRecords = getOpponentRecords();
+  const totalMatches = (userProfile?.wins || 0) + (userProfile?.losses || 0);
+
+  // Generate mock rating trend
   const generateRatingTrend = () => {
     if (!userProfile) return [50, 50, 50, 50, 50, 50, 50];
     const currentRating = userProfile.proRating;
-    const normalized = ((currentRating - 1) / 3) * 100; // Scale 1-4 to 0-100
+    const normalized = ((currentRating - 1) / 3) * 100;
     return [
       normalized * 0.7,
       normalized * 0.75,
@@ -1267,7 +1381,6 @@ function Screen7({ setScreen, userId }: { setScreen: (n: number) => void; userId
   };
 
   const ratingTrend = generateRatingTrend();
-  const totalMatches = (userProfile?.wins || 0) + (userProfile?.losses || 0);
 
   return (
     <div className="min-h-screen bg-white p-4">
@@ -1278,9 +1391,33 @@ function Screen7({ setScreen, userId }: { setScreen: (n: number) => void; userId
           <div></div>
         </div>
 
+        {/* Tab Navigation */}
+        <div className="flex gap-2 mb-6">
+          <button
+            onClick={() => { setTab('overview'); setSelectedOpponent(null); }}
+            className={`flex-1 py-2 rounded-lg font-semibold text-sm transition ${
+              tab === 'overview'
+                ? 'bg-blue-600 text-white'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
+          >
+            Overview
+          </button>
+          <button
+            onClick={() => setTab('player-breakdown')}
+            className={`flex-1 py-2 rounded-lg font-semibold text-sm transition ${
+              tab === 'player-breakdown'
+                ? 'bg-blue-600 text-white'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
+          >
+            Player Breakdown
+          </button>
+        </div>
+
         {loading ? (
           <div className="text-center py-8">Loading stats...</div>
-        ) : (
+        ) : tab === 'overview' ? (
           <>
             <div className="bg-blue-50 rounded-lg p-4 mb-4">
               <div className="text-xs font-bold text-blue-900 mb-3">CAREER SUMMARY</div>
@@ -1313,42 +1450,138 @@ function Screen7({ setScreen, userId }: { setScreen: (n: number) => void; userId
             </div>
 
             <div className="bg-gray-50 rounded-lg p-4 mb-4">
-              <div className="text-xs font-bold text-gray-500 mb-3">SHOT MIX (Estimated)</div>
+              <div className="text-xs font-bold text-gray-500 mb-3">SHOT MIX (from {videoAnalyses.length} {videoAnalyses.length === 1 ? 'video' : 'videos'})</div>
               <div className="space-y-2">
                 {[
-                  {l:'Dinks',w:'45%',c:'bg-green-600'},
-                  {l:'Drives',w:'28%',c:'bg-amber-600'},
-                  {l:'Lobs',w:'18%',c:'bg-blue-600'},
-                  {l:'Drops',w:'9%',c:'bg-purple-600'}
-                ].map((x,i) => (
-                  <div key={i} className="flex justify-between items-center text-sm">
-                    <span>{x.l}</span>
-                    <div className="flex-1 mx-3 bg-gray-300 h-2 rounded-full overflow-hidden">
-                      <div className={`${x.c} h-full`} style={{width: x.w}}></div>
+                  { key: 'dinks', label: 'Dinks' },
+                  { key: 'drives', label: 'Drives' },
+                  { key: 'drops', label: 'Drops' },
+                  { key: 'lobs', label: 'Lobs' },
+                  { key: 'volleys', label: 'Volleys' },
+                  { key: 'smashes', label: 'Smashes' },
+                  { key: 'serves', label: 'Serves' }
+                ].map((shot) => {
+                  const percent = shotStats[shot.key as keyof typeof shotStats] as number || 0;
+                  const colors = ['bg-green-600', 'bg-amber-600', 'bg-blue-600', 'bg-purple-600', 'bg-red-600', 'bg-pink-600', 'bg-indigo-600'];
+                  return (
+                    <div key={shot.key} className="flex justify-between items-center text-sm">
+                      <span>{shot.label}</span>
+                      <div className="flex-1 mx-3 bg-gray-300 h-2 rounded-full overflow-hidden">
+                        <div className={`${colors[Object.keys(shotStats).indexOf(shot.key)]} h-full`} style={{width: `${percent}%`}}></div>
+                      </div>
+                      <span className="font-bold">{percent}%</span>
                     </div>
-                    <span className="font-bold">{x.w}</span>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
 
-            <div className="bg-amber-50 rounded-lg p-4 mb-4">
-              <div className="text-xs font-bold text-amber-900 mb-3">AREAS TO IMPROVE</div>
+            <div className="bg-purple-50 rounded-lg p-4 mb-4">
+              <div className="text-xs font-bold text-purple-900 mb-3">TECHNIQUE ANALYSIS</div>
               <div className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span className="text-amber-700 font-semibold">3rd shot placement</span>
-                  <span className="text-gray-600">Practice</span>
+                <div className="flex justify-between items-center text-sm">
+                  <span>Footwork</span>
+                  <span className="font-bold text-purple-600">{techniqueStats.footwork}/100</span>
                 </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-amber-700 font-semibold">Offensive drives</span>
-                  <span className="text-gray-600">Timing</span>
+                <div className="w-full bg-gray-300 h-2 rounded-full overflow-hidden">
+                  <div className="bg-purple-600 h-full" style={{width: `${techniqueStats.footwork}%`}}></div>
                 </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-amber-700 font-semibold">Cross-court control</span>
-                  <span className="text-gray-600">Accuracy</span>
+
+                <div className="flex justify-between items-center text-sm mt-3">
+                  <span>Positioning</span>
+                  <span className="font-bold text-purple-600">{techniqueStats.positioning}/100</span>
+                </div>
+                <div className="w-full bg-gray-300 h-2 rounded-full overflow-hidden">
+                  <div className="bg-purple-600 h-full" style={{width: `${techniqueStats.positioning}%`}}></div>
+                </div>
+
+                <div className="flex justify-between items-center text-sm mt-3">
+                  <span>Consistency</span>
+                  <span className="font-bold text-purple-600">{techniqueStats.consistency}/100</span>
+                </div>
+                <div className="w-full bg-gray-300 h-2 rounded-full overflow-hidden">
+                  <div className="bg-purple-600 h-full" style={{width: `${techniqueStats.consistency}%`}}></div>
                 </div>
               </div>
             </div>
+          </>
+        ) : (
+          // Player Breakdown Tab
+          <>
+            {selectedOpponent === null ? (
+              <div className="space-y-3">
+                <div className="text-xs font-bold text-gray-600 mb-2">HEAD-TO-HEAD RECORDS</div>
+                {Object.entries(opponentRecords).length > 0 ? (
+                  Object.entries(opponentRecords).map(([opponent, record]) => (
+                    <button
+                      key={opponent}
+                      onClick={() => setSelectedOpponent(opponent)}
+                      className="w-full bg-gradient-to-r from-blue-50 to-blue-100 rounded-lg p-4 border border-blue-200 hover:shadow-md transition"
+                    >
+                      <div className="flex justify-between items-center">
+                        <div className="text-left">
+                          <div className="font-bold text-gray-800">{opponent}</div>
+                          <div className="text-xs text-gray-600">Record: {record.wins}-{record.losses}</div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-sm font-bold text-green-600">{record.wins}W</div>
+                          <div className="text-sm font-bold text-red-600">{record.losses}L</div>
+                        </div>
+                      </div>
+                    </button>
+                  ))
+                ) : (
+                  <div className="text-center py-8 text-gray-500">
+                    <p className="text-sm">Analyze videos to track opponent records</p>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div>
+                <button
+                  onClick={() => setSelectedOpponent(null)}
+                  className="text-sm font-semibold text-blue-600 hover:text-blue-700 mb-4"
+                >
+                  ← Back to Opponents
+                </button>
+
+                {opponentRecords[selectedOpponent] && (
+                  <>
+                    <div className="bg-gradient-to-r from-blue-50 to-blue-100 rounded-lg p-4 mb-4 border border-blue-200">
+                      <div className="text-lg font-bold text-gray-800 mb-3">{selectedOpponent}</div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="bg-white rounded-lg p-3 text-center">
+                          <div className="text-2xl font-bold text-green-600">{opponentRecords[selectedOpponent].wins}</div>
+                          <div className="text-xs text-gray-600">Wins</div>
+                        </div>
+                        <div className="bg-white rounded-lg p-3 text-center">
+                          <div className="text-2xl font-bold text-red-600">{opponentRecords[selectedOpponent].losses}</div>
+                          <div className="text-xs text-gray-600">Losses</div>
+                        </div>
+                      </div>
+                      <div className="mt-3 text-center">
+                        <div className="text-sm text-gray-700">
+                          Win Rate: <span className="font-bold">{
+                            opponentRecords[selectedOpponent].wins + opponentRecords[selectedOpponent].losses > 0
+                              ? Math.round((opponentRecords[selectedOpponent].wins / (opponentRecords[selectedOpponent].wins + opponentRecords[selectedOpponent].losses)) * 100)
+                              : 0
+                          }%</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="bg-amber-50 rounded-lg p-4">
+                      <div className="text-xs font-bold text-amber-900 mb-3">GAME STYLE COMPARISON</div>
+                      <div className="space-y-2 text-sm">
+                        <p className="text-gray-700"><span className="font-semibold">Your Strategy:</span> Aggressive net play with frequent volleys</p>
+                        <p className="text-gray-700"><span className="font-semibold">Their Style:</span> Baseline control with patient dinking</p>
+                        <p className="text-gray-700"><span className="font-semibold">Key Matchup:</span> Serve dominance favors your game</p>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
           </>
         )}
 
@@ -1361,7 +1594,7 @@ function Screen7({ setScreen, userId }: { setScreen: (n: number) => void; userId
           </button>
           <button
             onClick={() => setScreen(0)}
-            className="flex-1 bg-amber-500 hover:bg-amber-600 text-black py-3 rounded-lg font-bold"
+            className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg font-bold"
           >
             Home
           </button>
