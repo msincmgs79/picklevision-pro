@@ -20,8 +20,8 @@ export interface User {
   uid: string;
   email: string;
   displayName?: string;
-  duprId?: string; // DUPR player ID for live ratings
-  duprRating?: number; // Live DUPR rating from DUPR API
+  duprId?: string;
+  duprRating?: number;
   proRating: number;
   wins: number;
   losses: number;
@@ -39,11 +39,10 @@ export interface Match {
   result: 'WIN' | 'LOSS';
   videoUrl?: string;
   ratingChange: number;
-  aiAnalysis?: any; // Shot analysis results
+  aiAnalysis?: any;
   createdAt: Timestamp;
 }
 
-// Create/update user profile
 export async function createUserProfile(uid: string, email: string, displayName?: string) {
   const userRef = doc(db, 'users', uid);
   const userData: User = {
@@ -59,7 +58,6 @@ export async function createUserProfile(uid: string, email: string, displayName?
   return userData;
 }
 
-// Update user display name
 export async function updateDisplayName(uid: string, displayName: string) {
   const userRef = doc(db, 'users', uid);
   await updateDoc(userRef, {
@@ -67,7 +65,6 @@ export async function updateDisplayName(uid: string, displayName: string) {
   });
 }
 
-// Upload match video to Firebase Cloud Storage with progress tracking
 export async function uploadMatchVideo(
   userId: string,
   matchId: string,
@@ -78,9 +75,7 @@ export async function uploadMatchVideo(
     const timestamp = Date.now();
     const fileName = `matches/${userId}/${matchId}_${timestamp}.webm`;
     const storageRef = ref(storage, fileName);
-
     const uploadTask = uploadBytesResumable(storageRef, videoBlob);
-
     return new Promise((resolve, reject) => {
       uploadTask.on(
         'state_changed',
@@ -109,14 +104,12 @@ export async function uploadMatchVideo(
   }
 }
 
-// Get user profile
 export async function getUserProfile(uid: string): Promise<User | null> {
   const userRef = doc(db, 'users', uid);
   const docSnap = await getDoc(userRef);
   return docSnap.exists() ? (docSnap.data() as User) : null;
 }
 
-// Save match
 export async function saveMatch(userId: string, match: Omit<Match, 'id' | 'userId' | 'createdAt'>) {
   const matchRef = collection(db, 'matches');
   const newDocRef = doc(matchRef);
@@ -129,7 +122,6 @@ export async function saveMatch(userId: string, match: Omit<Match, 'id' | 'userI
   return newDocRef.id;
 }
 
-// Get user's recent matches
 export async function getUserMatches(userId: string, limitCount: number = 5) {
   const matchesRef = collection(db, 'matches');
   const q = query(
@@ -145,7 +137,6 @@ export async function getUserMatches(userId: string, limitCount: number = 5) {
   })) as (Match & { id: string })[];
 }
 
-// Update user stats
 export async function updateUserStats(uid: string, wins: number, losses: number, proRating: number) {
   const userRef = doc(db, 'users', uid);
   await updateDoc(userRef, {
@@ -155,7 +146,6 @@ export async function updateUserStats(uid: string, wins: number, losses: number,
   });
 }
 
-// Get top players for leaderboard
 export async function getTopPlayers(limitCount: number = 20) {
   const usersRef = collection(db, 'users');
   const q = query(
@@ -170,56 +160,49 @@ export async function getTopPlayers(limitCount: number = 20) {
   })) as (User & { uid: string })[];
 }
 
-// Calculate pro rating based on wins/losses
 export function calculateProRating(wins: number, losses: number): number {
   const total = wins + losses;
   if (total === 0) return 2.0;
   const winRate = wins / total;
-  return Math.round((2.0 + winRate * 2.0) * 100) / 100; // Rating from 2.0 to 4.0
+  return Math.round((2.0 + winRate * 2.0) * 100) / 100;
 }
 
-// Save standalone video
 export async function saveStandaloneVideo(userId: string, videoUrl: string, title?: string) {
-    const videosRef = collection(db, 'videos');
-    const newDocRef = doc(videosRef);
-    const videoData = {
-          userId,
-          videoUrl,
-          title: title || 'Uploaded Video',
-          uploadedAt: Timestamp.now()
-    };
-    await setDoc(newDocRef, videoData);
-    return newDocRef.id;
+  const videosRef = collection(db, 'videos');
+  const newDocRef = doc(videosRef);
+  const videoData = {
+    userId,
+    videoUrl,
+    title: title || 'Uploaded Video',
+    uploadedAt: Timestamp.now()
+  };
+  await setDoc(newDocRef, videoData);
+  return newDocRef.id;
 }
 
-// Get user's videos (both match videos and standalone uploads)
 export async function getUserVideos(
   userId: string,
   limitCount: number = 10
 ): Promise<Array<{ id: string; userId: string; videoUrl: string; title?: string; uploadedAt: Timestamp }>> {
-    const videosRef = collection(db, 'videos');
-    const q = query(
-          videosRef,
-          where('userId', '==', userId),
-          orderBy('uploadedAt', 'desc'),
-          limit(limitCount)
-        );
-    const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-    })) as Array<{ id: string; userId: string; videoUrl: string; title?: string; uploadedAt: Timestamp }>;
+  const videosRef = collection(db, 'videos');
+  const q = query(
+    videosRef,
+    where('userId', '==', userId),
+    orderBy('uploadedAt', 'desc'),
+    limit(limitCount)
+  );
+  const querySnapshot = await getDocs(q);
+  return querySnapshot.docs.map(doc => ({
+    id: doc.id,
+    ...doc.data()
+  })) as Array<{ id: string; userId: string; videoUrl: string; title?: string; uploadedAt: Timestamp }>;
+}
 
-// Delete video from Firestore and Cloud Storage
 export async function deleteVideo(videoId: string, videoUrl: string) {
   try {
-    // Delete Firestore document
     const videoRef = doc(db, 'videos', videoId);
     await deleteDoc(videoRef);
-
-    // Delete file from Cloud Storage
     try {
-      // Extract file path from download URL
       const url = new URL(videoUrl);
       const pathParts = url.pathname.split('/o/')[1].split('?')[0];
       const filePath = decodeURIComponent(pathParts);
@@ -227,13 +210,10 @@ export async function deleteVideo(videoId: string, videoUrl: string) {
       await deleteObject(storageRef);
     } catch (storageError) {
       console.warn('Could not delete file from Cloud Storage:', storageError);
-      // Continue anyway since Firestore document was deleted
     }
-
     return true;
   } catch (error) {
     console.error('Error deleting video:', error);
     throw error;
   }
-}
 }
