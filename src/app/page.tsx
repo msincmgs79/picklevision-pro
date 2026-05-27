@@ -307,15 +307,22 @@ function Screen0({ setScreen, userId }: { setScreen: (n: number) => void; userId
                               console.log(`Upload progress: ${Math.round(progress * 100)}%`);
                             });
 
+                            console.log('Video uploaded to Cloud Storage:', videoUrl);
+
                             // Save video metadata to Firestore
                             await saveStandaloneVideo(userId, videoUrl, file.name);
 
+                            console.log('Video metadata saved to Firestore');
+
                             alert('✅ Video uploaded successfully!');
                             // Refresh the page to see the new video
-                            setTimeout(() => window.location.reload(), 500);
+                            setTimeout(() => {
+                              console.log('Reloading page...');
+                              window.location.reload();
+                            }, 1500);
                           } catch (err) {
                             console.error('Upload failed:', err);
-                            alert('❌ Upload failed. Please try again.');
+                            alert('❌ Upload failed: ' + err.message);
                             setUploading(false);
                           }
                         }
