@@ -87,7 +87,16 @@ export async function analyzeMatchVideo(videoUrl: string): Promise<MatchAnalysis
 
       breakdown = {
         totalShots: videoAnalysis.totalShots,
-        shotCounts: videoAnalysis.shotSummary,
+        shotCounts: {
+          dinks: videoAnalysis.shotSummary.dinks,
+          drives: videoAnalysis.shotSummary.drives,
+          drops: videoAnalysis.shotSummary.drops,
+          lobs: videoAnalysis.shotSummary.lobs,
+          volleys: videoAnalysis.shotSummary.volleys,
+          smashes: videoAnalysis.shotSummary.smashes,
+          serves: videoAnalysis.shotSummary.serves,
+          unknown: 0,
+        },
         effectivenessScore: Math.min(100, Math.max(20, videoAnalysis.playerTechnique.consistency)),
         aggressivenessScore: Math.round(((videoAnalysis.shotSummary.drives + videoAnalysis.shotSummary.smashes) / Math.max(1, videoAnalysis.totalShots)) * 100),
       };
