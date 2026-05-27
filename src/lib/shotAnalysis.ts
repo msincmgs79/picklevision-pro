@@ -54,6 +54,19 @@ export interface ProComparison {
   proStyleMatch: string; // e.g., "Darius Bazin - defensive style"
 }
 
+export interface PlayerClothing {
+  shirtColor: string; // e.g., "Red", "Blue", "Black", "White"
+  shortsColor: string; // e.g., "White", "Black", "Navy"
+  position?: 'left' | 'right' | 'front' | 'back'; // Estimated position in frame
+}
+
+export interface DetectedPlayer {
+  playerId: 1 | 2 | 3 | 4; // Player 1-4 (supports doubles)
+  clothing: PlayerClothing;
+  description: string; // e.g., "Red shirt, white shorts"
+  team?: 'A' | 'B'; // For doubles: A = your team, B = opponent's team
+}
+
 export interface MatchAnalysis {
   videoUrl: string;
   analysisDate: string;
@@ -63,6 +76,8 @@ export interface MatchAnalysis {
   proComparison: ProComparison;
   coachingTips: string[];
   overallInsights: string;
+  detectedPlayers?: DetectedPlayer[]; // NEW: Player clothing colors
+  opponentClothing?: PlayerClothing; // NEW: Store opponent's clothing
   rallySummary: {
     totalRallies: number;
     avgRallyLength: number;
@@ -133,6 +148,7 @@ export async function analyzeMatchVideo(videoUrl: string): Promise<MatchAnalysis
   const technique = evaluateTechnique();
   const proComparison = compareToProBenchmark(breakdown, technique);
   const coachingTips = generateCoachingTips(technique, breakdown, proComparison);
+  const detectedPlayers = generateDetectedPlayers();
 
   return {
     videoUrl,
@@ -142,6 +158,7 @@ export async function analyzeMatchVideo(videoUrl: string): Promise<MatchAnalysis
     techniqueAnalysis: technique,
     proComparison: proComparison,
     coachingTips: coachingTips,
+    detectedPlayers: detectedPlayers,
     overallInsights: generateOverallInsights(breakdown, technique, proComparison),
     rallySummary: {
       totalRallies: Math.floor(breakdown.totalShots / 8),
@@ -333,21 +350,4 @@ function generateCoachingTips(
   ];
 }
 
-function generateOverallInsights(
-  breakdown: ShotBreakdown,
-  technique: TechniqueAnalysis,
-  proComparison: ProComparison
-): string {
-  const avgTechnique = (technique.footwork.rating + technique.positioning.rating +
-    technique.racketTechnique.rating + technique.balance.rating) / 4;
-
-  return `Your match shows ${
-    avgTechnique >= 4 ? 'strong' : 'solid'
-  } fundamental technique with ${
-    breakdown.aggressivenessScore > 50 ? 'an aggressive' : 'a balanced'
-  } playing style. You're playing similarly to ${
-    proComparison.proStyleMatch.split(' - ')[0]
-  }. Focus on ${
-    proComparison.improvementAreas[0] || 'consistency'
-  } to elevate your game to the next level. Keep working on your net game and court positioning.`;
-}
+function generateO

@@ -1,0 +1,163 @@
+╔════════════════════════════════════════════════════════════════════════════╗
+║                      PICKLEVISION PRO - QUICK DEPLOY                        ║
+║                          May 27, 2026 - Analytics Fix                        ║
+╚════════════════════════════════════════════════════════════════════════════╝
+
+WHAT WAS FIXED
+══════════════════════════════════════════════════════════════════════════════
+
+✅ Shot breakdown now shows correct percentages instead of 0%
+✅ Opponent names are captured and displayed
+✅ Player breakdown groups videos by actual opponent name
+✅ Fixed data aggregation to use correct Firestore structure
+
+═════════════════════════════════════════════════════════════════════════════
+
+WHAT CHANGED
+══════════════════════════════════════════════════════════════════════════════
+
+File: src/app/page.tsx (Main application file)
+
+Changes:
+1. Added opponent name modal (appears after video analysis)
+2. Fixed aggregateShotStats() function
+3. Fixed aggregateTechniqueStats() function
+4. Fixed getOpponentRecords() function
+5. Modified analyze button to show modal instead of instant save
+
+No database changes needed - just the aggregation logic
+
+═════════════════════════════════════════════════════════════════════════════
+
+DEPLOY IN 5 STEPS
+══════════════════════════════════════════════════════════════════════════════
+
+Step 1: COMMIT THE CODE
+────────────────────────────────────────────────────────────────────────────
+
+  cd ~/picklevision-pro
+  git add -A
+  git commit -m "Fix: Analytics aggregation and opponent name capture"
+  git push origin main
+
+  Expected: Code pushed to GitHub
+
+Step 2: VERCEL AUTO-DEPLOYS
+────────────────────────────────────────────────────────────────────────────
+
+  ⏳ Wait 2-5 minutes
+
+  Vercel automatically deploys when code is pushed
+  Watch at: https://vercel.com/dashboard/projects
+
+Step 3: TEST IN PRODUCTION
+────────────────────────────────────────────────────────────────────────────
+
+  1. Visit your live app URL
+  2. Login
+  3. Analyze a video
+  4. ✅ Modal should appear asking for opponent name
+  5. Enter opponent name and save
+  6. Click "📊 Analytics"
+  7. ✅ Shot percentages should display (not 0%)
+  8. ✅ Opponent name should appear in Player Breakdown
+
+Step 4: VERIFY FIRESTORE
+────────────────────────────────────────────────────────────────────────────
+
+  1. Go to Firebase Console
+  2. Check Firestore: users/{your-id}/videoAnalyses/
+  3. Open a document
+  4. ✅ Should see "opponent" field with name
+  5. ✅ Should see shotBreakdown.shotCounts with numbers
+
+Step 5: DONE! ✅
+────────────────────────────────────────────────────────────────────────────
+
+  App is live with analytics fixed!
+
+═════════════════════════════════════════════════════════════════════════════
+
+TESTING CHECKLIST (Quick)
+══════════════════════════════════════════════════════════════════════════════
+
+□ Modal appears after analyzing video
+□ Can enter opponent name
+□ Modal saves analysis
+□ Stats overview shows shot percentages (not 0%)
+□ Player breakdown shows opponent name
+□ Can click opponent to see record
+□ No red errors in browser console
+
+═════════════════════════════════════════════════════════════════════════════
+
+DOCUMENTATION
+══════════════════════════════════════════════════════════════════════════════
+
+For more details, see:
+
+📄 FIX_SUMMARY.md
+   - What was wrong and why
+   - Detailed explanation of all changes
+   - Data structure before/after
+
+📄 DEPLOY_CHECKLIST.md
+   - Step-by-step deployment process
+   - Testing procedures
+   - Troubleshooting guide
+   - Rollback instructions
+
+📄 DATA_FLOW_DIAGRAM.txt
+   - Visual representation of data flow
+   - Before/after comparison
+   - Function-by-function changes
+
+═════════════════════════════════════════════════════════════════════════════
+
+TROUBLESHOOTING
+══════════════════════════════════════════════════════════════════════════════
+
+Q: Modal doesn't appear?
+A: Clear browser cache (Ctrl+Shift+Delete) and reload
+
+Q: Stats still show 0%?
+A: Hard refresh (Ctrl+Shift+R). Verify new analyses were created.
+
+Q: Opponent names don't show?
+A: Check Firestore has "opponent" field in recent documents.
+
+Q: Vercel deployment stuck?
+A: Go to Vercel dashboard and click "Redeploy"
+
+═════════════════════════════════════════════════════════════════════════════
+
+SUCCESS INDICATORS
+══════════════════════════════════════════════════════════════════════════════
+
+✅ Modal appears after video analysis
+✅ Opponent name saves to Firestore
+✅ Stats show correct percentages
+✅ Player breakdown shows opponent names
+✅ No console errors
+✅ Works on mobile and desktop
+
+═════════════════════════════════════════════════════════════════════════════
+
+TIMELINE
+══════════════════════════════════════════════════════════════════════════════
+
+Commit code:        1 min
+Push to GitHub:     1 min
+Vercel deploys:     2-5 min (automatic)
+Production test:    10-15 min
+─────────────────────────────────
+Total time:         ~20-25 minutes
+
+═════════════════════════════════════════════════════════════════════════════
+
+That's it! 🚀
+
+Your analytics fix is ready to go live.
+Just commit, push, test, and you're done.
+
+═════════════════════════════════════════════════════════════════════════════

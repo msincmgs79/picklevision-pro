@@ -1,0 +1,370 @@
+================================================================================
+PICKLEVISION PRO - DATA FLOW DIAGRAM (Analytics Fix)
+================================================================================
+
+BEFORE FIX (❌ BROKEN)
+================================================================================
+
+User uploads video → Click "📊 Analyze"
+                    ↓
+            Claude Vision API analyzes video (30-60s)
+                    ↓
+        Creates MatchAnalysis object with:
+        {
+          shotBreakdown: {
+            shotCounts: { dinks: 15, drives: 10, ... }  ✅ HAS DATA
+          },
+          techniqueAnalysis: {
+            footwork: { rating: 4, ... }  ✅ HAS DATA
+          }
+        }
+                    ↓
+        sessionStorage.setItem('matchAnalysis', ...)
+                    ↓
+        saveVideoAnalysis(userId, videoId, analysis)  ← THIS WAS THE PROBLEM
+                    ↓
+        Saves to Firestore at:
+        users/{userId}/videoAnalyses/{videoId}
+        {
+          shotSummary: undefined  ❌ DOESN'T EXIST
+          playerTechnique: undefined  ❌ DOESN'T EXIST
+          opponent: undefined  ❌ NOT CAPTURED
+        }
+                    ↓
+        Screen10 shows analysis ✅ Works (uses sessionStorage)
+                    ↓
+        User navigates to Stats (Screen7)
+                    ↓
+        aggregateShotStats() runs:
+        if (analysis.shotSummary) {  ❌ NULL
+          totals.dinks += analysis.shotSummary.dinks  ❌ CAN'T READ
+        }
+        → Returns all 0% ❌ BROKEN
+                    ↓
+        Display shows: SHOT MIX: Dinks 0%, Drives 0%, ... ❌ ❌ ❌
+
+================================================================================
+
+AFTER FIX (✅ WORKING)
+================================================================================
+
+User uploads video → Click "📊 Analyze"
+                    ↓
+            Claude Vision API analyzes video (30-60s)
+                    ↓
+        Creates MatchAnalysis object with:
+        {
+          shotBreakdown: {
+            shotCounts: { dinks: 15, drives: 10, ... }  ✅ HAS DATA
+          },
+          techniqueAnalysis: {
+            footwork: { rating: 4, ... }  ✅ HAS DATA
+          }
+        }
+                    ↓
+        sessionStorage.setItem('matchAnalysis', ...)
+                    ↓
+        ⭐ OPPONENT MODAL APPEARS ⭐
+        "Who was your opponent?"
+        [Input field] → "John Smith"
+        [Cancel] [Save Analysis]
+                    ↓
+        handleOpponentSubmit() runs:
+        {
+          ...analysis,
+          opponent: "John Smith"  ✅ NEW FIELD
+        }
+                    ↓
+        saveVideoAnalysis(userId, videoId, analysisWithOpponent)
+                    ↓
+        Saves to Firestore at:
+        users/{userId}/videoAnalyses/{videoId}
+        {
+          opponent: "John Smith"  ✅ NOW SAVED
+          shotBreakdown: {
+            shotCounts: {
+              dinks: 15,
+              drives: 10,
+              ...
+            }
+          }  ✅ SAVED CORRECTLY
+          techniqueAnalysis: {
+            footwork: { rating: 4, ... },
+            ...
+          }  ✅ SAVED CORRECTLY
+        }
+                    ↓
+        Screen10 shows analysis ✅ Works
+        User navigates to Stats (Screen7)
+                    ↓
+        aggregateShotStats() runs:
+        if (analysis.shotBreakdown && analysis.shotBreakdown.shotCounts) {
+          const shots = analysis.shotBreakdown.shotCounts;
+          totals.dinks += shots.dinks || 0;  ✅ READS CORRECTLY
+          totals.drives += shots.drives || 0;  ✅ READS CORRECTLY
+          ...
+        }
+        → Returns actual percentages ✅ WORKING
+                    ↓
+        aggregateTechniqueStats() runs:
+        if (analysis.techniqueAnalysis) {
+          totals.footwork += analysis.techniqueAnalysis.footwork.rating * 20
+          ✅ READS CORRECTLY & CONVERTS 1-5 SCALE TO 0-100
+        }
+        → Returns averaged scores ✅ WORKING
+                    ↓
+        getOpponentRecords() runs:
+        const opponent = analysis.opponent || 'Unknown'
+        ✅ USES ACTUAL OPPONENT NAME
+        → Groups analyses by real opponent names ✅ WORKING
+                    ↓
+        Display shows:
+        SHOT MIX (from 1 video)
+        ├─ Dinks: 30%  ████████  ✅ CORRECT
+        ├─ Drives: 20% ██████    ✅ CORRECT
+        └─ ...
+
+        PLAYER BREAKDOWN
+        ├─ John Smith  ✅ REAL NAME
+        │  Record: 1-0  ✅ CAN SEE W-L
+        └─ ...
+
+================================================================================
+
+COMPARISON: BEFORE vs AFTER
+================================================================================
+
+ISSUE #1: Shot Breakdown Shows 0%
+──────────────────────────────────
+
+BEFORE:
+  aggregateShotStats() looks for:
+  analysis.shotSummary.dinks ❌ UNDEFINED
+
+  Result: All percentages = 0% ❌
+
+AFTER:
+  aggregateShotStats() looks for:
+  analysis.shotBreakdown.shotCounts.dinks ✅ EXISTS
+
+  Result: Correct percentages ✅
+
+───────────────────────────────────────
+
+ISSUE #2: No Opponent Identification
+──────────────────────────────────────
+
+BEFORE:
+  Opponent field: NOT CAPTURED ❌
+  Player Breakdown: "Player 1", "Player 2" (simulated) ❌
+
+  Result: Can't identify who each video is against ❌
+
+AFTER:
+  Opponent field: CAPTURED IN MODAL ✅
+  Player Breakdown: "John Smith", "Mary Johnson" (real) ✅
+
+  Result: Each video properly attributed to opponent ✅
+
+═══════════════════════════════════════════════════════════════════════════════
+
+FUNCTION CHANGES
+═══════════════════════════════════════════════════════════════════════════════
+
+1. aggregateShotStats() in Screen7 (Line 1340-1393)
+   ────────────────────────────────────────────────
+
+   OLD:
+   if (analysis.shotSummary) {
+     totals.dinks += analysis.shotSummary.dinks || 0;
+   }
+
+   NEW:
+   if (analysis.shotBreakdown && analysis.shotBreakdown.shotCounts) {
+     const shots = analysis.shotBreakdown.shotCounts;
+     totals.dinks += shots.dinks || 0;
+   } else if (analysis.shotSummary) {
+     totals.dinks += analysis.shotSummary.dinks || 0;  // fallback
+   }
+
+   Impact: Reads from correct data path, with fallback support
+
+───────────────────────────────────────────────────────────────────────────────
+
+2. aggregateTechniqueStats() in Screen7 (Line 1395-1425)
+   ───────────────────────────────────────────────────
+
+   OLD:
+   if (analysis.playerTechnique) {
+     totals.footwork += analysis.playerTechnique.footwork || 0;
+   }
+
+   NEW:
+   if (analysis.techniqueAnalysis) {
+     totals.footwork += (analysis.techniqueAnalysis.footwork?.rating || 0) * 20;
+   } else if (analysis.playerTechnique) {
+     totals.footwork += analysis.playerTechnique.footwork || 0;  // fallback
+   }
+
+   Impact: Reads from correct structure, converts 1-5 rating to 0-100 scale
+
+───────────────────────────────────────────────────────────────────────────────
+
+3. getOpponentRecords() in Screen7 (Line 1422-1440)
+   ──────────────────────────────────────────────
+
+   OLD:
+   const opponent = `Player ${idx + 1}`;  // Simulated
+
+   NEW:
+   const opponent = analysis.opponent || 'Unknown Opponent';  // Real
+
+   Impact: Uses actual opponent names instead of simulated ones
+
+───────────────────────────────────────────────────────────────────────────────
+
+4. Analyze Button Handler in Screen0 (Line 362-389)
+   ───────────────────────────────────────────────
+
+   OLD:
+   const analysis = await analyzeMatchVideo(...);
+   sessionStorage.setItem('matchAnalysis', ...);
+   await saveVideoAnalysis(userId, video.id, analysis);  // Direct save
+
+   NEW:
+   const analysis = await analyzeMatchVideo(...);
+   sessionStorage.setItem('matchAnalysis', ...);
+   setPendingAnalysis(analysis);  // Store
+   setShowOpponentModal(true);    // Show modal
+   // Modal handles save after opponent name is entered
+
+   Impact: Captures opponent name before saving to Firestore
+
+───────────────────────────────────────────────────────────────────────────────
+
+5. New Opponent Modal (Line 479-530)
+   ────────────────────────────────
+
+   NEW: Modal appears after analysis completes
+
+   Features:
+   - Beautiful centered modal with backdrop
+   - Text input for opponent name
+   - Cancel and Save buttons
+   - Submit on Enter key
+   - Modal closes and navigates to results on save
+
+   Impact: User provides opponent name, saved to Firestore
+
+───────────────────────────────────────────────────────────────────────────────
+
+6. New handleOpponentSubmit() Function (Line 532-558)
+   ────────────────────────────────────────────────
+
+   NEW: Handles modal submission
+
+   Process:
+   1. Get opponent name from input
+   2. Merge with pending analysis
+   3. Save to Firestore with opponent field
+   4. Close modal and navigate to results
+
+   Impact: Properly saves analysis with opponent name
+
+═══════════════════════════════════════════════════════════════════════════════
+
+DATA STRUCTURE EVOLUTION
+═══════════════════════════════════════════════════════════════════════════════
+
+WHAT CLAUDE VISION RETURNS:
+────────────────────────
+
+MatchAnalysis {
+  videoUrl: string
+  analysisDate: string
+  shotBreakdown: {
+    totalShots: number
+    shotCounts: {
+      dinks: number
+      drives: number
+      drops: number
+      lobs: number
+      volleys: number
+      smashes: number
+      serves: number
+    }
+  }
+  detectedShots: ShotDetection[]
+  techniqueAnalysis: {
+    footwork: { rating: 1-5, feedback: string }
+    positioning: { rating: 1-5, feedback: string }
+    racketTechnique: { rating: 1-5, feedback: string }
+    balance: { rating: 1-5, feedback: string }
+  }
+  coachingTips: string[]
+  overallInsights: string
+  rallySummary: {...}
+}
+
+WHAT GETS ADDED BY OPPONENT MODAL:
+───────────────────────────────
+
+opponent: "John Smith"  ← NEW FIELD ADDED BY MODAL
+
+WHAT GETS SAVED TO FIRESTORE:
+──────────────────────────
+
+users/{userId}/videoAnalyses/{videoId} = {
+  opponent: "John Smith"  ✅ NOW SAVED
+  shotBreakdown: {...}    ✅ PRESERVED
+  detectedShots: [...]    ✅ PRESERVED
+  techniqueAnalysis: {...}  ✅ PRESERVED
+  ... (all other fields preserved)
+}
+
+═══════════════════════════════════════════════════════════════════════════════
+
+AGGREGATION LOGIC
+═══════════════════════════════════════════════════════════════════════════════
+
+EXAMPLE: 2 Videos Analyzed
+
+Video 1 (vs John Smith):
+  shotCounts: { dinks: 15, drives: 10, drops: 5, ... }
+  techniqueAnalysis: { footwork: { rating: 4 }, ... }
+
+Video 2 (vs Mary Johnson):
+  shotCounts: { dinks: 20, drives: 8, drops: 7, ... }
+  techniqueAnalysis: { footwork: { rating: 3 }, ... }
+
+AGGREGATESHOTS:
+  Total shots: (15+20) + (10+8) + (5+7) + ... = 65
+  Dinks %: (15+20)/65 = 35/65 = 54%
+  Drives %: (10+8)/65 = 18/65 = 28%
+
+AGGREGATETECHNIQUE:
+  Avg footwork: (4 + 3)/2 * 20 = 70/100
+
+AGGREGATEOPPONENTS:
+  John Smith: 1-0 record
+  Mary Johnson: 1-0 record
+
+═══════════════════════════════════════════════════════════════════════════════
+
+CONSOLE LOGGING
+═══════════════════════════════════════════════════════════════════════════════
+
+Before Fix:
+  ❌ No console logs for shot aggregation
+  ❌ Error: "Cannot read property 'dinks' of undefined"
+
+After Fix:
+  ✅ "✅ Analysis auto-saved to Firestore with opponent: John Smith"
+  ✅ "✅ Loaded video analyses: [...]" (with opponent field visible)
+  ✅ Shot percentages calculated and displayed correctly
+  ✅ No errors in console
+
+═══════════════════════════════════════════════════════════════════════════════
+
+END OF DIAGRAM
+═══════════════════════════════════════════════════════════════════════════════
