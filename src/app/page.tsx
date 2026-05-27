@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/authContext';
-import { getUserProfile, getUserMatches, calculateProRating, saveMatch, updateUserStats, getTopPlayers, updateDisplayName, uploadMatchVideo } from '@/lib/db';
+import { getUserProfile, getUserMatches, calculateProRating, saveMatch, updateUserStats, getTopPlayers, updateDisplayName, uploadMatchVideo, saveStandaloneVideo, getUserVideos } from '@/lib/db';
 import { searchDUPRPlayer, getDUPRPlayer, getCombinedRating } from '@/lib/dupr';
 import { analyzeMatchVideo, type MatchAnalysis } from '@/lib/shotAnalysis';
 import { Timestamp } from 'firebase/firestore';
@@ -57,6 +57,7 @@ function Screen0({ setScreen, userId }: { setScreen: (n: number) => void; userId
   const [tab, setTab] = useState('matches');
   const [userProfile, setUserProfile] = useState<User | null>(null);
   const [recentMatches, setRecentMatches] = useState<(Match & { id: string })[]>([]);
+  const [userVideos, setUserVideos] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [duprRating, setDuprRating] = useState<number | null>(null);
@@ -96,6 +97,10 @@ function Screen0({ setScreen, userId }: { setScreen: (n: number) => void; userId
         }
         const matches = await getUserMatches(userId, 5);
         setRecentMatches(matches);
+
+        // Load standalone videos
+        const videos = await getUserVideos(userId, 10);
+        setUserVideos(videos);
       } catch (error) {
         console.error('Error loading user data:', error);
       } finally {
@@ -297,9 +302,14 @@ function Screen0({ setScreen, userId }: { setScreen: (n: number) => void; userId
                           const file = e.target.files[0];
                           setUploading(true);
                           try {
-                            await uploadMatchVideo(userId, `standalone_${Date.now()}`, file, (progress) => {
+                            // Upload video to Cloud Storage
+                            const videoUrl = await uploadMatchVideo(userId, `standalone_${Date.now()}`, file, (progress) => {
                               console.log(`Upload progress: ${Math.round(progress * 100)}%`);
                             });
+
+                            // Save video metadata to Firestore
+                            await saveStandaloneVideo(userId, videoUrl, file.name);
+
                             alert('✅ Video uploaded successfully!');
                             // Refresh the page to see the new video
                             setTimeout(() => window.location.reload(), 500);
@@ -315,26 +325,29 @@ function Screen0({ setScreen, userId }: { setScreen: (n: number) => void; userId
                   </label>
 
                   <div className="space-y-2">
-                    {recentMatches.filter(m => m.videoUrl).length > 0 ? (
-                      recentMatches.filter(m => m.videoUrl).map((match) => (
+                    {userVideos && userVideos.length > 0 ? (
+                      userVideos.map((video) => (
                         <div
-                          key={match.id}
+                          key={video.id}
                           className="bg-white p-4 rounded-lg border border-gray-200 flex items-center gap-3"
                         >
                           <div className="text-2xl">🎥</div>
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-semibold text-gray-700 truncate">
-                              vs {match.opponent}
+                              {video.title || 'Uploaded Video'}
                             </p>
                             <p className="text-xs text-gray-500">
-                              {match.date?.toDate?.()?.toLocaleDateString()}
+                              {video.uploadedAt?.toDate?.()?.toLocaleDateString() || 'Recently uploaded'}
                             </p>
                           </div>
-                          <span className={`text-xs font-bold px-2 py-1 rounded ${
-                            match.result === 'WIN' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-                          }`}>
-                            {match.result}
-                          </span>
+                          <a
+                            href={video.videoUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-xs font-bold px-2 py-1 rounded bg-blue-100 text-blue-700 hover:bg-blue-200"
+                          >
+                            Watch
+                          </a>
                         </div>
                       ))
                     ) : (

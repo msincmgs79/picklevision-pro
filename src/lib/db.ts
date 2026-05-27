@@ -192,7 +192,10 @@ export async function saveStandaloneVideo(userId: string, videoUrl: string, titl
 }
 
 // Get user's videos (both match videos and standalone uploads)
-export async function getUserVideos(userId: string, limitCount: number = 10) {
+export async function getUserVideos(
+  userId: string,
+  limitCount: number = 10
+): Promise<Array<{ id: string; userId: string; videoUrl: string; title?: string; uploadedAt: Timestamp }>> {
     const videosRef = collection(db, 'videos');
     const q = query(
           videosRef,
@@ -204,5 +207,5 @@ export async function getUserVideos(userId: string, limitCount: number = 10) {
     return querySnapshot.docs.map(doc => ({
           id: doc.id,
           ...doc.data()
-    })) as (Video & { id: string })[];
+    })) as Array<{ id: string; userId: string; videoUrl: string; title?: string; uploadedAt: Timestamp }>;
 }
