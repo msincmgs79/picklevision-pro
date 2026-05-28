@@ -412,6 +412,11 @@ function Screen0({ setScreen, userId }: { setScreen: (n: number) => void; userId
                                   const analysis = await analyzeMatchVideo(video.videoUrl);
                                   sessionStorage.setItem('matchAnalysis', JSON.stringify(analysis));
 
+                                  // Save detected player colors for opponent selection
+                                  if (analysis.detectedPlayerColors) {
+                                    sessionStorage.setItem('detectedPlayerColors', JSON.stringify(analysis.detectedPlayerColors));
+                                  }
+
                                   // Auto-save analysis to Firestore
                                   try {
                                     await saveVideoAnalysis(userId, video.id, analysis);
@@ -2041,7 +2046,17 @@ function Screen10({ setScreen }: { setScreen: (n: number) => void }) {
 }
 
 function Screen11({ setScreen, userId }: { setScreen: (n: number) => void; userId: string }) {
-  const [detectedPlayers] = useState<DetectedPlayer[]>(generateDetectedPlayers());
+  const [detectedPlayers] = useState<DetectedPlayer[]>(() => {
+    try {
+      const saved = sessionStorage.getItem('detectedPlayerColors');
+      if (saved) {
+        return JSON.parse(saved);
+      }
+    } catch (err) {
+      console.warn('Could not load detected colors, using generated players');
+    }
+    return generateDetectedPlayers();
+  });
   const [selectedPlayers, setSelectedPlayers] = useState<number[]>([]);
   const [saving, setSaving] = useState(false);
 
