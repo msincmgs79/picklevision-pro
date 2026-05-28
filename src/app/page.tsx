@@ -421,7 +421,7 @@ function Screen0({ setScreen, userId }: { setScreen: (n: number) => void; userId
                                     // Don't throw - allow user to view analysis even if save fails
                                   }
 
-                                  setScreen(10);
+                                  setScreen(11);
                                 } catch (err: any) {
                                   console.error('Analysis failed:', err);
                                   alert('❌ Analysis failed: ' + (err?.message || 'Unknown error'));
@@ -2104,7 +2104,7 @@ function Screen11({ setScreen, userId }: { setScreen: (n: number) => void; userI
       alert(`Match analysis saved! Match type: ${matchType}`);
 
       // Navigate to analysis view
-      setScreen(10);
+      setScreen(11);
     } catch (err) {
       console.error('Error saving analysis:', err);
       alert('Failed to save analysis');
