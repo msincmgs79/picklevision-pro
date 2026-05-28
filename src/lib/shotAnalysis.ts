@@ -220,7 +220,7 @@ export async function analyzeMatchVideo(videoBase64: string): Promise<MatchAnaly
   const coachingTips = generateCoachingTips(technique, breakdown, proComparison);
 
   return {
-    videoUrl: frameBase64,
+    videoUrl: videoBase64,
     analysisDate: new Date().toISOString(),
     shotBreakdown: breakdown,
     detectedShots: shotDetections,
@@ -425,4 +425,15 @@ function generateOverallInsights(
   proComparison: ProComparison
 ): string {
   const avgTechnique = (technique.footwork.rating + technique.positioning.rating +
-    technique
+    technique.racketTechnique.rating + technique.balance.rating) / 4;
+
+  return `Your match shows ${
+    avgTechnique >= 4 ? 'strong' : 'solid'
+  } fundamental technique with ${
+    breakdown.aggressivenessScore > 50 ? 'an aggressive' : 'a balanced'
+  } playing style. You're playing similarly to ${
+    proComparison.proStyleMatch.split(' - ')[0]
+  }. Focus on ${
+    proComparison.improvementAreas[0] || 'consistency'
+  } to elevate your game to the next level. Keep working on your net game and court positioning.`;
+}
