@@ -4,16 +4,36 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
 
 export async function POST(request: Request) {
   try {
-    const { videoBase64 } = await request.json();
+    const body = await request.json();
+    const videoBase64 = body.videoBase64;
 
-    if (!videoBase64) {
+    console.log('📥 API Request received');
+    console.log('Request body keys:', Object.keys(body));
+    console.log('videoBase64 present:', !!videoBase64);
+    console.log('videoBase64 length:', videoBase64?.length || 0);
+
+    if (!videoBase64 || videoBase64.length === 0) {
+      console.error('❌ No video data provided');
       return Response.json({
+        success: false,
         error: 'Video data required',
-        details: 'No videoBase64 in request body'
+        details: 'No videoBase64 in request body',
       }, { status: 400 });
     }
 
+    console.log('🔑 API Key present:', !!process.env.GEMINI_API_KEY);
+
+    if (!process.env.GEMINI_API_KEY) {
+      console.error('❌ GEMINI_API_KEY not set in environment');
+      return Response.json({
+        success: false,
+        error: 'API configuration error',
+        details: 'GEMINI_API_KEY not configured',
+      }, { status: 500 });
+    }
+
     const model = genAI.getGenerativeModel({ model: 'gemini-1.5-pro' });
+    console.log('🤖 Gemini model initialized');
 
     const prompt = `Analyze this pickleball match video and identify the clothing colors of all 4 players visible in the video.
 
@@ -43,53 +63,48 @@ Focus on identifying the actual clothing colors of the players in the video. Be 
       },
     ]);
 
-    // Log the actual response structure to see what we're working with
-    console.log('Gemini response type:', typeof response);
-    console.log('Gemini response keys:', Object.keys(response));
-    console.log('Gemini response (first 1000 chars):', JSON.stringify(response).substring(0, 1000));
+    console.log('📊 Gemini response received');
+    console.log('Response type:', typeof response);
 
-    // Try to extract text from the response
     let responseText = '';
-
-    // First, check what properties exist
     const resp = response as any;
 
-    // Check for candidates array (most likely structure)
-    if (resp.candidates?.[0]?.content?.parts?.[0]?.text) {
-      responseText = resp.candidates[0].content.parts[0].text;
-      console.log('✓ Extracted text from candidates path');
-    }
-    // Check for direct text property
-    else if (resp.text) {
-      responseText = resp.text;
-      console.log('✓ Extracted text from direct text property');
-    }
-    // Check for text method
-    else if (typeof resp.text === 'function') {
-      responseText = resp.text();
-      console.log('✓ Extracted text from text() method');
-    }
-    // Fallback: log all properties for debugging
-    else {
-      console.error('Cannot extract text. Response object properties:');
-      for (const [key, value] of Object.entries(resp)) {
-        console.error(`  ${key}:`, typeof value, Array.isArray(value) ? `[${value.length}]` : '');
+    // Try to get text from the response - try all known paths
+    try {
+      if (resp.candidates?.[0]?.content?.parts?.[0]?.text) {
+        responseText = resp.candidates[0].content.parts[0].text;
+        console.log('✓ Got text from: candidates[0].content.parts[0].text');
+      } else if (typeof resp.text === 'function') {
+        responseText = resp.text();
+        console.log('✓ Got text from: response.text() method');
+      } else if (resp.text && typeof resp.text === 'string') {
+        responseText = resp.text;
+        console.log('✓ Got text from: response.text property');
+      } else {
+        // Log structure for debugging
+        console.log('Response object keys:', Object.keys(resp).join(', '));
+        console.log('Full response:', JSON.stringify(resp).substring(0, 500));
+        throw new Error('Could not extract text from any known path in response');
       }
+    } catch (textErr) {
+      console.error('❌ Error extracting text:', textErr);
       return Response.json({
         success: false,
-        error: 'Could not extract text from Gemini API response',
-        details: 'Response structure does not match any known pattern. Check logs.',
+        error: 'Failed to extract text from Gemini API',
+        details: (textErr as any)?.message || 'Unknown error',
       }, { status: 500 });
     }
 
-    if (!responseText || typeof responseText !== 'string') {
-      console.error('Response text is invalid:', typeof responseText, responseText);
+    if (!responseText || responseText.length === 0) {
+      console.error('❌ Response text is empty');
       return Response.json({
         success: false,
-        error: 'Invalid response text from Gemini API',
-        details: `Expected string, got ${typeof responseText}`,
+        error: 'Empty response from Gemini API',
+        details: 'API returned no text content',
       }, { status: 500 });
     }
+
+    console.log('✓ Response text length:', responseText.length);
 
     // Extract JSON from response
     const jsonMatch = responseText.match(/\{[\s\S]*\}/);
