@@ -43,27 +43,51 @@ Focus on identifying the actual clothing colors of the players in the video. Be 
       },
     ]);
 
-    // Extract text from Gemini response using the SDK method
+    // Log the actual response structure to see what we're working with
+    console.log('Gemini response type:', typeof response);
+    console.log('Gemini response keys:', Object.keys(response));
+    console.log('Gemini response (first 1000 chars):', JSON.stringify(response).substring(0, 1000));
+
+    // Try to extract text from the response
     let responseText = '';
 
-    try {
-      // Google Generative AI SDK returns a response with a text() method
-      responseText = response.text();
-    } catch (textErr) {
-      console.error('Error extracting text from response:', textErr);
+    // First, check what properties exist
+    const resp = response as any;
+
+    // Check for candidates array (most likely structure)
+    if (resp.candidates?.[0]?.content?.parts?.[0]?.text) {
+      responseText = resp.candidates[0].content.parts[0].text;
+      console.log('✓ Extracted text from candidates path');
+    }
+    // Check for direct text property
+    else if (resp.text) {
+      responseText = resp.text;
+      console.log('✓ Extracted text from direct text property');
+    }
+    // Check for text method
+    else if (typeof resp.text === 'function') {
+      responseText = resp.text();
+      console.log('✓ Extracted text from text() method');
+    }
+    // Fallback: log all properties for debugging
+    else {
+      console.error('Cannot extract text. Response object properties:');
+      for (const [key, value] of Object.entries(resp)) {
+        console.error(`  ${key}:`, typeof value, Array.isArray(value) ? `[${value.length}]` : '');
+      }
       return Response.json({
         success: false,
-        error: 'Failed to extract text from Gemini API response',
-        details: (textErr as any)?.message || 'Unknown error',
+        error: 'Could not extract text from Gemini API response',
+        details: 'Response structure does not match any known pattern. Check logs.',
       }, { status: 500 });
     }
 
     if (!responseText || typeof responseText !== 'string') {
-      console.error('Response text is not a string:', typeof responseText);
+      console.error('Response text is invalid:', typeof responseText, responseText);
       return Response.json({
         success: false,
-        error: 'Invalid response format from Gemini API',
-        details: 'Response text is empty or not a string',
+        error: 'Invalid response text from Gemini API',
+        details: `Expected string, got ${typeof responseText}`,
       }, { status: 500 });
     }
 
