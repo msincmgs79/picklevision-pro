@@ -482,7 +482,7 @@ function Screen0({ setScreen, userId }: { setScreen: (n: number) => void; userId
             <p className="text-sm text-gray-600 mb-4">Click your clothing to identify yourself (for doubles, you can select your partner)</p>
 
             <div className="grid grid-cols-2 gap-3 mb-6">
-              {pendingAnalysis.detectedPlayers.map((player: any) => {
+              {pendingAnalysis.detectedPlayers.map((player) => {
                 const shirtBg = getColorBg(player.clothing.shirtColor);
                 const shortsBg = getColorBg(player.clothing.shortsColor);
                 const isSelected = opponentName.split(',').includes(`player${player.playerId}`);
@@ -560,15 +560,15 @@ function Screen0({ setScreen, userId }: { setScreen: (n: number) => void; userId
 
     try {
       // Get selected player IDs (supports 1v1 or 2v2)
-      const selectedIds = opponentName.split(',').map((p: string) => parseInt(p.replace('player', '')) as 1 | 2 | 3 | 4);
-      const selectedPlayers = pendingAnalysis.detectedPlayers?.filter((p: any) => selectedIds.includes(p.playerId)) || [];
+      const selectedIds = opponentName.split(',').map(p => parseInt(p.replace('player', '')) as 1 | 2 | 3 | 4);
+      const selectedPlayers = pendingAnalysis.detectedPlayers?.filter(p => selectedIds.includes(p.playerId)) || [];
 
       // Get opponent players (all others)
-      const opponentPlayers = pendingAnalysis.detectedPlayers?.filter((p: any) => !selectedIds.includes(p.playerId)) || [];
+      const opponentPlayers = pendingAnalysis.detectedPlayers?.filter(p => !selectedIds.includes(p.playerId)) || [];
 
       // Create opponent identifier (supports singles and doubles)
       const opponentIdentifier = opponentPlayers.length > 0
-        ? opponentPlayers.map((p: any) => `${p.clothing.shirtColor} shirt, ${p.clothing.shortsColor} shorts`).join(' & ')
+        ? opponentPlayers.map(p => `${p.clothing.shirtColor} shirt, ${p.clothing.shortsColor} shorts`).join(' & ')
         : 'Unknown opponent';
 
       const matchType = selectedPlayers.length === 1 ? '1v1' : `${selectedPlayers.length}v${opponentPlayers.length}`;
@@ -577,7 +577,7 @@ function Screen0({ setScreen, userId }: { setScreen: (n: number) => void; userId
       const analysisWithOpponent = {
         ...pendingAnalysis,
         opponent: opponentIdentifier,
-        selectedPlayers: selectedPlayers.map((p: any) => p.playerId),
+        selectedPlayers: selectedPlayers.map(p => p.playerId),
         matchType: matchType,
         opponentClothing: opponentPlayers.length === 1 ? opponentPlayers[0]?.clothing : undefined,
       };
@@ -1700,4 +1700,5 @@ function Screen7({ setScreen, userId }: { setScreen: (n: number) => void; userId
                         <div className="text-right">
                           <div className="text-sm font-bold text-green-600">{record.wins}W</div>
                           <div className="text-sm font-bold text-red-600">{record.losses}L</div>
-                
+                        </div>
+                      </div>
