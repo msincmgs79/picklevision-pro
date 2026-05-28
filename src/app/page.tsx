@@ -2066,19 +2066,15 @@ function Screen11({ setScreen, userId }: { setScreen: (n: number) => void; userI
 
     setSaving(true);
     try {
-      const matchData = sessionStorage.getItem('currentMatch');
       const analysis = sessionStorage.getItem('matchAnalysis');
       const videoUrl = sessionStorage.getItem('matchVideoUrl');
 
-      if (!matchData || !analysis) {
-        alert('Missing match data');
+      if (!analysis) {
+        alert('Missing analysis data');
         return;
       }
 
-      const matchDataObj = JSON.parse(matchData);
       const analysisObj = JSON.parse(analysis);
-      const matchType = selectedPlayers.length === 1 ? '1v1' : '2v2';
-
       // Build opponent identifier from selected players' clothing colors
       const selectedPlayersList = detectedPlayers.filter((p: DetectedPlayer) => selectedPlayers.includes(p.id));
       const opponentIdentifier = selectedPlayersList
@@ -2193,3 +2189,4 @@ function Screen11({ setScreen, userId }: { setScreen: (n: number) => void; userI
   );
 }
 
+                                                                                                                             
