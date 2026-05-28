@@ -198,7 +198,7 @@ function Screen0({ setScreen, userId }: { setScreen: (n: number) => void; userId
             </div>
 
             <div className="flex gap-2 mb-6 border-b border-gray-200 overflow-x-auto">
-              {['matches', 'winrate', 'avgrating', 'videos', 'analytics'].map((t) => {
+              {['matches', 'winrate', 'avgrating', 'videos', 'analytics'].map((t: string) => {
                 const labels = { matches: 'MATCHES', winrate: 'WIN RATE', avgrating: 'AVG RATING', videos: 'VIDEOS', analytics: 'ANALYTICS' };
                 return (
                   <button
@@ -393,7 +393,7 @@ function Screen0({ setScreen, userId }: { setScreen: (n: number) => void; userId
                                 if (confirm('Are you sure you want to delete this video?')) {
                                   try {
                                     await deleteVideo(video.id, video.videoUrl);
-                                    setUserVideos(userVideos.filter(v => v.id !== video.id));
+                                    setUserVideos(userVideos.filter((v: any) => v.id !== video.id));
                                     alert('✅ Video deleted successfully!');
                                   } catch (err: any) {
                                     console.error('Delete failed:', err);
@@ -482,7 +482,7 @@ function Screen0({ setScreen, userId }: { setScreen: (n: number) => void; userId
             <p className="text-sm text-gray-600 mb-4">Click your clothing to identify yourself (for doubles, you can select your partner)</p>
 
             <div className="grid grid-cols-2 gap-3 mb-6">
-              {pendingAnalysis.detectedPlayers.map((player) => {
+              {pendingAnalysis.detectedPlayers.map((player: any) => {
                 const shirtBg = getColorBg(player.clothing.shirtColor);
                 const shortsBg = getColorBg(player.clothing.shortsColor);
                 const isSelected = opponentName.split(',').includes(`player${player.playerId}`);
@@ -492,10 +492,10 @@ function Screen0({ setScreen, userId }: { setScreen: (n: number) => void; userId
                     key={player.playerId}
                     onClick={() => {
                       // Toggle selection for doubles support
-                      const current = opponentName.split(',').filter(p => p);
+                      const current = opponentName.split(',').filter((p: string) => p);
                       if (current.includes(`player${player.playerId}`)) {
                         // Remove if already selected
-                        setOpponentName(current.filter(p => p !== `player${player.playerId}`).join(','));
+                        setOpponentName(current.filter((p: string) => p !== `player${player.playerId}`).join(','));
                       } else {
                         // Add to selection
                         setOpponentName([...current, `player${player.playerId}`].join(','));
@@ -560,15 +560,15 @@ function Screen0({ setScreen, userId }: { setScreen: (n: number) => void; userId
 
     try {
       // Get selected player IDs (supports 1v1 or 2v2)
-      const selectedIds = opponentName.split(',').map(p => parseInt(p.replace('player', '')) as 1 | 2 | 3 | 4);
-      const selectedPlayers = pendingAnalysis.detectedPlayers?.filter(p => selectedIds.includes(p.playerId)) || [];
+      const selectedIds = opponentName.split(',').map((p: string) => parseInt(p.replace('player', '')) as 1 | 2 | 3 | 4);
+      const selectedPlayers = pendingAnalysis.detectedPlayers?.filter((p: any) => selectedIds.includes(p.playerId)) || [];
 
       // Get opponent players (all others)
-      const opponentPlayers = pendingAnalysis.detectedPlayers?.filter(p => !selectedIds.includes(p.playerId)) || [];
+      const opponentPlayers = pendingAnalysis.detectedPlayers?.filter((p: any) => !selectedIds.includes(p.playerId)) || [];
 
       // Create opponent identifier (supports singles and doubles)
       const opponentIdentifier = opponentPlayers.length > 0
-        ? opponentPlayers.map(p => `${p.clothing.shirtColor} shirt, ${p.clothing.shortsColor} shorts`).join(' & ')
+        ? opponentPlayers.map((p: any) => `${p.clothing.shirtColor} shirt, ${p.clothing.shortsColor} shorts`).join(' & ')
         : 'Unknown opponent';
 
       const matchType = selectedPlayers.length === 1 ? '1v1' : `${selectedPlayers.length}v${opponentPlayers.length}`;
@@ -577,7 +577,7 @@ function Screen0({ setScreen, userId }: { setScreen: (n: number) => void; userId
       const analysisWithOpponent = {
         ...pendingAnalysis,
         opponent: opponentIdentifier,
-        selectedPlayers: selectedPlayers.map(p => p.playerId),
+        selectedPlayers: selectedPlayers.map((p: any) => p.playerId),
         matchType: matchType,
         opponentClothing: opponentPlayers.length === 1 ? opponentPlayers[0]?.clothing : undefined,
       };
@@ -651,7 +651,7 @@ function Screen1({ setScreen }: { setScreen: (n: number) => void }) {
         const blob = new Blob(chunks, { type: 'video/webm' });
         setVideoBlob(blob);
         currentVideoBlob = blob; // Store for access across screens
-        stream.getTracks().forEach(track => track.stop());
+        stream.getTracks().forEach((track: MediaStreamTrack) => track.stop());
       };
 
       mediaRecorder.start();
@@ -841,7 +841,7 @@ function Screen1({ setScreen }: { setScreen: (n: number) => void }) {
                   onClick={() => {
                     setShowVideoRecorder(false);
                     if (streamRef.current) {
-                      streamRef.current.getTracks().forEach(track => track.stop());
+                      streamRef.current.getTracks().forEach((track: MediaStreamTrack) => track.stop());
                     }
                   }}
                   className="w-full text-sm text-gray-400 hover:text-gray-200"
@@ -906,7 +906,7 @@ function Screen2({ setScreen }: { setScreen: (n: number) => void }) {
             {t:'Comparing to pro benchmark',d:false,a:true},
             {t:'Building highlight reel',d:false},
             {t:'Finalizing rating',d:false}
-          ].map((i,x) => (
+          ].map((i: any, x: number) => (
             <div key={x} className="flex items-center gap-3">
               <div
                 className="w-5 h-5 rounded-full flex items-center justify-center text-white text-xs"
@@ -1145,7 +1145,7 @@ function Screen4({ setScreen }: { setScreen: (n: number) => void }) {
 
             <div className="space-y-3 mb-6">
               {rallies.length > 0 ? (
-                rallies.map((rally) => (
+                rallies.map((rally: any) => (
                   <div key={rally.number} className="bg-gray-50 rounded-lg p-4 border border-gray-200">
                     <div className="font-semibold text-sm mb-2">Rally {rally.number}</div>
                     <div className="text-xs text-gray-600 mb-2">{rally.shots} shots • {rally.duration} seconds</div>
@@ -1264,7 +1264,7 @@ function Screen5({ setScreen }: { setScreen: (n: number) => void }) {
             </div>
 
             <div className="space-y-3 mb-6">
-              {tips.map((tip, idx) => (
+              {tips.map((tip: any, idx: number) => (
                 <div
                   key={idx}
                   className={`border-l-4 p-4 rounded ${
@@ -1358,7 +1358,7 @@ function Screen6({ setScreen }: { setScreen: (n: number) => void }) {
         )}
 
         <div className="flex gap-3 mb-6">
-          {['📱 WhatsApp', '𝕏 Twitter', '📘 Facebook'].map(s => (
+          {['📱 WhatsApp', '𝕏 Twitter', '📘 Facebook'].map((s: string) => (
             <button
               key={s}
               className="flex-1 bg-white hover:bg-gray-100 py-3 rounded-lg font-semibold text-sm border border-gray-300"
@@ -1422,7 +1422,7 @@ function Screen7({ setScreen, userId }: { setScreen: (n: number) => void; userId
     };
     let count = 0;
 
-    videoAnalyses.forEach(analysis => {
+    videoAnalyses.forEach((analysis: any) => {
       // Try shotBreakdown.shotCounts first (correct structure from analyzeMatchVideo)
       if (analysis.shotBreakdown && analysis.shotBreakdown.shotCounts) {
         const shots = analysis.shotBreakdown.shotCounts;
@@ -1447,7 +1447,7 @@ function Screen7({ setScreen, userId }: { setScreen: (n: number) => void; userId
       }
     });
 
-    const total = Object.values(totals).reduce((a, b) => a + b, 0);
+    const total = Object.values(totals).reduce((a: number, b: number) => a + b, 0);
     if (total === 0) {
       return { dinks: 0, drives: 0, drops: 0, lobs: 0, volleys: 0, smashes: 0, serves: 0, total: 0, count };
     }
@@ -1474,7 +1474,7 @@ function Screen7({ setScreen, userId }: { setScreen: (n: number) => void; userId
     };
     let count = 0;
 
-    videoAnalyses.forEach(analysis => {
+    videoAnalyses.forEach((analysis: any) => {
       // Try techniqueAnalysis first (correct structure from analyzeMatchVideo)
       if (analysis.techniqueAnalysis) {
         totals.footwork += (analysis.techniqueAnalysis.footwork?.rating || 0) * 20; // Convert 1-5 to 0-100
@@ -1504,7 +1504,7 @@ function Screen7({ setScreen, userId }: { setScreen: (n: number) => void; userId
   const getOpponentRecords = () => {
     const records: Record<string, { wins: number; losses: number; scores: number[] }> = {};
 
-    videoAnalyses.forEach((analysis) => {
+    videoAnalyses.forEach((analysis: any) => {
       // Use opponent name from analysis, or fallback to Unknown
       const opponent = analysis.opponent || 'Unknown Opponent';
 
@@ -1541,7 +1541,7 @@ function Screen7({ setScreen, userId }: { setScreen: (n: number) => void; userId
       normalized * 0.9,
       normalized * 0.95,
       normalized,
-    ].map(v => Math.max(30, Math.min(100, v)));
+    ].map((v: number) => Math.max(30, Math.min(100, v)));
   };
 
   const ratingTrend = generateRatingTrend();
@@ -1614,7 +1614,7 @@ function Screen7({ setScreen, userId }: { setScreen: (n: number) => void; userId
             <div className="bg-green-50 rounded-lg p-4 mb-4">
               <div className="text-xs font-bold text-gray-500 mb-2">PRO RATING TREND</div>
               <div className="h-20 bg-white rounded flex items-end gap-1 px-2 py-2">
-                {ratingTrend.map((h, i) => (
+                {ratingTrend.map((h: number, i: number) => (
                   <div key={i} className="flex-1 bg-green-600 rounded-t" style={{height: `${h}%`}}></div>
                 ))}
               </div>
@@ -1634,7 +1634,7 @@ function Screen7({ setScreen, userId }: { setScreen: (n: number) => void; userId
                   { key: 'volleys', label: 'Volleys' },
                   { key: 'smashes', label: 'Smashes' },
                   { key: 'serves', label: 'Serves' }
-                ].map((shot) => {
+                ].map((shot: any) => {
                   const percent = shotStats[shot.key as keyof typeof shotStats] as number || 0;
                   const colors = ['bg-green-600', 'bg-amber-600', 'bg-blue-600', 'bg-purple-600', 'bg-red-600', 'bg-pink-600', 'bg-indigo-600'];
                   return (
@@ -1686,7 +1686,7 @@ function Screen7({ setScreen, userId }: { setScreen: (n: number) => void; userId
               <div className="space-y-3">
                 <div className="text-xs font-bold text-gray-600 mb-2">HEAD-TO-HEAD RECORDS</div>
                 {Object.entries(opponentRecords).length > 0 ? (
-                  Object.entries(opponentRecords).map(([opponent, record]) => (
+                  Object.entries(opponentRecords).map(([opponent, record]: [string, any]) => (
                     <button
                       key={opponent}
                       onClick={() => setSelectedOpponent(opponent)}
@@ -1700,10 +1700,4 @@ function Screen7({ setScreen, userId }: { setScreen: (n: number) => void; userId
                         <div className="text-right">
                           <div className="text-sm font-bold text-green-600">{record.wins}W</div>
                           <div className="text-sm font-bold text-red-600">{record.losses}L</div>
-                        </div>
-                      </div>
-                    </button>
-                  ))
-                ) : (
-                  <div className="text-center py-8 text-gray-500">
-                    <p className="text-sm">Analyze videos
+                
