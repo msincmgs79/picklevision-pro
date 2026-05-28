@@ -41,11 +41,13 @@ export async function analyzeGameVideo(frameBase64: string): Promise<VideoAnalys
     });
     if (!response.ok) {
       const error = await response.json();
-      throw new Error(`API error: ${error.error}`);
+      const errorMsg = error.details ? `${error.error} - ${error.details}` : error.error;
+      throw new Error(`API error: ${errorMsg}`);
     }
     const result = await response.json();
     if (!result.success) {
-      throw new Error('Video analysis failed');
+      const details = result.details ? ` - ${result.details}` : '';
+      throw new Error(`Video analysis failed${details}`);
     }
     return result.analysis;
   } catch (error) {
