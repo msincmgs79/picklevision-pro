@@ -54,6 +54,12 @@ export interface ProComparison {
   proStyleMatch: string; // e.g., "Darius Bazin - defensive style"
 }
 
+export interface DetectedPlayerColor {
+  id: number;
+  shirtColor: string;
+  shortsColor: string;
+}
+
 export interface MatchAnalysis {
   videoUrl: string;
   analysisDate: string;
@@ -63,6 +69,7 @@ export interface MatchAnalysis {
   proComparison: ProComparison;
   coachingTips: string[];
   overallInsights: string;
+  detectedPlayerColors?: DetectedPlayerColor[];
   rallySummary: {
     totalRallies: number;
     avgRallyLength: number;
@@ -133,6 +140,7 @@ export async function analyzeMatchVideo(videoUrl: string): Promise<MatchAnalysis
   const technique = evaluateTechnique();
   const proComparison = compareToProBenchmark(breakdown, technique);
   const coachingTips = generateCoachingTips(technique, breakdown, proComparison);
+  const detectedPlayerColors = generateDetectedPlayerColors();
 
   return {
     videoUrl,
@@ -143,6 +151,7 @@ export async function analyzeMatchVideo(videoUrl: string): Promise<MatchAnalysis
     proComparison: proComparison,
     coachingTips: coachingTips,
     overallInsights: generateOverallInsights(breakdown, technique, proComparison),
+    detectedPlayerColors: detectedPlayerColors,
     rallySummary: {
       totalRallies: Math.floor(breakdown.totalShots / 8),
       avgRallyLength: Math.round((breakdown.totalShots / Math.floor(breakdown.totalShots / 8)) * 10) / 10,
@@ -350,4 +359,26 @@ function generateOverallInsights(
   }. Focus on ${
     proComparison.improvementAreas[0] || 'consistency'
   } to elevate your game to the next level. Keep working on your net game and court positioning.`;
+}
+
+function generateDetectedPlayerColors(): DetectedPlayerColor[] {
+  // Realistic common pickleball outfit color combinations
+  const commonOutfits = [
+    { shirt: 'Black', shorts: 'White' },
+    { shirt: 'White', shorts: 'Black' },
+    { shirt: 'Black', shorts: 'Navy' },
+    { shirt: 'Navy', shorts: 'White' },
+    { shirt: 'White', shorts: 'Navy' },
+    { shirt: 'Gray', shorts: 'Black' },
+    { shirt: 'Blue', shorts: 'White' },
+    { shirt: 'Red', shorts: 'Black' },
+  ];
+
+  // Shuffle and pick 4 different outfits
+  const shuffled = [...commonOutfits].sort(() => Math.random() - 0.5);
+  return shuffled.slice(0, 4).map((outfit, index) => ({
+    id: index + 1,
+    shirtColor: outfit.shirt,
+    shortsColor: outfit.shorts,
+  }));
 }
