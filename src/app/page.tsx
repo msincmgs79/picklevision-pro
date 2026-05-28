@@ -9,6 +9,50 @@ import { analyzeMatchVideo, type MatchAnalysis } from '@/lib/shotAnalysis';
 import { Timestamp } from 'firebase/firestore';
 import type { User, Match } from '@/lib/db';
 
+
+// Types for 4-player detection feature
+interface DetectedPlayer {
+  id: number;
+  shirtColor: string;
+  shortsColor: string;
+  description: string;
+}
+
+// Helper function to generate detected players with random colors
+function generateDetectedPlayers(): DetectedPlayer[] {
+  const shirtColors = ['Red', 'Blue', 'Black', 'White', 'Yellow', 'Green', 'Orange', 'Purple'];
+  const shortsColors = ['White', 'Black', 'Navy', 'Gray', 'Khaki', 'Blue'];
+
+  const players: DetectedPlayer[] = [];
+  for (let i = 1; i <= 4; i++) {
+    players.push({
+      id: i,
+      shirtColor: shirtColors[Math.floor(Math.random() * shirtColors.length)],
+      shortsColor: shortsColors[Math.floor(Math.random() * shortsColors.length)],
+      description: `Player ${i}`,
+    });
+  }
+  return players;
+}
+
+// Helper function to map color names to Tailwind background classes
+function getColorBg(color: string): string {
+  const colorMap: Record<string, string> = {
+    Red: 'bg-red-500',
+    Blue: 'bg-blue-500',
+    Black: 'bg-gray-900',
+    White: 'bg-white border-2 border-gray-300',
+    Yellow: 'bg-yellow-400',
+    Green: 'bg-green-500',
+    Orange: 'bg-orange-500',
+    Purple: 'bg-purple-500',
+    Navy: 'bg-blue-900',
+    Gray: 'bg-gray-500',
+    Khaki: 'bg-yellow-600',
+  };
+  return colorMap[color] || 'bg-gray-500';
+}
+
 // Global variable to store video blob across screens (Blob objects can't be serialized)
 let currentVideoBlob: Blob | null = null;
 
@@ -49,6 +93,7 @@ export default function Home() {
       {currentScreen === 8 && <Screen8 setScreen={setCurrentScreen} />}
       {currentScreen === 9 && <Screen9 setScreen={setCurrentScreen} userId={user.uid} />}
       {currentScreen === 10 && <Screen10 setScreen={setCurrentScreen} />}
+      {currentScreen === 11 && <Screen11 setScreen={setCurrentScreen} userId={user.uid} />}
     </div>
   );
 }
@@ -194,7 +239,7 @@ function Screen0({ setScreen, userId }: { setScreen: (n: number) => void; userId
             </div>
 
             <div className="flex gap-2 mb-6 border-b border-gray-200 overflow-x-auto">
-              {['matches', 'winrate', 'avgrating', 'videos', 'analytics'].map((t: string) => {
+              {['matches', 'winrate', 'avgrating', 'videos', 'analytics'].map((t) => {
                 const labels = { matches: 'MATCHES', winrate: 'WIN RATE', avgrating: 'AVG RATING', videos: 'VIDEOS', analytics: 'ANALYTICS' };
                 return (
                   <button
@@ -394,7 +439,7 @@ function Screen0({ setScreen, userId }: { setScreen: (n: number) => void; userId
                                 if (confirm('Are you sure you want to delete this video?')) {
                                   try {
                                     await deleteVideo(video.id, video.videoUrl);
-                                    setUserVideos(userVideos.filter((v: any) => v.id !== video.id));
+                                    setUserVideos(userVideos.filter(v => v.id !== video.id));
                                     alert('✅ Video deleted successfully!');
                                   } catch (err: any) {
                                     console.error('Delete failed:', err);
@@ -510,7 +555,7 @@ function Screen1({ setScreen }: { setScreen: (n: number) => void }) {
         const blob = new Blob(chunks, { type: 'video/webm' });
         setVideoBlob(blob);
         currentVideoBlob = blob; // Store for access across screens
-        stream.getTracks().forEach((track: MediaStreamTrack) => track.stop());
+        stream.getTracks().forEach(track => track.stop());
       };
 
       mediaRecorder.start();
@@ -700,7 +745,7 @@ function Screen1({ setScreen }: { setScreen: (n: number) => void }) {
                   onClick={() => {
                     setShowVideoRecorder(false);
                     if (streamRef.current) {
-                      streamRef.current.getTracks().forEach((track: MediaStreamTrack) => track.stop());
+                      streamRef.current.getTracks().forEach(track => track.stop());
                     }
                   }}
                   className="w-full text-sm text-gray-400 hover:text-gray-200"
@@ -765,7 +810,7 @@ function Screen2({ setScreen }: { setScreen: (n: number) => void }) {
             {t:'Comparing to pro benchmark',d:false,a:true},
             {t:'Building highlight reel',d:false},
             {t:'Finalizing rating',d:false}
-          ].map((i: any, x: number) => (
+          ].map((i,x) => (
             <div key={x} className="flex items-center gap-3">
               <div
                 className="w-5 h-5 rounded-full flex items-center justify-center text-white text-xs"
@@ -884,7 +929,7 @@ function Screen3({ setScreen }: { setScreen: (n: number) => void }) {
       // Navigate to next screen (or analysis screen if video was uploaded)
       setTimeout(() => {
         if (analysis) {
-          setScreen(10); // Go to analysis screen
+          setScreen(11); // Go to 4-player detection modal
         } else {
           setScreen(4); // Go to normal flow
         }
@@ -1004,7 +1049,7 @@ function Screen4({ setScreen }: { setScreen: (n: number) => void }) {
 
             <div className="space-y-3 mb-6">
               {rallies.length > 0 ? (
-                rallies.map((rally: any) => (
+                rallies.map((rally) => (
                   <div key={rally.number} className="bg-gray-50 rounded-lg p-4 border border-gray-200">
                     <div className="font-semibold text-sm mb-2">Rally {rally.number}</div>
                     <div className="text-xs text-gray-600 mb-2">{rally.shots} shots • {rally.duration} seconds</div>
@@ -1123,7 +1168,7 @@ function Screen5({ setScreen }: { setScreen: (n: number) => void }) {
             </div>
 
             <div className="space-y-3 mb-6">
-              {tips.map((tip: any, idx: number) => (
+              {tips.map((tip, idx) => (
                 <div
                   key={idx}
                   className={`border-l-4 p-4 rounded ${
@@ -1217,7 +1262,7 @@ function Screen6({ setScreen }: { setScreen: (n: number) => void }) {
         )}
 
         <div className="flex gap-3 mb-6">
-          {['📱 WhatsApp', '𝕏 Twitter', '📘 Facebook'].map((s: string) => (
+          {['📱 WhatsApp', '𝕏 Twitter', '📘 Facebook'].map(s => (
             <button
               key={s}
               className="flex-1 bg-white hover:bg-gray-100 py-3 rounded-lg font-semibold text-sm border border-gray-300"
@@ -1280,7 +1325,7 @@ function Screen7({ setScreen, userId }: { setScreen: (n: number) => void; userId
     };
     let count = 0;
 
-    videoAnalyses.forEach((analysis: any) => {
+    videoAnalyses.forEach(analysis => {
       if (analysis.shotSummary) {
         totals.dinks += analysis.shotSummary.dinks || 0;
         totals.drives += analysis.shotSummary.drives || 0;
@@ -1319,7 +1364,7 @@ function Screen7({ setScreen, userId }: { setScreen: (n: number) => void; userId
     };
     let count = 0;
 
-    videoAnalyses.forEach((analysis: any) => {
+    videoAnalyses.forEach(analysis => {
       if (analysis.playerTechnique) {
         totals.footwork += analysis.playerTechnique.footwork || 0;
         totals.positioning += analysis.playerTechnique.positioning || 0;
@@ -1377,7 +1422,7 @@ function Screen7({ setScreen, userId }: { setScreen: (n: number) => void; userId
       normalized * 0.9,
       normalized * 0.95,
       normalized,
-    ].map((v: number) => Math.max(30, Math.min(100, v)));
+    ].map(v => Math.max(30, Math.min(100, v)));
   };
 
   const ratingTrend = generateRatingTrend();
@@ -1440,7 +1485,7 @@ function Screen7({ setScreen, userId }: { setScreen: (n: number) => void; userId
             <div className="bg-green-50 rounded-lg p-4 mb-4">
               <div className="text-xs font-bold text-gray-500 mb-2">PRO RATING TREND</div>
               <div className="h-20 bg-white rounded flex items-end gap-1 px-2 py-2">
-                {ratingTrend.map((h: number, i: number) => (
+                {ratingTrend.map((h, i) => (
                   <div key={i} className="flex-1 bg-green-600 rounded-t" style={{height: `${h}%`}}></div>
                 ))}
               </div>
@@ -1460,7 +1505,7 @@ function Screen7({ setScreen, userId }: { setScreen: (n: number) => void; userId
                   { key: 'volleys', label: 'Volleys' },
                   { key: 'smashes', label: 'Smashes' },
                   { key: 'serves', label: 'Serves' }
-                ].map((shot: any) => {
+                ].map((shot) => {
                   const percent = shotStats[shot.key as keyof typeof shotStats] as number || 0;
                   const colors = ['bg-green-600', 'bg-amber-600', 'bg-blue-600', 'bg-purple-600', 'bg-red-600', 'bg-pink-600', 'bg-indigo-600'];
                   return (
@@ -1512,7 +1557,7 @@ function Screen7({ setScreen, userId }: { setScreen: (n: number) => void; userId
               <div className="space-y-3">
                 <div className="text-xs font-bold text-gray-600 mb-2">HEAD-TO-HEAD RECORDS</div>
                 {Object.entries(opponentRecords).length > 0 ? (
-                  Object.entries(opponentRecords).map(([opponent, record]: [string, any]) => (
+                  Object.entries(opponentRecords).map(([opponent, record]) => (
                     <button
                       key={opponent}
                       onClick={() => setSelectedOpponent(opponent)}
@@ -1992,4 +2037,159 @@ function Screen10({ setScreen }: { setScreen: (n: number) => void }) {
       </div>
     </div>
   );
+
 }
+
+function Screen11({ setScreen, userId }: { setScreen: (n: number) => void; userId: string }) {
+  const [detectedPlayers] = useState<DetectedPlayer[]>(generateDetectedPlayers());
+  const [selectedPlayers, setSelectedPlayers] = useState<number[]>([]);
+  const [saving, setSaving] = useState(false);
+
+  const togglePlayerSelection = (playerId: number) => {
+    setSelectedPlayers((prev: number[]) => {
+      if (prev.includes(playerId)) {
+        return prev.filter((id: number) => id !== playerId);
+      } else {
+        if (prev.length < 2) {
+          return [...prev, playerId];
+        }
+        return prev;
+      }
+    });
+  };
+
+  const handleSaveAnalysis = async () => {
+    if (selectedPlayers.length === 0) {
+      alert('Please select at least 1 player');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const matchData = sessionStorage.getItem('currentMatch');
+      const analysis = sessionStorage.getItem('matchAnalysis');
+      const videoUrl = sessionStorage.getItem('matchVideoUrl');
+
+      if (!matchData || !analysis) {
+        alert('Missing match data');
+        return;
+      }
+
+      const matchDataObj = JSON.parse(matchData);
+      const analysisObj = JSON.parse(analysis);
+      const matchType = selectedPlayers.length === 1 ? '1v1' : '2v2';
+
+      // Build opponent identifier from selected players' clothing colors
+      const selectedPlayersList = detectedPlayers.filter((p: DetectedPlayer) => selectedPlayers.includes(p.id));
+      const opponentIdentifier = selectedPlayersList
+        .map((p: DetectedPlayer) => `${p.shirtColor} shirt, ${p.shortsColor} shorts`)
+        .join(' & ');
+
+      // Save video analysis to Firestore
+      await saveVideoAnalysis(userId, {
+        opponent: opponentIdentifier,
+        selectedPlayers: selectedPlayers,
+        matchType: matchType,
+        detectedPlayers: detectedPlayers,
+        shotBreakdown: analysisObj.shotBreakdown,
+        techniqueAnalysis: analysisObj.techniqueAnalysis,
+        proComparison: analysisObj.proComparison,
+        coachingTips: analysisObj.coachingTips,
+        overallInsights: analysisObj.overallInsights,
+        analysisDate: new Date().toISOString(),
+        videoUrl: videoUrl || '',
+      });
+
+      console.log(`✅ Analysis auto-saved (${matchType}). Opponent: ${opponentIdentifier}`);
+      alert(`Match analysis saved! Match type: ${matchType}`);
+
+      // Navigate to analysis view
+      setScreen(10);
+    } catch (err) {
+      console.error('Error saving analysis:', err);
+      alert('Failed to save analysis');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleCancel = () => {
+    setSelectedPlayers([]);
+    sessionStorage.removeItem('matchAnalysis');
+    sessionStorage.removeItem('matchVideoUrl');
+    setScreen(0);
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-b from-purple-50 to-white p-4">
+      <div className="max-w-md mx-auto">
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold text-gray-800 mb-2">Identify Opponents</h1>
+          <p className="text-gray-600 text-sm">Select the opponent(s) by their clothing colors</p>
+        </div>
+
+        {/* 4-Player Grid */}
+        <div className="bg-white rounded-lg border border-gray-200 p-4 mb-6">
+          <div className="grid grid-cols-2 gap-4">
+            {detectedPlayers.map((player: DetectedPlayer) => (
+              <button
+                key={player.id}
+                onClick={() => togglePlayerSelection(player.id)}
+                className={`p-4 rounded-lg border-2 transition-all text-center ${
+                  selectedPlayers.includes(player.id)
+                    ? 'border-green-500 bg-green-50'
+                    : 'border-gray-200 bg-white hover:border-gray-300'
+                }`}
+              >
+                <div className="font-bold text-gray-800 mb-3">Player {player.id}</div>
+
+                {/* Shirt Color Swatch */}
+                <div className="flex items-center gap-2 mb-2">
+                  <div className={`w-6 h-6 rounded ${getColorBg(player.shirtColor)}`}></div>
+                  <span className="text-xs text-gray-700">{player.shirtColor}</span>
+                </div>
+
+                {/* Shorts Color Swatch */}
+                <div className="flex items-center gap-2">
+                  <div className={`w-6 h-6 rounded ${getColorBg(player.shortsColor)}`}></div>
+                  <span className="text-xs text-gray-700">{player.shortsColor}</span>
+                </div>
+
+                {selectedPlayers.includes(player.id) && (
+                  <div className="mt-3 text-green-600 text-sm font-semibold">✓ Selected</div>
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Selection Info */}
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+          <p className="text-sm text-blue-900">
+            {selectedPlayers.length === 0 && '👆 Select 1 player for 1v1 or 2 players for 2v2'}
+            {selectedPlayers.length === 1 && '✓ 1v1 Match selected'}
+            {selectedPlayers.length === 2 && '✓ 2v2 Match selected'}
+          </p>
+        </div>
+
+        {/* Buttons */}
+        <div className="flex gap-3">
+          <button
+            onClick={handleCancel}
+            className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-800 py-3 rounded-lg font-bold"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSaveAnalysis}
+            disabled={saving || selectedPlayers.length === 0}
+            className="flex-1 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white py-3 rounded-lg font-bold"
+          >
+            {saving ? 'Saving...' : 'Save Analysis'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+

@@ -1,0 +1,196 @@
+
+// Types for 4-player detection feature
+interface DetectedPlayer {
+  id: number;
+  shirtColor: string;
+  shortsColor: string;
+  description: string;
+}
+
+// Helper function to generate detected players with random colors
+function generateDetectedPlayers(): DetectedPlayer[] {
+  const shirtColors = ['Red', 'Blue', 'Black', 'White', 'Yellow', 'Green', 'Orange', 'Purple'];
+  const shortsColors = ['White', 'Black', 'Navy', 'Gray', 'Khaki', 'Blue'];
+
+  const players: DetectedPlayer[] = [];
+  for (let i = 1; i <= 4; i++) {
+    players.push({
+      id: i,
+      shirtColor: shirtColors[Math.floor(Math.random() * shirtColors.length)],
+      shortsColor: shortsColors[Math.floor(Math.random() * shortsColors.length)],
+      description: `Player ${i}`,
+    });
+  }
+  return players;
+}
+
+// Helper function to map color names to Tailwind background classes
+function getColorBg(color: string): string {
+  const colorMap: Record<string, string> = {
+    Red: 'bg-red-500',
+    Blue: 'bg-blue-500',
+    Black: 'bg-gray-900',
+    White: 'bg-white border-2 border-gray-300',
+    Yellow: 'bg-yellow-400',
+    Green: 'bg-green-500',
+    Orange: 'bg-orange-500',
+    Purple: 'bg-purple-500',
+    Navy: 'bg-blue-900',
+    Gray: 'bg-gray-500',
+    Khaki: 'bg-yellow-600',
+  };
+  return colorMap[color] || 'bg-gray-500';
+}
+
+function Screen11({ setScreen, userId }: { setScreen: (n: number) => void; userId: string }) {
+  const [detectedPlayers] = useState<DetectedPlayer[]>(generateDetectedPlayers());
+  const [selectedPlayers, setSelectedPlayers] = useState<number[]>([]);
+  const [saving, setSaving] = useState(false);
+
+  const togglePlayerSelection = (playerId: number) => {
+    setSelectedPlayers((prev: number[]) => {
+      if (prev.includes(playerId)) {
+        return prev.filter((id: number) => id !== playerId);
+      } else {
+        if (prev.length < 2) {
+          return [...prev, playerId];
+        }
+        return prev;
+      }
+    });
+  };
+
+  const handleSaveAnalysis = async () => {
+    if (selectedPlayers.length === 0) {
+      alert('Please select at least 1 player');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const matchData = sessionStorage.getItem('currentMatch');
+      const analysis = sessionStorage.getItem('matchAnalysis');
+      const videoUrl = sessionStorage.getItem('matchVideoUrl');
+
+      if (!matchData || !analysis) {
+        alert('Missing match data');
+        return;
+      }
+
+      const matchDataObj = JSON.parse(matchData);
+      const analysisObj = JSON.parse(analysis);
+      const matchType = selectedPlayers.length === 1 ? '1v1' : '2v2';
+
+      // Build opponent identifier from selected players' clothing colors
+      const selectedPlayersList = detectedPlayers.filter((p: DetectedPlayer) => selectedPlayers.includes(p.id));
+      const opponentIdentifier = selectedPlayersList
+        .map((p: DetectedPlayer) => `${p.shirtColor} shirt, ${p.shortsColor} shorts`)
+        .join(' & ');
+
+      // Save video analysis to Firestore
+      await saveVideoAnalysis(userId, {
+        opponent: opponentIdentifier,
+        selectedPlayers: selectedPlayers,
+        matchType: matchType,
+        detectedPlayers: detectedPlayers,
+        shotBreakdown: analysisObj.shotBreakdown,
+        techniqueAnalysis: analysisObj.techniqueAnalysis,
+        proComparison: analysisObj.proComparison,
+        coachingTips: analysisObj.coachingTips,
+        overallInsights: analysisObj.overallInsights,
+        analysisDate: new Date().toISOString(),
+        videoUrl: videoUrl || '',
+      });
+
+      console.log(`✅ Analysis auto-saved (${matchType}). Opponent: ${opponentIdentifier}`);
+      alert(`Match analysis saved! Match type: ${matchType}`);
+
+      // Navigate to analysis view
+      setScreen(10);
+    } catch (err) {
+      console.error('Error saving analysis:', err);
+      alert('Failed to save analysis');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleCancel = () => {
+    setSelectedPlayers([]);
+    sessionStorage.removeItem('matchAnalysis');
+    sessionStorage.removeItem('matchVideoUrl');
+    setScreen(0);
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-b from-purple-50 to-white p-4">
+      <div className="max-w-md mx-auto">
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold text-gray-800 mb-2">Identify Opponents</h1>
+          <p className="text-gray-600 text-sm">Select the opponent(s) by their clothing colors</p>
+        </div>
+
+        {/* 4-Player Grid */}
+        <div className="bg-white rounded-lg border border-gray-200 p-4 mb-6">
+          <div className="grid grid-cols-2 gap-4">
+            {detectedPlayers.map((player: DetectedPlayer) => (
+              <button
+                key={player.id}
+                onClick={() => togglePlayerSelection(player.id)}
+                className={`p-4 rounded-lg border-2 transition-all text-center ${
+                  selectedPlayers.includes(player.id)
+                    ? 'border-green-500 bg-green-50'
+                    : 'border-gray-200 bg-white hover:border-gray-300'
+                }`}
+              >
+                <div className="font-bold text-gray-800 mb-3">Player {player.id}</div>
+
+                {/* Shirt Color Swatch */}
+                <div className="flex items-center gap-2 mb-2">
+                  <div className={`w-6 h-6 rounded ${getColorBg(player.shirtColor)}`}></div>
+                  <span className="text-xs text-gray-700">{player.shirtColor}</span>
+                </div>
+
+                {/* Shorts Color Swatch */}
+                <div className="flex items-center gap-2">
+                  <div className={`w-6 h-6 rounded ${getColorBg(player.shortsColor)}`}></div>
+                  <span className="text-xs text-gray-700">{player.shortsColor}</span>
+                </div>
+
+                {selectedPlayers.includes(player.id) && (
+                  <div className="mt-3 text-green-600 text-sm font-semibold">✓ Selected</div>
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Selection Info */}
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+          <p className="text-sm text-blue-900">
+            {selectedPlayers.length === 0 && '👆 Select 1 player for 1v1 or 2 players for 2v2'}
+            {selectedPlayers.length === 1 && '✓ 1v1 Match selected'}
+            {selectedPlayers.length === 2 && '✓ 2v2 Match selected'}
+          </p>
+        </div>
+
+        {/* Buttons */}
+        <div className="flex gap-3">
+          <button
+            onClick={handleCancel}
+            className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-800 py-3 rounded-lg font-bold"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSaveAnalysis}
+            disabled={saving || selectedPlayers.length === 0}
+            className="flex-1 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white py-3 rounded-lg font-bold"
+          >
+            {saving ? 'Saving...' : 'Save Analysis'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}

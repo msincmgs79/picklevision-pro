@@ -217,3 +217,48 @@ export async function deleteVideo(videoId: string, videoUrl: string) {
     throw error;
   }
 }
+
+/**
+ * Save video analysis results to Firestore
+ */
+export async function saveVideoAnalysis(userId: string, analysisData: any) {
+  try {
+    const analysesRef = collection(db, `users/${userId}/videoAnalyses`);
+    const newDocRef = doc(analysesRef);
+    
+    const dataToSave = {
+      ...analysisData,
+      analyzedAt: Timestamp.now(),
+      createdAt: Timestamp.now(),
+    };
+    
+    await setDoc(newDocRef, dataToSave);
+    console.log('✅ Video analysis saved:', newDocRef.id);
+    return newDocRef;
+  } catch (error) {
+    console.error('Error saving video analysis:', error);
+    throw error;
+  }
+}
+
+/**
+ * Get all video analyses for a user
+ */
+export async function getUserVideoAnalyses(userId: string, limitCount: number = 20): Promise<Array<any>> {
+  try {
+    const analysesRef = collection(db, `users/${userId}/videoAnalyses`);
+    const q = query(
+      analysesRef,
+      orderBy('analyzedAt', 'desc'),
+      limit(limitCount)
+    );
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map((doc: any) => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+  } catch (error) {
+    console.error('Error getting video analyses:', error);
+    return [];
+  }
+}
