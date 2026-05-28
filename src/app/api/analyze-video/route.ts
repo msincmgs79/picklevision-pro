@@ -5,17 +5,18 @@ const anthropic = new Anthropic({
 });
 
 export async function POST(request: Request) {
+  let errorDetails = '';
+  
   try {
     const { frameBase64 } = await request.json();
-    console.log('📥 API received frameBase64, length:', frameBase64?.length || 0);
     
     if (!frameBase64) {
-      console.error('❌ No frameBase64 provided');
-      return Response.json({ error: 'Frame data required' }, { status: 400 });
+      return Response.json({ 
+        error: 'Frame data required',
+        details: 'No frameBase64 in request body'
+      }, { status: 400 });
     }
 
-    console.log('🔄 Calling Claude Vision API...');
-    
     try {
       const response = await anthropic.messages.create({
         model: 'claude-3-5-sonnet-20241022',
@@ -31,7 +32,7 @@ export async function POST(request: Request) {
                   media_type: 'image/jpeg',
                   data: frameBase64,
                 },
-              },
+              } as any,
               {
                 type: 'text',
                 text: `Analyze this pickleball match image and identify player clothing colors. Return ONLY valid JSON:
@@ -53,28 +54,23 @@ Color names must be one of: Red, Blue, Black, White, Navy, Gray, Orange, Purple,
         ],
       });
 
-      console.log('✅ Claude Vision API responded');
-
       const textContent = response.content.find((block) => block.type === 'text');
       if (!textContent || textContent.type !== 'text') {
-        console.error('❌ No text in response');
-        throw new Error('No text response from Claude');
+        errorDetails = 'Claude did not return text content';
+        throw new Error(errorDetails);
       }
-
-      console.log('📄 Claude response:', textContent.text.substring(0, 200));
 
       let analysisData;
       try {
         const jsonMatch = textContent.text.match(/\{[\s\S]*\}/);
         if (!jsonMatch) {
-          console.error('❌ No JSON found in response');
-          throw new Error('No JSON found in response');
+          errorDetails = `Could not find JSON in response: "${textContent.text}"`;
+          throw new Error(errorDetails);
         }
         analysisData = JSON.parse(jsonMatch[0]);
-        console.log('✅ JSON parsed, playerColors count:', analysisData.playerColors?.length || 0);
       } catch (parseError) {
-        console.error('❌ JSON parse error:', parseError);
-        throw new Error('Failed to parse analysis response');
+        errorDetails = `JSON parse error: ${parseError instanceof Error ? parseError.message : 'Unknown'}`;
+        throw new Error(errorDetails);
       }
 
       const colorMap: Record<string, string> = {
@@ -128,8 +124,6 @@ Color names must be one of: Red, Blue, Black, White, Navy, Gray, Orange, Purple,
         });
       }
 
-      console.log('✅ Detected players:', normalizedPlayers);
-
       return Response.json({
         success: true,
         analysis: {
@@ -154,16 +148,18 @@ Color names must be one of: Red, Blue, Black, White, Navy, Gray, Orange, Purple,
         },
       });
     } catch (claudeError) {
-      console.error('❌ Claude Vision API error:', claudeError);
-      throw claudeError;
+      const err = claudeError as any;
+      errorDetails = err?.message || JSON.stringify(claudeError);
+      throw new Error(`Claude Vision API failed: ${errorDetails}`);
     }
   } catch (error) {
-    console.error('❌ API Error:', error);
-    const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-    console.error('Error details:', errorMsg);
-    return Response.json(
-      { error: 'Failed to analyze video frame', details: errorMsg },
-      { status: 500 }
-    );
+    const err = error as any;
+    const finalError = err?.message || 'Unknown error';
+    
+    return Response.json({
+      success: false,
+      error: 'Failed to analyze video frame',
+      details: finalError,
+    }, { status: 500 });
   }
 }
