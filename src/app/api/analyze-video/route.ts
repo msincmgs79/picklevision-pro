@@ -1,160 +1,165 @@
-/**
- * API Route: Analyze uploaded video for game breakdown
- * Extracts key frames and uses Claude Vision API for analysis
- */
-
-import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
-import { extractFramesFromUrl } from '@/lib/videoFrameExtractor';
 
-const client = new Anthropic({
+const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 });
 
-export async function POST(request: NextRequest) {
+export async function POST(request: Request) {
   try {
     const { videoUrl } = await request.json();
 
     if (!videoUrl) {
-      return NextResponse.json(
-        { error: 'Video URL is required' },
-        { status: 400 }
-      );
+      return Response.json({ error: 'Video URL required' }, { status: 400 });
     }
 
-    // Try to extract frames from video
-    let frames: string[] = [];
-    try {
-      frames = await extractFramesFromUrl(videoUrl, 3);
-    } catch (error) {
-      console.warn('Frame extraction failed, using fallback analysis', error);
-    }
-
-    // If we got frames, analyze them with Claude Vision
-    if (frames.length > 0) {
-      try {
-        // Build content array with frames and prompt
-        const content: Array<{ type: string; source?: { type: string; media_type: string; data: string }; text?: string }> = [];
-        
-        // Add extracted frames as images
-        for (const frame of frames) {
-          content.push({
-            type: 'image',
-            source: {
-              type: 'base64',
-              media_type: 'image/jpeg',
-              data: frame,
-            },
-          });
-        }
-
-        // Add analysis prompt
-        content.push({
-          type: 'text',
-          text: `Analyze these pickleball game frames and provide a detailed breakdown:
-
-1. Count the shots visible: How many dinks, drives, drops, lobs, volleys, smashes, and serves?
-2. Player technique: Rate the footwork, positioning, and consistency (1-100)
-3. Game style: Is it aggressive (drives/smashes) or defensive (dinks/drops)?
-4. Key observations: What are 3-5 key insights about the player's game?
-
-Respond in JSON format only:
-{
-  "shotCounts": {
-    "dinks": number,
-    "drives": number,
-    "drops": number,
-    "lobs": number,
-    "volleys": number,
-    "smashes": number,
-    "serves": number
-  },
-  "technique": {
-    "footwork": number,
-    "positioning": number,
-    "consistency": number
-  },
-  "gameStyle": "aggressive|defensive|balanced",
-  "insights": ["insight1", "insight2", "insight3"],
-  "totalShots": number
-}`,
-        });
-
-        // Analyze with Claude Vision
-        const analysisResponse = await client.messages.create({
-          model: 'claude-3-5-sonnet-20241022',
-          max_tokens: 2048,
-          messages: [
+    // Analyze video with Claude Vision for shot analysis and player colors
+    const response = await anthropic.messages.create({
+      model: 'claude-3-5-sonnet-20241022',
+      max_tokens: 1024,
+      messages: [
+        {
+          role: 'user',
+          content: [
             {
-              role: 'user',
-              content: content as Anthropic.Messages.MessageParam['content'],
-            }
+              type: 'image',
+              source: {
+                type: 'url',
+                url: videoUrl,
+              },
+            },
+            {
+              type: 'text',
+              text: `Analyze this pickleball match video frame and provide:
+
+1. Shot type counts (dinks, drives, drops, lobs, volleys, smashes, serves)
+2. Player clothing colors - describe the shirt color and shorts/pants color for up to 4 players you can see
+3. Player technique assessment (footwork 1-5, positioning 1-5, consistency 1-5)
+4. Game style (aggressive, defensive, or balanced)
+
+For player colors, format as: "Player 1: Red shirt, Black shorts" etc.
+
+Return a JSON response with this structure:
+{
+  "shotCounts": { "dinks": number, "drives": number, "drops": number, "lobs": number, "volleys": number, "smashes": number, "serves": number },
+  "playerColors": [
+    { "id": 1, "shirtColor": "string", "shortsColor": "string" },
+    ...
+  ],
+  "playerTechnique": { "footwork": number, "positioning": number, "consistency": number },
+  "gameStyle": "aggressive" | "defensive" | "balanced"
+}`,
+            },
           ],
-        });
+        },
+      ],
+    });
 
-        const responseContent = analysisResponse.content[0];
-        if (responseContent.type !== 'text') {
-          throw new Error('Unexpected response format');
-        }
-
-        const analysis = JSON.parse(responseContent.text);
-
-        return NextResponse.json({
-          success: true,
-          analysis: {
-            shotSummary: analysis.shotCounts,
-            playerTechnique: analysis.technique,
-            gameStyle: analysis.gameStyle,
-            gameInsights: analysis.insights,
-            totalShots: analysis.totalShots,
-          },
-        });
-      } catch (error) {
-        console.warn('Claude Vision analysis failed:', error);
-        // Fall through to fallback analysis
-      }
+    // Extract the text response
+    const textContent = response.content.find((block) => block.type === 'text');
+    if (!textContent || textContent.type !== 'text') {
+      throw new Error('No text response from Claude');
     }
 
-    // Fallback: Return simulated realistic analysis
-    const analysis = {
-      shotSummary: {
-        dinks: Math.floor(Math.random() * 15) + 15,
-        drives: Math.floor(Math.random() * 10) + 8,
-        drops: Math.floor(Math.random() * 8) + 5,
-        lobs: Math.floor(Math.random() * 5) + 2,
-        volleys: Math.floor(Math.random() * 12) + 10,
-        smashes: Math.floor(Math.random() * 6) + 3,
-        serves: Math.floor(Math.random() * 5) + 5,
-      },
-      playerTechnique: {
-        footwork: Math.floor(Math.random() * 30) + 60,
-        positioning: Math.floor(Math.random() * 30) + 60,
-        consistency: Math.floor(Math.random() * 30) + 60,
-      },
-      gameStyle: ['aggressive', 'defensive', 'balanced'][Math.floor(Math.random() * 3)] as 'aggressive' | 'defensive' | 'balanced',
-      gameInsights: [
-        'Player demonstrates strong net positioning and court awareness',
-        'Good technique on dink shots with consistent control',
-        'Opportunity to increase aggressive play on overheads',
-      ],
-      totalShots: 0,
+    // Parse the JSON response
+    let analysisData;
+    try {
+      // Extract JSON from the response (it might be wrapped in markdown)
+      const jsonMatch = textContent.text.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) {
+        throw new Error('No JSON found in response');
+      }
+      analysisData = JSON.parse(jsonMatch[0]);
+    } catch (parseError) {
+      console.error('Failed to parse Claude response:', textContent.text);
+      throw new Error('Failed to parse analysis response');
+    }
+
+    // Normalize color names to match our available colors
+    const colorMap: Record<string, string> = {
+      'red': 'Red',
+      'blue': 'Blue',
+      'black': 'Black',
+      'white': 'White',
+      'navy': 'Navy',
+      'gray': 'Gray',
+      'grey': 'Gray',
+      'orange': 'Orange',
+      'purple': 'Purple',
+      'yellow': 'Yellow',
+      'green': 'Green',
+      'khaki': 'Khaki',
     };
 
-    // Calculate total shots
-    analysis.totalShots = Object.values(analysis.shotSummary).reduce((sum, count) => sum + count, 0);
+    const normalizeColor = (color: string): string => {
+      const normalized = color.toLowerCase().trim();
+      for (const [key, value] of Object.entries(colorMap)) {
+        if (normalized.includes(key)) {
+          return value;
+        }
+      }
+      return color.charAt(0).toUpperCase() + color.slice(1);
+    };
 
-    return NextResponse.json({
+    // Normalize player colors
+    const normalizedPlayers = (analysisData.playerColors || []).slice(0, 4).map(
+      (player: { id: number; shirtColor: string; shortsColor: string }, index: number) => ({
+        id: index + 1,
+        shirtColor: normalizeColor(player.shirtColor || 'Black'),
+        shortsColor: normalizeColor(player.shortsColor || 'White'),
+      })
+    );
+
+    // Pad with common outfits if less than 4 detected
+    const commonOutfits = [
+      { shirt: 'Black', shorts: 'White' },
+      { shirt: 'White', shorts: 'Black' },
+      { shirt: 'Navy', shorts: 'White' },
+      { shirt: 'Gray', shorts: 'Black' },
+    ];
+
+    while (normalizedPlayers.length < 4) {
+      const outfit = commonOutfits[normalizedPlayers.length];
+      normalizedPlayers.push({
+        id: normalizedPlayers.length + 1,
+        shirtColor: outfit.shirt,
+        shortsColor: outfit.shorts,
+      });
+    }
+
+    return Response.json({
       success: true,
-      analysis,
+      analysis: {
+        shotSummary: {
+          dinks: analysisData.shotCounts?.dinks || 0,
+          drives: analysisData.shotCounts?.drives || 0,
+          drops: analysisData.shotCounts?.drops || 0,
+          lobs: analysisData.shotCounts?.lobs || 0,
+          volleys: analysisData.shotCounts?.volleys || 0,
+          smashes: analysisData.shotCounts?.smashes || 0,
+          serves: analysisData.shotCounts?.serves || 0,
+        },
+        playerTechnique: {
+          footwork: analysisData.playerTechnique?.footwork || 3,
+          positioning: analysisData.playerTechnique?.positioning || 3,
+          consistency: analysisData.playerTechnique?.consistency || 50,
+        },
+        gameStyle: analysisData.gameStyle || 'balanced',
+        gameInsights: [`Game style detected: ${analysisData.gameStyle || 'balanced'}`],
+        totalShots:
+          (analysisData.shotCounts?.dinks || 0) +
+          (analysisData.shotCounts?.drives || 0) +
+          (analysisData.shotCounts?.drops || 0) +
+          (analysisData.shotCounts?.lobs || 0) +
+          (analysisData.shotCounts?.volleys || 0) +
+          (analysisData.shotCounts?.smashes || 0) +
+          (analysisData.shotCounts?.serves || 0),
+        playerColors: normalizedPlayers,
+      },
     });
   } catch (error) {
     console.error('Video analysis error:', error);
-
-    return NextResponse.json(
-      {
-        error: 'Failed to analyze video',
-        details: error instanceof Error ? error.message : 'Unknown error',
-      },
+    return Response.json(
+      { error: 'Failed to analyze video', details: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
     );
   }
