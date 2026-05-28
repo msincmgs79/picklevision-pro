@@ -43,28 +43,27 @@ Focus on identifying the actual clothing colors of the players in the video. Be 
       },
     ]);
 
-    // Handle multiple possible response structures from Gemini API
+    // Extract text from Gemini response using the SDK method
     let responseText = '';
 
-    // Try primary path: response.candidates[0].content.parts[0].text
-    if (response.candidates && response.candidates[0]?.content?.parts?.[0]?.text) {
-      responseText = response.candidates[0].content.parts[0].text;
-    }
-    // Try alternative: direct text() method if available
-    else if (typeof (response as any).text === 'function') {
-      responseText = await (response as any).text();
-    }
-    // Try alternative: response might have text property directly
-    else if ((response as any).text) {
-      responseText = (response as any).text;
+    try {
+      // Google Generative AI SDK returns a response with a text() method
+      responseText = response.text();
+    } catch (textErr) {
+      console.error('Error extracting text from response:', textErr);
+      return Response.json({
+        success: false,
+        error: 'Failed to extract text from Gemini API response',
+        details: (textErr as any)?.message || 'Unknown error',
+      }, { status: 500 });
     }
 
     if (!responseText || typeof responseText !== 'string') {
-      console.error('Unexpected response structure:', JSON.stringify(response).substring(0, 200));
+      console.error('Response text is not a string:', typeof responseText);
       return Response.json({
         success: false,
-        error: 'Unexpected response format from Gemini API',
-        details: 'Could not extract text from response',
+        error: 'Invalid response format from Gemini API',
+        details: 'Response text is empty or not a string',
       }, { status: 500 });
     }
 
