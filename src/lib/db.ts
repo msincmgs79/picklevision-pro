@@ -220,21 +220,37 @@ export async function deleteVideo(videoId: string, videoUrl: string) {
 
 /**
  * Save video analysis results to Firestore
+ * Supports both signatures:
+ * - saveVideoAnalysis(userId, analysisData)
+ * - saveVideoAnalysis(userId, videoId, analysis)
  */
-export async function saveVideoAnalysis(userId: string, analysisData: any) {
+export async function saveVideoAnalysis(userId: string, videoIdOrData: string | any, analysisData?: any) {
   try {
-    const analysesRef = collection(db, `users/${userId}/videoAnalyses`);
-    const newDocRef = doc(analysesRef);
-    
-    const dataToSave = {
-      ...analysisData,
-      analyzedAt: Timestamp.now(),
-      createdAt: Timestamp.now(),
-    };
-    
-    await setDoc(newDocRef, dataToSave);
-    console.log('✅ Video analysis saved:', newDocRef.id);
-    return newDocRef;
+    let docId: string;
+    let dataToSave: any;
+
+    if (typeof videoIdOrData === 'string' && analysisData) {
+      // 3-arg signature: (userId, videoId, analysis)
+      docId = videoIdOrData;
+      dataToSave = {
+        ...analysisData,
+        videoId: videoIdOrData,
+        analyzedAt: Timestamp.now(),
+      };
+    } else {
+      // 2-arg signature: (userId, analysisData)
+      docId = Date.now().toString();
+      dataToSave = {
+        ...videoIdOrData,
+        analyzedAt: Timestamp.now(),
+        createdAt: Timestamp.now(),
+      };
+    }
+
+    const analysisRef = doc(db, `users/${userId}/videoAnalyses`, docId);
+    await setDoc(analysisRef, dataToSave);
+    console.log('✅ Video analysis saved:', docId);
+    return analysisRef;
   } catch (error) {
     console.error('Error saving video analysis:', error);
     throw error;
@@ -244,21 +260,4 @@ export async function saveVideoAnalysis(userId: string, analysisData: any) {
 /**
  * Get all video analyses for a user
  */
-export async function getUserVideoAnalyses(userId: string, limitCount: number = 20): Promise<Array<any>> {
-  try {
-    const analysesRef = collection(db, `users/${userId}/videoAnalyses`);
-    const q = query(
-      analysesRef,
-      orderBy('analyzedAt', 'desc'),
-      limit(limitCount)
-    );
-    const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map((doc: any) => ({
-      id: doc.id,
-      ...doc.data()
-    }));
-  } catch (error) {
-    console.error('Error getting video analyses:', error);
-    return [];
-  }
-}
+export as
