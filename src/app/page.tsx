@@ -2075,6 +2075,8 @@ function Screen11({ setScreen, userId }: { setScreen: (n: number) => void; userI
       }
 
       const analysisObj = JSON.parse(analysis);
+      const matchType = selectedPlayers.length === 1 ? '1v1' : '2v2';
+
       // Build opponent identifier from selected players' clothing colors
       const selectedPlayersList = detectedPlayers.filter((p: DetectedPlayer) => selectedPlayers.includes(p.id));
       const opponentIdentifier = selectedPlayersList
@@ -2189,4 +2191,4 @@ function Screen11({ setScreen, userId }: { setScreen: (n: number) => void; userI
   );
 }
 
-                                                                                                                             
+                                                      
