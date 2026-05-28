@@ -158,21 +158,21 @@ function generateDetectedPlayerColors(): DetectedPlayerColor[] {
   }));
 }
 
-export async function analyzeMatchVideo(frameBase64: string): Promise<MatchAnalysis> {
+export async function analyzeMatchVideo(videoBase64: string): Promise<MatchAnalysis> {
   let shotDetections = generateShotDetections();
   let breakdown = calculateShotBreakdown(shotDetections);
   let detectedPlayerColors = generateDetectedPlayerColors();
 
-  // Analyze video frame with Claude Vision API
-  if (frameBase64 && frameBase64.length > 0) {
+  // Call Gemini API for video analysis
+  if (videoBase64 && videoBase64.length > 0) {
     try {
-      console.log('Analyzing video frame with Claude Vision API');
-      const videoAnalysis = await analyzeGameVideo(frameBase64);
-      
-      // Use detected player colors from API
+      console.log('📹 Sending video to Gemini API...');
+      const videoAnalysis = await analyzeGameVideo(videoBase64);
+
+      // Use detected player colors from Gemini
       if (videoAnalysis.playerColors && videoAnalysis.playerColors.length > 0) {
         detectedPlayerColors = videoAnalysis.playerColors;
-        console.log('✓ Detected player colors from video:', detectedPlayerColors);
+        console.log('✓ Detected player colors from Gemini:', detectedPlayerColors);
       }
 
       breakdown = {
@@ -191,7 +191,6 @@ export async function analyzeMatchVideo(frameBase64: string): Promise<MatchAnaly
         aggressivenessScore: Math.round(((videoAnalysis.shotSummary.drives + videoAnalysis.shotSummary.smashes) / Math.max(1, videoAnalysis.totalShots)) * 100),
       };
 
-      // Convert shot counts to detections for consistency
       shotDetections = [];
       for (let i = 0; i < videoAnalysis.shotSummary.dinks; i++) shotDetections.push({
         type: 'dink',
@@ -209,14 +208,10 @@ export async function analyzeMatchVideo(frameBase64: string): Promise<MatchAnaly
         description: 'Drop shot detected',
       });
 
-      console.log('Video analysis completed:', breakdown);
+      console.log('✓ Gemini analysis complete');
     } catch (error) {
-      console.warn('Video analysis failed, using simulated data:', error);
-      // Fall back to simulated analysis
+      console.warn('⚠️ Gemini analysis failed, using fallback colors:', error);
     }
-  } else {
-    // Simulate analysis delay for no-video case
-    await new Promise(resolve => setTimeout(resolve, 2000));
   }
 
   // Generate realistic analysis based on shot patterns
@@ -430,15 +425,4 @@ function generateOverallInsights(
   proComparison: ProComparison
 ): string {
   const avgTechnique = (technique.footwork.rating + technique.positioning.rating +
-    technique.racketTechnique.rating + technique.balance.rating) / 4;
-
-  return `Your match shows ${
-    avgTechnique >= 4 ? 'strong' : 'solid'
-  } fundamental technique with ${
-    breakdown.aggressivenessScore > 50 ? 'an aggressive' : 'a balanced'
-  } playing style. You're playing similarly to ${
-    proComparison.proStyleMatch.split(' - ')[0]
-  }. Focus on ${
-    proComparison.improvementAreas[0] || 'consistency'
-  } to elevate your game to the next level. Keep working on your net game and court positioning.`;
-}
+    technique
