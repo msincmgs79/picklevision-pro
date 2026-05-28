@@ -15,7 +15,6 @@ import {
 import { db, storage } from './firebase';
 import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage';
 
-// User data type
 export interface User {
   uid: string;
   email: string;
@@ -28,7 +27,6 @@ export interface User {
   createdAt: Timestamp;
 }
 
-// Match data type
 export interface Match {
   id: string;
   userId: string;
@@ -60,9 +58,7 @@ export async function createUserProfile(uid: string, email: string, displayName?
 
 export async function updateDisplayName(uid: string, displayName: string) {
   const userRef = doc(db, 'users', uid);
-  await updateDoc(userRef, {
-    displayName
-  });
+  await updateDoc(userRef, { displayName });
 }
 
 export async function uploadMatchVideo(
@@ -77,8 +73,7 @@ export async function uploadMatchVideo(
     const storageRef = ref(storage, fileName);
     const uploadTask = uploadBytesResumable(storageRef, videoBlob);
     return new Promise((resolve, reject) => {
-      uploadTask.on(
-        'state_changed',
+      uploadTask.on('state_changed',
         (snapshot) => {
           const progress = snapshot.bytesTransferred / snapshot.totalBytes;
           onProgress?.(progress);
@@ -113,51 +108,28 @@ export async function getUserProfile(uid: string): Promise<User | null> {
 export async function saveMatch(userId: string, match: Omit<Match, 'id' | 'userId' | 'createdAt'>) {
   const matchRef = collection(db, 'matches');
   const newDocRef = doc(matchRef);
-  const matchData = {
-    userId,
-    ...match,
-    createdAt: Timestamp.now()
-  };
+  const matchData = { userId, ...match, createdAt: Timestamp.now() };
   await setDoc(newDocRef, matchData);
   return newDocRef.id;
 }
 
 export async function getUserMatches(userId: string, limitCount: number = 5) {
   const matchesRef = collection(db, 'matches');
-  const q = query(
-    matchesRef,
-    where('userId', '==', userId),
-    orderBy('date', 'desc'),
-    limit(limitCount)
-  );
+  const q = query(matchesRef, where('userId', '==', userId), orderBy('date', 'desc'), limit(limitCount));
   const querySnapshot = await getDocs(q);
-  return querySnapshot.docs.map(doc => ({
-    id: doc.id,
-    ...doc.data()
-  })) as (Match & { id: string })[];
+  return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as (Match & { id: string })[];
 }
 
 export async function updateUserStats(uid: string, wins: number, losses: number, proRating: number) {
   const userRef = doc(db, 'users', uid);
-  await updateDoc(userRef, {
-    wins,
-    losses,
-    proRating
-  });
+  await updateDoc(userRef, { wins, losses, proRating });
 }
 
 export async function getTopPlayers(limitCount: number = 20) {
   const usersRef = collection(db, 'users');
-  const q = query(
-    usersRef,
-    orderBy('proRating', 'desc'),
-    limit(limitCount)
-  );
+  const q = query(usersRef, orderBy('proRating', 'desc'), limit(limitCount));
   const querySnapshot = await getDocs(q);
-  return querySnapshot.docs.map(doc => ({
-    uid: doc.id,
-    ...doc.data()
-  })) as (User & { uid: string })[];
+  return querySnapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() })) as (User & { uid: string })[];
 }
 
 export function calculateProRating(wins: number, losses: number): number {
@@ -170,12 +142,7 @@ export function calculateProRating(wins: number, losses: number): number {
 export async function saveStandaloneVideo(userId: string, videoUrl: string, title?: string) {
   const videosRef = collection(db, 'videos');
   const newDocRef = doc(videosRef);
-  const videoData = {
-    userId,
-    videoUrl,
-    title: title || 'Uploaded Video',
-    uploadedAt: Timestamp.now()
-  };
+  const videoData = { userId, videoUrl, title: title || 'Uploaded Video', uploadedAt: Timestamp.now() };
   await setDoc(newDocRef, videoData);
   return newDocRef.id;
 }
@@ -185,17 +152,9 @@ export async function getUserVideos(
   limitCount: number = 10
 ): Promise<Array<{ id: string; userId: string; videoUrl: string; title?: string; uploadedAt: Timestamp }>> {
   const videosRef = collection(db, 'videos');
-  const q = query(
-    videosRef,
-    where('userId', '==', userId),
-    orderBy('uploadedAt', 'desc'),
-    limit(limitCount)
-  );
+  const q = query(videosRef, where('userId', '==', userId), orderBy('uploadedAt', 'desc'), limit(limitCount));
   const querySnapshot = await getDocs(q);
-  return querySnapshot.docs.map(doc => ({
-    id: doc.id,
-    ...doc.data()
-  })) as Array<{ id: string; userId: string; videoUrl: string; title?: string; uploadedAt: Timestamp }>;
+  return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Array<{ id: string; userId: string; videoUrl: string; title?: string; uploadedAt: Timestamp }>;
 }
 
 export async function deleteVideo(videoId: string, videoUrl: string) {
@@ -218,33 +177,17 @@ export async function deleteVideo(videoId: string, videoUrl: string) {
   }
 }
 
-/**
- * Save video analysis results to Firestore
- * Supports both signatures:
- * - saveVideoAnalysis(userId, analysisData)
- * - saveVideoAnalysis(userId, videoId, analysis)
- */
 export async function saveVideoAnalysis(userId: string, videoIdOrData: string | any, analysisData?: any) {
   try {
     let docId: string;
     let dataToSave: any;
 
     if (typeof videoIdOrData === 'string' && analysisData) {
-      // 3-arg signature: (userId, videoId, analysis)
       docId = videoIdOrData;
-      dataToSave = {
-        ...analysisData,
-        videoId: videoIdOrData,
-        analyzedAt: Timestamp.now(),
-      };
+      dataToSave = { ...analysisData, videoId: videoIdOrData, analyzedAt: Timestamp.now() };
     } else {
-      // 2-arg signature: (userId, analysisData)
       docId = Date.now().toString();
-      dataToSave = {
-        ...videoIdOrData,
-        analyzedAt: Timestamp.now(),
-        createdAt: Timestamp.now(),
-      };
+      dataToSave = { ...videoIdOrData, analyzedAt: Timestamp.now(), createdAt: Timestamp.now() };
     }
 
     const analysisRef = doc(db, `users/${userId}/videoAnalyses`, docId);
@@ -257,7 +200,14 @@ export async function saveVideoAnalysis(userId: string, videoIdOrData: string | 
   }
 }
 
-/**
- * Get all video analyses for a user
- */
-export as
+export async function getUserVideoAnalyses(userId: string, limitCount: number = 20): Promise<Array<any>> {
+  try {
+    const analysesRef = collection(db, `users/${userId}/videoAnalyses`);
+    const q = query(analysesRef, orderBy('analyzedAt', 'desc'), limit(limitCount));
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }));
+  } catch (error) {
+    console.error('Error getting video analyses:', error);
+    return [];
+  }
+}
