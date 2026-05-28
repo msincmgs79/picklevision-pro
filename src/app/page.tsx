@@ -898,26 +898,65 @@ function Screen3({ setScreen }: { setScreen: (n: number) => void }) {
       if (matchData.hasVideo && currentVideoBlob) {
         setUploading(true);
         try {
-          // Extract frame from video for analysis
+          // Convert video blob to base64 and analyze
           setAnalyzing(true);
           try {
-            console.log('Extracting frame from video...');
-            const frameBase64 = await extractFrameFromVideoBlob(currentVideoBlob);
+            console.log('Converting video to base64...');
+            console.log('currentVideoBlob:', currentVideoBlob ? `${currentVideoBlob.size} bytes` : 'null');
 
-            // Analyze the extracted frame
-            console.log('Analyzing frame with Claude Vision...');
-            const analysisResult = await analyzeMatchVideo(frameBase64);
+            if (!currentVideoBlob) {
+              console.error('No video blob available');
+              setAnalyzing(false);
+              return;
+            }
+
+            // Properly handle async FileReader
+            const videoBase64 = await new Promise<string>((resolve, reject) => {
+              const reader = new FileReader();
+
+              reader.onload = () => {
+                try {
+                  const result = reader.result as string;
+                  console.log('FileReader result type:', typeof result);
+                  console.log('FileReader result length:', result.length);
+
+                  // Extract base64 part from data URL
+                  const base64Part = result.split(',')[1];
+                  console.log('Base64 extracted, length:', base64Part?.length || 0);
+
+                  if (!base64Part) {
+                    reject(new Error('Could not extract base64 from video'));
+                  } else {
+                    resolve(base64Part);
+                  }
+                } catch (err) {
+                  reject(err);
+                }
+              };
+
+              reader.onerror = () => {
+                reject(new Error('FileReader error: ' + reader.error));
+              };
+
+              reader.readAsDataURL(currentVideoBlob);
+            });
+
+            console.log('✓ Video converted to base64');
+            console.log('Analyzing video with Gemini API...');
+            const analysisResult = await analyzeMatchVideo(videoBase64);
+
+            console.log('✓ Analysis complete');
             setAnalysis(analysisResult);
             sessionStorage.setItem('matchAnalysis', JSON.stringify(analysisResult));
 
             // Save detected player colors if available
             if (analysisResult.detectedPlayerColors) {
+              console.log('✓ Saving detected colors:', analysisResult.detectedPlayerColors);
               sessionStorage.setItem('detectedPlayerColors', JSON.stringify(analysisResult.detectedPlayerColors));
             }
-          } catch (analysisErr) {
-            console.error('Error analyzing video frame:', analysisErr);
-            // Don't fail if analysis fails, video is still saved
-          } finally {
+            setAnalyzing(false);
+          } catch (err) {
+            console.error('Error analyzing video:', err);
             setAnalyzing(false);
           }
 
