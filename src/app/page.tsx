@@ -8,16 +8,21 @@ import { searchDUPRPlayer, getDUPRPlayer, getCombinedRating } from '@/lib/dupr';
 import { analyzeMatchVideo, type MatchAnalysis } from '@/lib/shotAnalysis';
 import { Timestamp } from 'firebase/firestore';
 import type { User, Match } from '@/lib/db';
+
+
 // Types for 4-player detection feature
 interface DetectedPlayer {
   id: number;
   shirtColor: string;
   shortsColor: string;
   description: string;
+}
+
 // Helper function to generate detected players with random colors
 function generateDetectedPlayers(): DetectedPlayer[] {
   const shirtColors = ['Red', 'Blue', 'Black', 'White', 'Yellow', 'Green', 'Orange', 'Purple'];
   const shortsColors = ['White', 'Black', 'Navy', 'Gray', 'Khaki', 'Blue'];
+
   const players: DetectedPlayer[] = [];
   for (let i = 1; i <= 4; i++) {
     players.push({
@@ -26,7 +31,10 @@ function generateDetectedPlayers(): DetectedPlayer[] {
       shortsColor: shortsColors[Math.floor(Math.random() * shortsColors.length)],
       description: `Player ${i}`,
     });
+  }
   return players;
+}
+
 // Helper function to map color names to Tailwind background classes
 function getColorBg(color: string): string {
   const colorMap: Record<string, string> = {
@@ -43,17 +51,22 @@ function getColorBg(color: string): string {
     Khaki: 'bg-yellow-600',
   };
   return colorMap[color] || 'bg-gray-500';
+}
+
 // Global variable to store video blob across screens (Blob objects can't be serialized)
 let currentVideoBlob: Blob | null = null;
+
 export default function Home() {
   const { user, loading } = useAuth();
   const router = useRouter();
   const [currentScreen, setCurrentScreen] = useState(0);
+
   useEffect(() => {
     if (!loading && !user) {
       router.push('/login');
     }
   }, [user, loading, router]);
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-green-50 to-white">
@@ -63,7 +76,10 @@ export default function Home() {
         </div>
       </div>
     );
+  }
+
   if (!user) return null;
+
   return (
     <div className="bg-white">
       {currentScreen === 0 && <Screen0 setScreen={setCurrentScreen} userId={user.uid} />}
@@ -80,6 +96,8 @@ export default function Home() {
       {currentScreen === 11 && <Screen11 setScreen={setCurrentScreen} userId={user.uid} />}
     </div>
   );
+}
+
 function Screen0({ setScreen, userId }: { setScreen: (n: number) => void; userId: string }) {
   const [tab, setTab] = useState('matches');
   const [userProfile, setUserProfile] = useState<User | null>(null);
@@ -92,12 +110,14 @@ function Screen0({ setScreen, userId }: { setScreen: (n: number) => void; userId
   const [analyzing, setAnalyzing] = useState(false);
   const [analyzingVideoId, setAnalyzingVideoId] = useState<string | null>(null);
   const { logout } = useAuth();
+
   useEffect(() => {
     const loadUserData = async () => {
       try {
         const profile = await getUserProfile(userId);
         if (profile) {
           setUserProfile(profile);
+
           // Try to fetch DUPR rating
           if (profile.duprId) {
             try {
@@ -124,6 +144,7 @@ function Screen0({ setScreen, userId }: { setScreen: (n: number) => void; userId
         }
         const matches = await getUserMatches(userId, 5);
         setRecentMatches(matches);
+
         // Load standalone videos
         const videos = await getUserVideos(userId, 10);
         setUserVideos(videos);
@@ -133,11 +154,14 @@ function Screen0({ setScreen, userId }: { setScreen: (n: number) => void; userId
         setLoading(false);
       }
     };
+
     loadUserData();
   }, [userId]);
+
   const winRate = userProfile
     ? Math.round((userProfile.wins / (userProfile.wins + userProfile.losses)) * 100) || 0
     : 0;
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-green-50 to-white p-4">
       <div className="max-w-md mx-auto">
@@ -156,15 +180,13 @@ function Screen0({ setScreen, userId }: { setScreen: (n: number) => void; userId
               onClick={() => setScreen(8)}
               className="text-blue-600 hover:text-blue-700 font-semibold text-sm"
             >
-              
- Leaderboard
+              🏆 Leaderboard
             </button>
             <button
               onClick={() => setScreen(7)}
               className="text-green-600 hover:text-green-700 font-semibold text-sm"
             >
-              
- Analytics
+              📊 Analytics
             </button>
             <button
               onClick={async () => {
@@ -186,19 +208,17 @@ function Screen0({ setScreen, userId }: { setScreen: (n: number) => void; userId
               className="text-blue-600 hover:text-blue-700 font-semibold text-sm disabled:opacity-50"
               title="Sync with DUPR"
             >
-              {syncingDUPR ? '
-' : '
-'} DUPR
+              {syncingDUPR ? '⏳' : '🔄'} DUPR
             </button>
             <button
               onClick={() => setScreen(9)}
               className="text-purple-600 hover:text-purple-700 font-semibold text-sm"
             >
-              
- Edit Profile
+              ⚙️ Edit Profile
             </button>
           </div>
         </div>
+
         {loading ? (
           <div className="text-center py-8">Loading...</div>
         ) : (
@@ -210,15 +230,14 @@ function Screen0({ setScreen, userId }: { setScreen: (n: number) => void; userId
               </div>
               {duprRating && (
                 <div className="bg-green-500/40 inline-block px-2 py-1 rounded-full text-xs mb-3">
-                  
- Live from DUPR
+                  🔄 Live from DUPR
                 </div>
               )}
               <div className="text-sm">
-                {userProfile?.wins || 0} wins 
- {userProfile?.losses || 0} losses
+                {userProfile?.wins || 0} wins • {userProfile?.losses || 0} losses
               </div>
             </div>
+
             <div className="flex gap-2 mb-6 border-b border-gray-200 overflow-x-auto">
               {['matches', 'winrate', 'avgrating', 'videos', 'analytics'].map((t) => {
                 const labels = { matches: 'MATCHES', winrate: 'WIN RATE', avgrating: 'AVG RATING', videos: 'VIDEOS', analytics: 'ANALYTICS' };
@@ -237,6 +256,7 @@ function Screen0({ setScreen, userId }: { setScreen: (n: number) => void; userId
                 );
               })}
             </div>
+
             <div className="mb-6">
               {tab === 'matches' && (
                 <>
@@ -251,8 +271,7 @@ function Screen0({ setScreen, userId }: { setScreen: (n: number) => void; userId
                           className="flex justify-between items-center bg-white p-3 rounded-lg border border-gray-200"
                         >
                           <span className="text-sm text-gray-600">
-                            vs {match.opponent} 
- {match.date?.toDate?.()?.toLocaleDateString()}
+                            vs {match.opponent} • {match.date?.toDate?.()?.toLocaleDateString()}
                           </span>
                           <span
                             className={`${
@@ -271,6 +290,7 @@ function Screen0({ setScreen, userId }: { setScreen: (n: number) => void; userId
                   </div>
                 </>
               )}
+
               {tab === 'winrate' && (
                 <>
                   <h3 className="text-xs font-bold text-gray-500 mb-3 uppercase">
@@ -292,6 +312,7 @@ function Screen0({ setScreen, userId }: { setScreen: (n: number) => void; userId
                   </div>
                 </>
               )}
+
               {tab === 'avgrating' && (
                 <>
                   <h3 className="text-xs font-bold text-gray-500 mb-3 uppercase">
@@ -310,15 +331,15 @@ function Screen0({ setScreen, userId }: { setScreen: (n: number) => void; userId
                   </div>
                 </>
               )}
+
               {tab === 'videos' && (
                 <>
                   <h3 className="text-xs font-bold text-gray-500 mb-3 uppercase">
                     My Videos
                   </h3>
+
                   <label className="w-full bg-purple-600 hover:bg-purple-700 text-white py-3 rounded-lg font-semibold text-center cursor-pointer block mb-4">
-                    {uploading ? '
- Uploading...' : '
- Upload Video File'}
+                    {uploading ? '⏳ Uploading...' : '📁 Upload Video File'}
                     <input
                       type="file"
                       accept="video/*"
@@ -332,12 +353,15 @@ function Screen0({ setScreen, userId }: { setScreen: (n: number) => void; userId
                             const videoUrl = await uploadMatchVideo(userId, `standalone_${Date.now()}`, file, (progress) => {
                               console.log(`Upload progress: ${Math.round(progress * 100)}%`);
                             });
+
                             console.log('Video uploaded to Cloud Storage:', videoUrl);
+
                             // Save video metadata to Firestore
                             await saveStandaloneVideo(userId, videoUrl, file.name);
+
                             console.log('Video metadata saved to Firestore');
-                            alert('
- Video uploaded successfully!');
+
+                            alert('✅ Video uploaded successfully!');
                             // Refresh the page to see the new video
                             setTimeout(() => {
                               console.log('Reloading page...');
@@ -345,8 +369,7 @@ function Screen0({ setScreen, userId }: { setScreen: (n: number) => void; userId
                             }, 1500);
                           } catch (err: any) {
                             console.error('Upload failed:', err);
-                            alert('
- Upload failed: ' + (err?.message || 'Unknown error'));
+                            alert('❌ Upload failed: ' + (err?.message || 'Unknown error'));
                             setUploading(false);
                           }
                         }
@@ -354,6 +377,7 @@ function Screen0({ setScreen, userId }: { setScreen: (n: number) => void; userId
                       className="hidden"
                     />
                   </label>
+
                   <div className="space-y-2">
                     {userVideos && userVideos.length > 0 ? (
                       userVideos.map((video) => (
@@ -361,8 +385,7 @@ function Screen0({ setScreen, userId }: { setScreen: (n: number) => void; userId
                           key={video.id}
                           className="bg-white p-4 rounded-lg border border-gray-200 flex items-center gap-3"
                         >
-                          <div className="text-2xl">
-</div>
+                          <div className="text-2xl">🎥</div>
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-semibold text-gray-700 truncate">
                               {video.title || 'Uploaded Video'}
@@ -388,21 +411,20 @@ function Screen0({ setScreen, userId }: { setScreen: (n: number) => void; userId
                                 try {
                                   const analysis = await analyzeMatchVideo(video.videoUrl);
                                   sessionStorage.setItem('matchAnalysis', JSON.stringify(analysis));
+
                                   // Auto-save analysis to Firestore
                                   try {
                                     await saveVideoAnalysis(userId, video.id, analysis);
-                                    console.log('
- Analysis auto-saved to Firestore');
+                                    console.log('✅ Analysis auto-saved to Firestore');
                                   } catch (saveErr) {
-                                    console.error('
- Failed to save analysis to Firestore:', saveErr);
+                                    console.error('⚠️ Failed to save analysis to Firestore:', saveErr);
                                     // Don't throw - allow user to view analysis even if save fails
                                   }
+
                                   setScreen(11);
                                 } catch (err: any) {
                                   console.error('Analysis failed:', err);
-                                  alert('
- Analysis failed: ' + (err?.message || 'Unknown error'));
+                                  alert('❌ Analysis failed: ' + (err?.message || 'Unknown error'));
                                   setAnalyzing(false);
                                   setAnalyzingVideoId(null);
                                 }
@@ -410,9 +432,7 @@ function Screen0({ setScreen, userId }: { setScreen: (n: number) => void; userId
                               disabled={analyzing && analyzingVideoId === video.id}
                               className="text-xs font-bold px-2 py-1 rounded bg-green-100 text-green-700 hover:bg-green-200 disabled:opacity-50"
                             >
-                              {analyzing && analyzingVideoId === video.id ? '
- Analyzing...' : '
- Analyze'}
+                              {analyzing && analyzingVideoId === video.id ? '⏳ Analyzing...' : '📊 Analyze'}
                             </button>
                             <button
                               onClick={async () => {
@@ -420,12 +440,10 @@ function Screen0({ setScreen, userId }: { setScreen: (n: number) => void; userId
                                   try {
                                     await deleteVideo(video.id, video.videoUrl);
                                     setUserVideos(userVideos.filter(v => v.id !== video.id));
-                                    alert('
- Video deleted successfully!');
+                                    alert('✅ Video deleted successfully!');
                                   } catch (err: any) {
                                     console.error('Delete failed:', err);
-                                    alert('
- Delete failed: ' + (err?.message || 'Unknown error'));
+                                    alert('❌ Delete failed: ' + (err?.message || 'Unknown error'));
                                   }
                                 }
                               }}
@@ -442,6 +460,7 @@ function Screen0({ setScreen, userId }: { setScreen: (n: number) => void; userId
                   </div>
                 </>
               )}
+
               {tab === 'analytics' && (
                 <>
                   <h3 className="text-xs font-bold text-gray-500 mb-3 uppercase">
@@ -473,35 +492,37 @@ function Screen0({ setScreen, userId }: { setScreen: (n: number) => void; userId
                           <div className="w-full bg-gray-300 rounded-full h-2">
                             <div className="bg-purple-600 h-full rounded-full" style={{width: `${((userProfile?.proRating || 2) - 1) / 3 * 100}%`}}></div>
                           </div>
-                          <p className="text-xs text-gray-600 mt-1">1.0 
- 4.0</p>
+                          <p className="text-xs text-gray-600 mt-1">1.0 ← → 4.0</p>
                         </div>
                       </div>
                     </div>
                     <button onClick={() => setScreen(7)} className="w-full bg-purple-600 hover:bg-purple-700 text-white text-sm font-semibold py-2 rounded-lg">
-                      View Full Analytics 
+                      View Full Analytics →
                     </button>
                   </div>
                 </>
               )}
             </div>
+
             <div className="bg-amber-100 rounded-lg p-4 mb-6">
               <p className="text-xs font-bold text-amber-900">
-                PRO STYLE MATCH 
- THIS MONTH
+                PRO STYLE MATCH • THIS MONTH
               </p>
             </div>
+
             <button
               onClick={() => setScreen(1)}
               className="w-full bg-amber-500 hover:bg-amber-600 text-black font-bold py-3 rounded-lg"
             >
-              Record a match 
+              Record a match →
             </button>
           </>
         )}
       </div>
     </div>
   );
+}
+
 function Screen1({ setScreen }: { setScreen: (n: number) => void }) {
   const [opponent, setOpponent] = useState('');
   const [yourScore, setYourScore] = useState('');
@@ -514,6 +535,7 @@ function Screen1({ setScreen }: { setScreen: (n: number) => void }) {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+
   const startVideoRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -524,8 +546,10 @@ function Screen1({ setScreen }: { setScreen: (n: number) => void }) {
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
       }
+
       const mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
       const chunks: BlobPart[] = [];
+
       mediaRecorder.ondataavailable = (e) => chunks.push(e.data);
       mediaRecorder.onstop = () => {
         const blob = new Blob(chunks, { type: 'video/webm' });
@@ -533,6 +557,7 @@ function Screen1({ setScreen }: { setScreen: (n: number) => void }) {
         currentVideoBlob = blob; // Store for access across screens
         stream.getTracks().forEach(track => track.stop());
       };
+
       mediaRecorder.start();
       mediaRecorderRef.current = mediaRecorder;
       setIsRecording(true);
@@ -542,12 +567,14 @@ function Screen1({ setScreen }: { setScreen: (n: number) => void }) {
       alert('Unable to access camera. Please check permissions.');
     }
   };
+
   const stopVideoRecording = () => {
     if (mediaRecorderRef.current && isRecording) {
       mediaRecorderRef.current.stop();
       setIsRecording(false);
     }
   };
+
   useEffect(() => {
     let interval: NodeJS.Timeout;
     if (isRecording) {
@@ -557,6 +584,7 @@ function Screen1({ setScreen }: { setScreen: (n: number) => void }) {
     }
     return () => clearInterval(interval);
   }, [isRecording]);
+
   const handleStartMatch = () => {
     if (opponent && yourScore && oppScore && result) {
       // Store match data to be saved on screen 3
@@ -570,15 +598,16 @@ function Screen1({ setScreen }: { setScreen: (n: number) => void }) {
       setScreen(2);
     }
   };
+
   return (
     <div className="min-h-screen bg-white p-4">
       <div className="max-w-md mx-auto">
         <div className="flex justify-between items-center mb-6">
-          <button onClick={() => setScreen(0)} className="text-sm font-semibold text-gray-600 hover:text-gray-900">
- Back</button>
+          <button onClick={() => setScreen(0)} className="text-sm font-semibold text-gray-600 hover:text-gray-900">← Back</button>
           <h1 className="text-lg font-bold">Record Match</h1>
           <div></div>
         </div>
+
         <div className="space-y-4">
           <div>
             <label className="block text-sm font-semibold text-gray-700 mb-2">Opponent Name</label>
@@ -590,6 +619,7 @@ function Screen1({ setScreen }: { setScreen: (n: number) => void }) {
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-600"
             />
           </div>
+
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-2">Your Score</label>
@@ -612,6 +642,7 @@ function Screen1({ setScreen }: { setScreen: (n: number) => void }) {
               />
             </div>
           </div>
+
           <div>
             <label className="block text-sm font-semibold text-gray-700 mb-2">Result</label>
             <div className="flex gap-3">
@@ -637,20 +668,19 @@ function Screen1({ setScreen }: { setScreen: (n: number) => void }) {
               </button>
             </div>
           </div>
+
           <div className="border-t pt-4">
             <label className="block text-sm font-semibold text-gray-700 mb-3">Match Video (Optional)</label>
+
             <div className="flex gap-2 mb-4">
               <button
                 onClick={() => setShowVideoRecorder(!showVideoRecorder)}
                 className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg font-semibold text-sm"
               >
-                {showVideoRecorder ? '
- Recording' : '
- Record Video'}
+                {showVideoRecorder ? '🎬 Recording' : '🎬 Record Video'}
               </button>
               <label className="flex-1 bg-purple-600 hover:bg-purple-700 text-white py-2 rounded-lg font-semibold text-sm cursor-pointer flex items-center justify-center">
-                
- Upload File
+                📁 Upload File
                 <input
                   type="file"
                   accept="video/*"
@@ -664,10 +694,10 @@ function Screen1({ setScreen }: { setScreen: (n: number) => void }) {
                 />
               </label>
             </div>
+
             {videoBlob ? (
               <div className="bg-green-50 border border-green-300 rounded-lg p-3 mb-3">
-                <p className="text-sm text-green-700 font-semibold">
- Video selected ({Math.round(videoBlob.size / 1024 / 1024 * 100) / 100} MB)</p>
+                <p className="text-sm text-green-700 font-semibold">✓ Video selected ({Math.round(videoBlob.size / 1024 / 1024 * 100) / 100} MB)</p>
                 <button
                   onClick={() => {
                     setVideoBlob(null);
@@ -707,8 +737,7 @@ function Screen1({ setScreen }: { setScreen: (n: number) => void }) {
                       onClick={startVideoRecording}
                       className="flex-1 bg-red-600 hover:bg-red-700 text-white py-2 rounded font-bold"
                     >
-                      
- Start Recording
+                      🔴 Start Recording
                     </button>
                   )}
                 </div>
@@ -729,31 +758,32 @@ function Screen1({ setScreen }: { setScreen: (n: number) => void }) {
                 onClick={() => setShowVideoRecorder(true)}
                 className="w-full bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-300 py-2 rounded-lg font-semibold text-sm"
               >
-                
- Record Match Video
+                📹 Record Match Video
               </button>
             )}
           </div>
         </div>
+
         <div className="flex gap-3 mt-8">
           <button
             onClick={() => setScreen(0)}
             className="flex-1 bg-gray-200 hover:bg-gray-300 text-black py-3 rounded-lg font-bold"
           >
-            
- Back
+            ← Back
           </button>
           <button
             onClick={handleStartMatch}
             disabled={!opponent || !yourScore || !oppScore || !result}
             className="flex-1 bg-amber-500 hover:bg-amber-600 disabled:bg-gray-300 text-black py-3 rounded-lg font-bold"
           >
-            Continue 
+            Continue →
           </button>
         </div>
       </div>
     </div>
   );
+}
+
 function Screen2({ setScreen }: { setScreen: (n: number) => void }) {
   return (
     <div className="min-h-screen bg-white p-4">
@@ -788,9 +818,7 @@ function Screen2({ setScreen }: { setScreen: (n: number) => void }) {
                   backgroundColor: i.d ? '#16a34a' : i.a ? '#f59e0b' : '#e5e7eb'
                 }}
               >
-                {i.d ? '
-' : i.a ? '
-' : ''}
+                {i.d ? '✓' : i.a ? '⧖' : ''}
               </div>
               <span className="text-sm">{i.t}</span>
             </div>
@@ -805,6 +833,8 @@ function Screen2({ setScreen }: { setScreen: (n: number) => void }) {
       </div>
     </div>
   );
+}
+
 function Screen3({ setScreen }: { setScreen: (n: number) => void }) {
   const { user } = useAuth();
   const [saving, setSaving] = useState(false);
@@ -813,20 +843,25 @@ function Screen3({ setScreen }: { setScreen: (n: number) => void }) {
   const [analyzing, setAnalyzing] = useState(false);
   const [error, setError] = useState('');
   const [analysis, setAnalysis] = useState<MatchAnalysis | null>(null);
+
   const handleSaveMatch = async () => {
     if (!user) return;
+
     setSaving(true);
     try {
       const matchData = JSON.parse(sessionStorage.getItem('matchData') || '{}');
       const { opponent, yourScore, oppScore, result } = matchData;
+
       // Get current user profile
       const profile = await getUserProfile(user.uid);
       if (!profile) throw new Error('User profile not found');
+
       // Calculate new stats
       const newWins = result === 'WIN' ? profile.wins + 1 : profile.wins;
       const newLosses = result === 'LOSS' ? profile.losses + 1 : profile.losses;
       const newProRating = calculateProRating(newWins, newLosses);
       const ratingChange = newProRating - profile.proRating;
+
       // Create match object
       const matchPayload = {
         date: Timestamp.now(),
@@ -836,10 +871,13 @@ function Screen3({ setScreen }: { setScreen: (n: number) => void }) {
         result,
         ratingChange,
       };
+
       // Save match to Firestore (this returns docRef)
       const docRef = await saveMatch(user.uid, matchPayload);
+
       // Update user stats
       await updateUserStats(user.uid, newWins, newLosses, newProRating);
+
       // Store current match info for next screens
       sessionStorage.setItem('currentMatch', JSON.stringify({
         ...matchPayload,
@@ -850,6 +888,7 @@ function Screen3({ setScreen }: { setScreen: (n: number) => void }) {
         ratingAfter: newProRating,
         matchRating: 78, // Placeholder for AI-generated rating
       }));
+
       // Handle video upload if video was recorded
       if (matchData.hasVideo && currentVideoBlob) {
         setUploading(true);
@@ -858,8 +897,10 @@ function Screen3({ setScreen }: { setScreen: (n: number) => void }) {
           const videoUrl = await uploadMatchVideo(user.uid, docRef, currentVideoBlob, (progress) => {
             setUploadProgress(Math.round(progress * 100));
           });
+
           // Store video URL in match data for future use
           sessionStorage.setItem('matchVideoUrl', videoUrl);
+
           // Trigger AI shot analysis
           setAnalyzing(true);
           try {
@@ -872,6 +913,7 @@ function Screen3({ setScreen }: { setScreen: (n: number) => void }) {
           } finally {
             setAnalyzing(false);
           }
+
           // Clear the global blob after upload
           currentVideoBlob = null;
         } catch (err) {
@@ -883,6 +925,7 @@ function Screen3({ setScreen }: { setScreen: (n: number) => void }) {
           setUploadProgress(0);
         }
       }
+
       // Navigate to next screen (or analysis screen if video was uploaded)
       setTimeout(() => {
         if (analysis) {
@@ -897,12 +940,12 @@ function Screen3({ setScreen }: { setScreen: (n: number) => void }) {
       setSaving(false);
     }
   };
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-green-700 to-green-600 text-white p-4">
       <div className="max-w-md mx-auto">
         <div className="flex justify-between items-center mb-6">
-          <button onClick={() => setScreen(0)} className="text-sm hover:underline">
- Home</button>
+          <button onClick={() => setScreen(0)} className="text-sm hover:underline">← Home</button>
           <h1 className="text-lg font-bold">Match Result</h1>
           <div></div>
         </div>
@@ -920,11 +963,13 @@ function Screen3({ setScreen }: { setScreen: (n: number) => void }) {
           <p className="text-white/80 text-sm mb-3">73% similar to Tyson McGuffin</p>
           <p className="text-white/60 text-xs">Your aggressive forehand and net-rushing style closely matches Tyson's championship approach.</p>
         </div>
+
         {error && (
           <div className="bg-red-500/20 border border-red-500 text-red-200 p-3 rounded-lg mb-4 text-sm">
             {error}
           </div>
         )}
+
         {uploading && (
           <div className="bg-blue-500/20 border border-blue-500 text-blue-200 p-4 rounded-lg mb-4">
             <p className="text-sm font-semibold mb-2">Uploading video...</p>
@@ -937,10 +982,12 @@ function Screen3({ setScreen }: { setScreen: (n: number) => void }) {
             <p className="text-xs mt-2">{uploadProgress}% complete</p>
           </div>
         )}
+
         <div className="flex gap-3 mb-4">
           <button onClick={() => setScreen(4)} disabled={saving || uploading} className="flex-1 bg-white/20 hover:bg-white/30 disabled:bg-white/10 text-white py-3 rounded-lg font-bold">Rally Breakdown</button>
           <button onClick={() => setScreen(5)} disabled={saving || uploading} className="flex-1 bg-white/20 hover:bg-white/30 disabled:bg-white/10 text-white py-3 rounded-lg font-bold">Coaching</button>
         </div>
+
         <button
           onClick={handleSaveMatch}
           disabled={saving || uploading}
@@ -951,14 +998,18 @@ function Screen3({ setScreen }: { setScreen: (n: number) => void }) {
       </div>
     </div>
   );
+}
+
 function Screen4({ setScreen }: { setScreen: (n: number) => void }) {
   const [matchData, setMatchData] = useState<any>(null);
+
   useEffect(() => {
     const data = sessionStorage.getItem('currentMatch');
     if (data) {
       setMatchData(JSON.parse(data));
     }
   }, []);
+
   // Generate mock rallies based on actual score
   const generateRallies = () => {
     if (!matchData) return [];
@@ -974,16 +1025,18 @@ function Screen4({ setScreen }: { setScreen: (n: number) => void }) {
     }
     return rallies;
   };
+
   const rallies = generateRallies();
+
   return (
     <div className="min-h-screen bg-white p-4">
       <div className="max-w-md mx-auto">
         <div className="flex justify-between items-center mb-6">
-          <button onClick={() => setScreen(0)} className="text-sm font-semibold text-gray-600 hover:text-gray-900">
- Back</button>
+          <button onClick={() => setScreen(0)} className="text-sm font-semibold text-gray-600 hover:text-gray-900">← Back</button>
           <h1 className="text-lg font-bold">Rally Breakdown</h1>
           <div></div>
         </div>
+
         {matchData && (
           <>
             <div className="bg-blue-50 rounded-lg p-4 mb-6">
@@ -993,13 +1046,13 @@ function Screen4({ setScreen }: { setScreen: (n: number) => void }) {
                 <span className="font-bold">{matchData.yourScore} - {matchData.oppScore}</span>
               </div>
             </div>
+
             <div className="space-y-3 mb-6">
               {rallies.length > 0 ? (
                 rallies.map((rally) => (
                   <div key={rally.number} className="bg-gray-50 rounded-lg p-4 border border-gray-200">
                     <div className="font-semibold text-sm mb-2">Rally {rally.number}</div>
-                    <div className="text-xs text-gray-600 mb-2">{rally.shots} shots 
- {rally.duration} seconds</div>
+                    <div className="text-xs text-gray-600 mb-2">{rally.shots} shots • {rally.duration} seconds</div>
                     <div className="w-full h-2 bg-gray-300 rounded-full overflow-hidden">
                       <div className="h-full bg-amber-500" style={{width: `${rally.intensity}%`}}></div>
                     </div>
@@ -1013,37 +1066,43 @@ function Screen4({ setScreen }: { setScreen: (n: number) => void }) {
             </div>
           </>
         )}
+
         <div className="flex gap-3">
           <button
             onClick={() => setScreen(5)}
             className="flex-1 bg-gray-200 hover:bg-gray-300 text-black py-3 rounded-lg font-bold"
           >
-            
- Coaching
+            ← Coaching
           </button>
           <button
             onClick={() => setScreen(6)}
             className="flex-1 bg-green-600 hover:bg-green-700 text-white py-3 rounded-lg font-bold"
           >
-            Share Match 
+            Share Match →
           </button>
         </div>
       </div>
     </div>
   );
+}
+
 function Screen5({ setScreen }: { setScreen: (n: number) => void }) {
   const [matchData, setMatchData] = useState<any>(null);
+
   useEffect(() => {
     const data = sessionStorage.getItem('currentMatch');
     if (data) {
       setMatchData(JSON.parse(data));
     }
   }, []);
+
   const generateCoachingTips = () => {
     if (!matchData) return [];
+
     const tips = [];
     const { yourScore, oppScore, result } = matchData;
     const scoreDiff = Math.abs(yourScore - oppScore);
+
     if (result === 'WIN') {
       tips.push({
         type: 'positive',
@@ -1051,6 +1110,7 @@ function Screen5({ setScreen }: { setScreen: (n: number) => void }) {
         description: 'Your serve was effective. Keep up the accuracy and variation.',
       });
     }
+
     if (scoreDiff <= 2) {
       tips.push({
         type: 'attention',
@@ -1058,6 +1118,7 @@ function Screen5({ setScreen }: { setScreen: (n: number) => void }) {
         description: `You won by only ${scoreDiff} points. Work on consistency in pressure situations.`,
       });
     }
+
     if (result === 'LOSS') {
       tips.push({
         type: 'attention',
@@ -1065,23 +1126,27 @@ function Screen5({ setScreen }: { setScreen: (n: number) => void }) {
         description: 'Analyze your opponent\'s strategy. What worked against you?',
       });
     }
+
     tips.push({
       type: 'positive',
       title: 'Dinking fundamentals',
       description: 'Your dink control improved. Continue practicing kitchen play.',
     });
+
     return tips;
   };
+
   const tips = generateCoachingTips();
+
   return (
     <div className="min-h-screen bg-white p-4">
       <div className="max-w-md mx-auto">
         <div className="flex justify-between items-center mb-6">
-          <button onClick={() => setScreen(0)} className="text-sm font-semibold text-gray-600 hover:text-gray-900">
- Back</button>
+          <button onClick={() => setScreen(0)} className="text-sm font-semibold text-gray-600 hover:text-gray-900">← Back</button>
           <h1 className="text-lg font-bold">Coaching</h1>
           <div></div>
         </div>
+
         {matchData && (
           <>
             <div className="bg-purple-50 rounded-lg p-4 mb-6">
@@ -1101,6 +1166,7 @@ function Screen5({ setScreen }: { setScreen: (n: number) => void }) {
                 </div>
               </div>
             </div>
+
             <div className="space-y-3 mb-6">
               {tips.map((tip, idx) => (
                 <div
@@ -1120,44 +1186,49 @@ function Screen5({ setScreen }: { setScreen: (n: number) => void }) {
             </div>
           </>
         )}
+
         <div className="flex gap-3">
           <button
             onClick={() => setScreen(4)}
             className="flex-1 bg-gray-200 hover:bg-gray-300 text-black py-3 rounded-lg font-bold"
           >
-            
- Rally Breakdown
+            ← Rally Breakdown
           </button>
           <button
             onClick={() => setScreen(6)}
             className="flex-1 bg-green-600 hover:bg-green-700 text-white py-3 rounded-lg font-bold"
           >
-            Share Match 
+            Share Match →
           </button>
         </div>
       </div>
     </div>
   );
+}
+
 function Screen6({ setScreen }: { setScreen: (n: number) => void }) {
   const [matchData, setMatchData] = useState<any>(null);
+
   useEffect(() => {
     const data = sessionStorage.getItem('currentMatch');
     if (data) {
       setMatchData(JSON.parse(data));
     }
   }, []);
+
   const shareText = matchData
-    ? `I just recorded a pickleball match with PickleVision Pro! ${matchData.result === 'WIN' ? 'Won' : 'Lost'} ${matchData.yourScore}-${matchData.oppScore} vs ${matchData.opponent}. Rating: ${matchData.matchRating} 
+    ? `I just recorded a pickleball match with PickleVision Pro! ${matchData.result === 'WIN' ? 'Won' : 'Lost'} ${matchData.yourScore}-${matchData.oppScore} vs ${matchData.opponent}. Rating: ${matchData.matchRating} 🥒`
     : 'Check out my pickleball match on PickleVision Pro!';
+
   return (
     <div className="min-h-screen bg-gray-50 p-4">
       <div className="max-w-md mx-auto">
         <div className="flex justify-between items-center mb-6">
-          <button onClick={() => setScreen(0)} className="text-sm font-semibold text-gray-600 hover:text-gray-900">
- Back</button>
+          <button onClick={() => setScreen(0)} className="text-sm font-semibold text-gray-600 hover:text-gray-900">← Back</button>
           <h1 className="text-lg font-bold">Share</h1>
           <div></div>
         </div>
+
         {matchData && (
           <>
             <div className="bg-gradient-to-br from-green-600 to-green-700 rounded-lg p-6 text-white text-center mb-6">
@@ -1181,6 +1252,7 @@ function Screen6({ setScreen }: { setScreen: (n: number) => void }) {
               </p>
               <p className="text-xs opacity-80">Match Rating: {matchData.matchRating}</p>
             </div>
+
             <div className="bg-white rounded-lg p-4 mb-6">
               <div className="text-center text-xs text-gray-600 bg-gray-50 rounded p-3">
                 <p className="font-mono text-xs break-all">{shareText}</p>
@@ -1188,11 +1260,9 @@ function Screen6({ setScreen }: { setScreen: (n: number) => void }) {
             </div>
           </>
         )}
+
         <div className="flex gap-3 mb-6">
-          {['
- WhatsApp', '
- Twitter', '
- Facebook'].map(s => (
+          {['📱 WhatsApp', '𝕏 Twitter', '📘 Facebook'].map(s => (
             <button
               key={s}
               className="flex-1 bg-white hover:bg-gray-100 py-3 rounded-lg font-semibold text-sm border border-gray-300"
@@ -1202,6 +1272,7 @@ function Screen6({ setScreen }: { setScreen: (n: number) => void }) {
             </button>
           ))}
         </div>
+
         <button
           onClick={() => setScreen(7)}
           className="w-full bg-green-600 hover:bg-green-700 text-white py-3 rounded-lg font-bold"
@@ -1211,12 +1282,15 @@ function Screen6({ setScreen }: { setScreen: (n: number) => void }) {
       </div>
     </div>
   );
+}
+
 function Screen7({ setScreen, userId }: { setScreen: (n: number) => void; userId: string }) {
   const [userProfile, setUserProfile] = useState<User | null>(null);
   const [videoAnalyses, setVideoAnalyses] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<'overview' | 'player-breakdown'>('overview');
   const [selectedOpponent, setSelectedOpponent] = useState<string | null>(null);
+
   useEffect(() => {
     const loadData = async () => {
       try {
@@ -1224,18 +1298,20 @@ function Screen7({ setScreen, userId }: { setScreen: (n: number) => void; userId
         if (profile) {
           setUserProfile(profile);
         }
+
         const analyses = await getUserVideoAnalyses(userId);
         setVideoAnalyses(analyses);
-        console.log('
- Loaded video analyses:', analyses);
+        console.log('✅ Loaded video analyses:', analyses);
       } catch (error) {
         console.error('Error loading stats:', error);
       } finally {
         setLoading(false);
       }
     };
+
     loadData();
   }, [userId]);
+
   // Aggregate shot statistics from all analyses
   const aggregateShotStats = () => {
     let totals = {
@@ -1248,6 +1324,7 @@ function Screen7({ setScreen, userId }: { setScreen: (n: number) => void; userId
       serves: 0,
     };
     let count = 0;
+
     videoAnalyses.forEach(analysis => {
       if (analysis.shotSummary) {
         totals.dinks += analysis.shotSummary.dinks || 0;
@@ -1260,10 +1337,12 @@ function Screen7({ setScreen, userId }: { setScreen: (n: number) => void; userId
         count++;
       }
     });
+
     const total = Object.values(totals).reduce((a, b) => a + b, 0);
     if (total === 0) {
       return { dinks: 0, drives: 0, drops: 0, lobs: 0, volleys: 0, smashes: 0, serves: 0, total: 0 };
     }
+
     return {
       dinks: total > 0 ? Math.round((totals.dinks / total) * 100) : 0,
       drives: total > 0 ? Math.round((totals.drives / total) * 100) : 0,
@@ -1275,6 +1354,7 @@ function Screen7({ setScreen, userId }: { setScreen: (n: number) => void; userId
       total,
     };
   };
+
   // Aggregate technique stats
   const aggregateTechniqueStats = () => {
     let totals = {
@@ -1283,6 +1363,7 @@ function Screen7({ setScreen, userId }: { setScreen: (n: number) => void; userId
       consistency: 0,
     };
     let count = 0;
+
     videoAnalyses.forEach(analysis => {
       if (analysis.playerTechnique) {
         totals.footwork += analysis.playerTechnique.footwork || 0;
@@ -1291,6 +1372,7 @@ function Screen7({ setScreen, userId }: { setScreen: (n: number) => void; userId
         count++;
       }
     });
+
     return count > 0
       ? {
           footwork: Math.round(totals.footwork / count),
@@ -1299,9 +1381,11 @@ function Screen7({ setScreen, userId }: { setScreen: (n: number) => void; userId
         }
       : { footwork: 0, positioning: 0, consistency: 0 };
   };
+
   // Get opponent records
   const getOpponentRecords = () => {
     const records: Record<string, { wins: number; losses: number; scores: number[] }> = {};
+
     // For now, simulate opponent data from analyses
     // In a full implementation, this would be connected to match data
     videoAnalyses.forEach((analysis, idx) => {
@@ -1316,12 +1400,15 @@ function Screen7({ setScreen, userId }: { setScreen: (n: number) => void; userId
         records[opponent].losses++;
       }
     });
+
     return records;
   };
+
   const shotStats = aggregateShotStats();
   const techniqueStats = aggregateTechniqueStats();
   const opponentRecords = getOpponentRecords();
   const totalMatches = (userProfile?.wins || 0) + (userProfile?.losses || 0);
+
   // Generate mock rating trend
   const generateRatingTrend = () => {
     if (!userProfile) return [50, 50, 50, 50, 50, 50, 50];
@@ -1337,16 +1424,18 @@ function Screen7({ setScreen, userId }: { setScreen: (n: number) => void; userId
       normalized,
     ].map(v => Math.max(30, Math.min(100, v)));
   };
+
   const ratingTrend = generateRatingTrend();
+
   return (
     <div className="min-h-screen bg-white p-4">
       <div className="max-w-md mx-auto">
         <div className="flex justify-between items-center mb-6">
-          <button onClick={() => setScreen(0)} className="text-sm font-semibold text-gray-600 hover:text-gray-900">
- Home</button>
+          <button onClick={() => setScreen(0)} className="text-sm font-semibold text-gray-600 hover:text-gray-900">← Home</button>
           <h1 className="text-lg font-bold">Stats</h1>
           <div></div>
         </div>
+
         {/* Tab Navigation */}
         <div className="flex gap-2 mb-6">
           <button
@@ -1370,6 +1459,7 @@ function Screen7({ setScreen, userId }: { setScreen: (n: number) => void; userId
             Player Breakdown
           </button>
         </div>
+
         {loading ? (
           <div className="text-center py-8">Loading stats...</div>
         ) : tab === 'overview' ? (
@@ -1391,6 +1481,7 @@ function Screen7({ setScreen, userId }: { setScreen: (n: number) => void; userId
                 </div>
               </div>
             </div>
+
             <div className="bg-green-50 rounded-lg p-4 mb-4">
               <div className="text-xs font-bold text-gray-500 mb-2">PRO RATING TREND</div>
               <div className="h-20 bg-white rounded flex items-end gap-1 px-2 py-2">
@@ -1402,6 +1493,7 @@ function Screen7({ setScreen, userId }: { setScreen: (n: number) => void; userId
                 Current: <span className="font-bold text-green-700">{userProfile?.proRating?.toFixed(2)}</span>
               </div>
             </div>
+
             <div className="bg-gray-50 rounded-lg p-4 mb-4">
               <div className="text-xs font-bold text-gray-500 mb-3">SHOT MIX (from {videoAnalyses.length} {videoAnalyses.length === 1 ? 'video' : 'videos'})</div>
               <div className="space-y-2">
@@ -1428,6 +1520,7 @@ function Screen7({ setScreen, userId }: { setScreen: (n: number) => void; userId
                 })}
               </div>
             </div>
+
             <div className="bg-purple-50 rounded-lg p-4 mb-4">
               <div className="text-xs font-bold text-purple-900 mb-3">TECHNIQUE ANALYSIS</div>
               <div className="space-y-2">
@@ -1438,6 +1531,7 @@ function Screen7({ setScreen, userId }: { setScreen: (n: number) => void; userId
                 <div className="w-full bg-gray-300 h-2 rounded-full overflow-hidden">
                   <div className="bg-purple-600 h-full" style={{width: `${techniqueStats.footwork}%`}}></div>
                 </div>
+
                 <div className="flex justify-between items-center text-sm mt-3">
                   <span>Positioning</span>
                   <span className="font-bold text-purple-600">{techniqueStats.positioning}/100</span>
@@ -1445,6 +1539,7 @@ function Screen7({ setScreen, userId }: { setScreen: (n: number) => void; userId
                 <div className="w-full bg-gray-300 h-2 rounded-full overflow-hidden">
                   <div className="bg-purple-600 h-full" style={{width: `${techniqueStats.positioning}%`}}></div>
                 </div>
+
                 <div className="flex justify-between items-center text-sm mt-3">
                   <span>Consistency</span>
                   <span className="font-bold text-purple-600">{techniqueStats.consistency}/100</span>
@@ -1492,9 +1587,9 @@ function Screen7({ setScreen, userId }: { setScreen: (n: number) => void; userId
                   onClick={() => setSelectedOpponent(null)}
                   className="text-sm font-semibold text-blue-600 hover:text-blue-700 mb-4"
                 >
-                  
- Back to Opponents
+                  ← Back to Opponents
                 </button>
+
                 {opponentRecords[selectedOpponent] && (
                   <>
                     <div className="bg-gradient-to-r from-blue-50 to-blue-100 rounded-lg p-4 mb-4 border border-blue-200">
@@ -1519,6 +1614,7 @@ function Screen7({ setScreen, userId }: { setScreen: (n: number) => void; userId
                         </div>
                       </div>
                     </div>
+
                     <div className="bg-amber-50 rounded-lg p-4">
                       <div className="text-xs font-bold text-amber-900 mb-3">GAME STYLE COMPARISON</div>
                       <div className="space-y-2 text-sm">
@@ -1533,13 +1629,13 @@ function Screen7({ setScreen, userId }: { setScreen: (n: number) => void; userId
             )}
           </>
         )}
+
         <div className="flex gap-3 mt-6">
           <button
             onClick={() => setScreen(6)}
             className="flex-1 bg-gray-200 hover:bg-gray-300 text-black py-3 rounded-lg font-bold"
           >
-            
- Back
+            ← Back
           </button>
           <button
             onClick={() => setScreen(0)}
@@ -1551,10 +1647,13 @@ function Screen7({ setScreen, userId }: { setScreen: (n: number) => void; userId
       </div>
     </div>
   );
+}
+
 function Screen8({ setScreen }: { setScreen: (n: number) => void }) {
   const [topPlayers, setTopPlayers] = useState<(User & { uid: string })[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterRange, setFilterRange] = useState<'all' | 'pro' | 'intermediate' | 'beginner'>('all');
+
   useEffect(() => {
     const loadTopPlayers = async () => {
       try {
@@ -1566,8 +1665,10 @@ function Screen8({ setScreen }: { setScreen: (n: number) => void }) {
         setLoading(false);
       }
     };
+
     loadTopPlayers();
   }, []);
+
   const filteredPlayers = topPlayers.filter(player => {
     const rating = player.proRating;
     switch (filterRange) {
@@ -1581,37 +1682,36 @@ function Screen8({ setScreen }: { setScreen: (n: number) => void }) {
         return true;
     }
   });
+
   const getRankColor = (rank: number) => {
     if (rank === 1) return 'text-yellow-600';
     if (rank === 2) return 'text-gray-500';
     if (rank === 3) return 'text-amber-700';
     return 'text-gray-400';
   };
+
   const getRankMedal = (rank: number) => {
-    if (rank === 1) return '
-    if (rank === 2) return '
-    if (rank === 3) return '
+    if (rank === 1) return '🥇';
+    if (rank === 2) return '🥈';
+    if (rank === 3) return '🥉';
     return `${rank}`;
   };
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-purple-50 to-white p-4">
       <div className="max-w-md mx-auto">
         <div className="flex justify-between items-center mb-6">
-          <button onClick={() => setScreen(0)} className="text-sm font-semibold text-gray-600 hover:text-gray-900">
- Home</button>
-          <h1 className="text-lg font-bold">
- Leaderboard</h1>
+          <button onClick={() => setScreen(0)} className="text-sm font-semibold text-gray-600 hover:text-gray-900">← Home</button>
+          <h1 className="text-lg font-bold">🏆 Leaderboard</h1>
           <div></div>
         </div>
+
         <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
           {[
-            { key: 'all', label: 'All', icon: '
-' },
-            { key: 'pro', label: 'Pro', icon: '
-' },
-            { key: 'intermediate', label: 'Intermediate', icon: '
-' },
-            { key: 'beginner', label: 'Beginner', icon: '
+            { key: 'all', label: 'All', icon: '👥' },
+            { key: 'pro', label: 'Pro', icon: '⭐' },
+            { key: 'intermediate', label: 'Intermediate', icon: '📈' },
+            { key: 'beginner', label: 'Beginner', icon: '🌱' }
           ].map(f => (
             <button
               key={f.key}
@@ -1626,6 +1726,7 @@ function Screen8({ setScreen }: { setScreen: (n: number) => void }) {
             </button>
           ))}
         </div>
+
         {loading ? (
           <div className="text-center py-8">Loading leaderboard...</div>
         ) : filteredPlayers.length > 0 ? (
@@ -1650,8 +1751,7 @@ function Screen8({ setScreen }: { setScreen: (n: number) => void }) {
                       {player.displayName || `Player ${player.uid.slice(0, 8)}`}
                     </div>
                     <div className="text-xs text-gray-600">
-                      {totalMatches} match{totalMatches !== 1 ? 'es' : ''} 
- {player.wins || 0} wins
+                      {totalMatches} match{totalMatches !== 1 ? 'es' : ''} • {player.wins || 0} wins
                     </div>
                   </div>
                   <div className="text-right">
@@ -1669,6 +1769,7 @@ function Screen8({ setScreen }: { setScreen: (n: number) => void }) {
             <p className="text-gray-500">No players in this range yet</p>
           </div>
         )}
+
         <button
           onClick={() => setScreen(0)}
           className="w-full mt-6 bg-purple-600 hover:bg-purple-700 text-white py-3 rounded-lg font-bold"
@@ -1678,12 +1779,15 @@ function Screen8({ setScreen }: { setScreen: (n: number) => void }) {
       </div>
     </div>
   );
+}
+
 function Screen9({ setScreen, userId }: { setScreen: (n: number) => void; userId: string }) {
   const [userProfile, setUserProfile] = useState<User | null>(null);
   const [displayName, setDisplayName] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState('');
+
   useEffect(() => {
     const loadProfile = async () => {
       try {
@@ -1698,18 +1802,20 @@ function Screen9({ setScreen, userId }: { setScreen: (n: number) => void; userId
         setLoading(false);
       }
     };
+
     loadProfile();
   }, [userId]);
+
   const handleSaveProfile = async () => {
     if (!displayName.trim()) {
       setSaveMessage('Display name cannot be empty');
       return;
     }
+
     setSaving(true);
     try {
       await updateDisplayName(userId, displayName);
-      setSaveMessage('
- Profile updated successfully!');
+      setSaveMessage('✓ Profile updated successfully!');
       setUserProfile(prev => prev ? { ...prev, displayName } : null);
       setTimeout(() => setSaveMessage(''), 2000);
     } catch (error) {
@@ -1719,16 +1825,16 @@ function Screen9({ setScreen, userId }: { setScreen: (n: number) => void; userId
       setSaving(false);
     }
   };
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-purple-50 to-white p-4">
       <div className="max-w-md mx-auto">
         <div className="flex justify-between items-center mb-6">
-          <button onClick={() => setScreen(0)} className="text-sm font-semibold text-gray-600 hover:text-gray-900">
- Back</button>
-          <h1 className="text-lg font-bold">
- Edit Profile</h1>
+          <button onClick={() => setScreen(0)} className="text-sm font-semibold text-gray-600 hover:text-gray-900">← Back</button>
+          <h1 className="text-lg font-bold">⚙️ Edit Profile</h1>
           <div></div>
         </div>
+
         {loading ? (
           <div className="text-center py-8">Loading profile...</div>
         ) : (
@@ -1744,6 +1850,7 @@ function Screen9({ setScreen, userId }: { setScreen: (n: number) => void; userId
               />
               <p className="text-xs text-gray-500 mt-1">Email cannot be changed</p>
             </div>
+
             {/* Display Name */}
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-2">Display Name</label>
@@ -1756,6 +1863,7 @@ function Screen9({ setScreen, userId }: { setScreen: (n: number) => void; userId
               />
               <p className="text-xs text-gray-500 mt-1">This name will appear on the leaderboard</p>
             </div>
+
             {/* Stats (Read-only) */}
             <div className="border-t pt-4">
               <p className="text-sm font-semibold text-gray-700 mb-3">Your Stats</p>
@@ -1774,33 +1882,37 @@ function Screen9({ setScreen, userId }: { setScreen: (n: number) => void; userId
                 </div>
               </div>
             </div>
+
             {/* Save Message */}
             {saveMessage && (
               <div className={`p-3 rounded text-sm ${
-                saveMessage.includes('
+                saveMessage.includes('✓')
                   ? 'bg-green-100 text-green-700'
                   : 'bg-red-100 text-red-700'
               }`}>
                 {saveMessage}
               </div>
             )}
+
             {/* Save Button */}
             <button
               onClick={handleSaveProfile}
               disabled={saving || !displayName.trim()}
               className="w-full bg-purple-600 hover:bg-purple-700 disabled:bg-gray-400 text-white font-bold py-3 rounded-lg transition"
             >
-              {saving ? 'Saving...' : '
- Save Changes'}
+              {saving ? 'Saving...' : '💾 Save Changes'}
             </button>
           </div>
         )}
       </div>
     </div>
   );
+}
+
 function Screen10({ setScreen }: { setScreen: (n: number) => void }) {
   const [analysis, setAnalysis] = useState<MatchAnalysis | null>(null);
   const [loading, setLoading] = useState(true);
+
   useEffect(() => {
     const analysisData = sessionStorage.getItem('matchAnalysis');
     if (analysisData) {
@@ -1812,46 +1924,49 @@ function Screen10({ setScreen }: { setScreen: (n: number) => void }) {
     }
     setLoading(false);
   }, []);
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-blue-50 to-white">
         <div className="text-center">
-          <div className="text-2xl font-bold text-blue-700 mb-4">
- Analyzing...</div>
+          <div className="text-2xl font-bold text-blue-700 mb-4">🎬 Analyzing...</div>
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
         </div>
       </div>
     );
+  }
+
   if (!analysis) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white p-4">
         <div className="max-w-md mx-auto text-center">
-          <button onClick={() => setScreen(0)} className="text-sm font-semibold text-gray-600 mb-6">
- Back to Home</button>
+          <button onClick={() => setScreen(0)} className="text-sm font-semibold text-gray-600 mb-6">← Back to Home</button>
           <p className="text-gray-600">No analysis data available</p>
         </div>
       </div>
     );
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white p-4">
       <div className="max-w-md mx-auto">
         <div className="flex justify-between items-center mb-6">
-          <button onClick={() => setScreen(4)} className="text-sm font-semibold text-gray-600 hover:text-gray-900">
- Back</button>
+          <button onClick={() => setScreen(4)} className="text-sm font-semibold text-gray-600 hover:text-gray-900">← Back</button>
           <h1 className="text-lg font-bold">Shot Analysis</h1>
           <div></div>
         </div>
+
         {/* Overall Rating */}
         <div className="bg-gradient-to-br from-blue-600 to-blue-700 rounded-2xl p-6 text-white mb-6">
           <div className="text-center">
             <div className="text-sm font-semibold mb-2">OVERALL PERFORMANCE</div>
             <div className="text-5xl font-black mb-3">
-              {'
-'.repeat(Math.round(analysis.proComparison.overallRating))}
+              {'⭐'.repeat(Math.round(analysis.proComparison.overallRating))}
             </div>
             <div className="text-sm">{analysis.proComparison.overallRating.toFixed(1)} / 5.0</div>
           </div>
         </div>
+
         {/* Shot Breakdown */}
         <div className="bg-white rounded-lg border border-gray-200 p-4 mb-4">
           <h2 className="text-sm font-bold text-gray-700 mb-3">SHOT BREAKDOWN</h2>
@@ -1878,6 +1993,7 @@ function Screen10({ setScreen }: { setScreen: (n: number) => void }) {
             </div>
           </div>
         </div>
+
         {/* Technique Analysis */}
         <div className="bg-white rounded-lg border border-gray-200 p-4 mb-4">
           <h2 className="text-sm font-bold text-gray-700 mb-3">TECHNIQUE ANALYSIS</h2>
@@ -1898,6 +2014,7 @@ function Screen10({ setScreen }: { setScreen: (n: number) => void }) {
             </div>
           </div>
         </div>
+
         {/* Pro Comparison */}
         <div className="bg-purple-50 rounded-lg border border-purple-200 p-4 mb-4">
           <h2 className="text-sm font-bold text-purple-900 mb-2">PRO COMPARISON</h2>
@@ -1906,15 +2023,13 @@ function Screen10({ setScreen }: { setScreen: (n: number) => void }) {
             <div>
               <p className="font-semibold text-purple-900 mb-1">Strengths:</p>
               {analysis.proComparison.strengths.map((s, i) => (
-                <p key={i} className="text-purple-700 ml-2">
- {s}</p>
+                <p key={i} className="text-purple-700 ml-2">✓ {s}</p>
               ))}
             </div>
             <div>
               <p className="font-semibold text-purple-900 mb-1">Areas to Improve:</p>
               {analysis.proComparison.improvementAreas.map((area, i) => (
-                <p key={i} className="text-purple-700 ml-2">
- {area}</p>
+                <p key={i} className="text-purple-700 ml-2">• {area}</p>
               ))}
             </div>
           </div>
@@ -1922,10 +2037,14 @@ function Screen10({ setScreen }: { setScreen: (n: number) => void }) {
       </div>
     </div>
   );
+
+}
+
 function Screen11({ setScreen, userId }: { setScreen: (n: number) => void; userId: string }) {
   const [detectedPlayers] = useState<DetectedPlayer[]>(generateDetectedPlayers());
   const [selectedPlayers, setSelectedPlayers] = useState<number[]>([]);
   const [saving, setSaving] = useState(false);
+
   const togglePlayerSelection = (playerId: number) => {
     setSelectedPlayers((prev: number[]) => {
       if (prev.includes(playerId)) {
@@ -1938,26 +2057,32 @@ function Screen11({ setScreen, userId }: { setScreen: (n: number) => void; userI
       }
     });
   };
+
   const handleSaveAnalysis = async () => {
     if (selectedPlayers.length === 0) {
       alert('Please select at least 1 player');
       return;
     }
+
     setSaving(true);
     try {
       const analysis = sessionStorage.getItem('matchAnalysis');
       const videoUrl = sessionStorage.getItem('matchVideoUrl');
+
       if (!analysis) {
         alert('Missing analysis data');
         return;
       }
+
       const analysisObj = JSON.parse(analysis);
       const matchType = selectedPlayers.length === 1 ? '1v1' : '2v2';
+
       // Build opponent identifier from selected players' clothing colors
       const selectedPlayersList = detectedPlayers.filter((p: DetectedPlayer) => selectedPlayers.includes(p.id));
       const opponentIdentifier = selectedPlayersList
         .map((p: DetectedPlayer) => `${p.shirtColor} shirt, ${p.shortsColor} shorts`)
         .join(' & ');
+
       // Save video analysis to Firestore
       await saveVideoAnalysis(userId, {
         opponent: opponentIdentifier,
@@ -1972,9 +2097,10 @@ function Screen11({ setScreen, userId }: { setScreen: (n: number) => void; userI
         analysisDate: new Date().toISOString(),
         videoUrl: videoUrl || '',
       });
-      console.log(`
- Analysis auto-saved (${matchType}). Opponent: ${opponentIdentifier}`);
+
+      console.log(`✅ Analysis auto-saved (${matchType}). Opponent: ${opponentIdentifier}`);
       alert(`Match analysis saved! Match type: ${matchType}`);
+
       // Navigate to analysis view
       setScreen(11);
     } catch (err) {
@@ -1984,12 +2110,14 @@ function Screen11({ setScreen, userId }: { setScreen: (n: number) => void; userI
       setSaving(false);
     }
   };
+
   const handleCancel = () => {
     setSelectedPlayers([]);
     sessionStorage.removeItem('matchAnalysis');
     sessionStorage.removeItem('matchVideoUrl');
     setScreen(0);
   };
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-purple-50 to-white p-4">
       <div className="max-w-md mx-auto">
@@ -1997,6 +2125,7 @@ function Screen11({ setScreen, userId }: { setScreen: (n: number) => void; userI
           <h1 className="text-2xl font-bold text-gray-800 mb-2">Identify Opponents</h1>
           <p className="text-gray-600 text-sm">Select the opponent(s) by their clothing colors</p>
         </div>
+
         {/* 4-Player Grid */}
         <div className="bg-white rounded-lg border border-gray-200 p-4 mb-6">
           <div className="grid grid-cols-2 gap-4">
@@ -2011,35 +2140,36 @@ function Screen11({ setScreen, userId }: { setScreen: (n: number) => void; userI
                 }`}
               >
                 <div className="font-bold text-gray-800 mb-3">Player {player.id}</div>
+
                 {/* Shirt Color Swatch */}
                 <div className="flex items-center gap-2 mb-2">
                   <div className={`w-6 h-6 rounded ${getColorBg(player.shirtColor)}`}></div>
                   <span className="text-xs text-gray-700">{player.shirtColor}</span>
                 </div>
+
                 {/* Shorts Color Swatch */}
                 <div className="flex items-center gap-2">
                   <div className={`w-6 h-6 rounded ${getColorBg(player.shortsColor)}`}></div>
                   <span className="text-xs text-gray-700">{player.shortsColor}</span>
                 </div>
+
                 {selectedPlayers.includes(player.id) && (
-                  <div className="mt-3 text-green-600 text-sm font-semibold">
- Selected</div>
+                  <div className="mt-3 text-green-600 text-sm font-semibold">✓ Selected</div>
                 )}
               </button>
             ))}
           </div>
         </div>
+
         {/* Selection Info */}
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
           <p className="text-sm text-blue-900">
-            {selectedPlayers.length === 0 && '
- Select 1 player for 1v1 or 2 players for 2v2'}
-            {selectedPlayers.length === 1 && '
- 1v1 Match selected'}
-            {selectedPlayers.length === 2 && '
- 2v2 Match selected'}
+            {selectedPlayers.length === 0 && '👆 Select 1 player for 1v1 or 2 players for 2v2'}
+            {selectedPlayers.length === 1 && '✓ 1v1 Match selected'}
+            {selectedPlayers.length === 2 && '✓ 2v2 Match selected'}
           </p>
         </div>
+
         {/* Buttons */}
         <div className="flex gap-3">
           <button
@@ -2060,3 +2190,4 @@ function Screen11({ setScreen, userId }: { setScreen: (n: number) => void; userI
     </div>
   );
 }
+
