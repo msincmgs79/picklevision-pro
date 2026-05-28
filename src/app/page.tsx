@@ -64,10 +64,6 @@ function Screen0({ setScreen, userId }: { setScreen: (n: number) => void; userId
   const [syncingDUPR, setSyncingDUPR] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const [analyzingVideoId, setAnalyzingVideoId] = useState<string | null>(null);
-  const [showOpponentModal, setShowOpponentModal] = useState(false);
-  const [opponentName, setOpponentName] = useState('');
-  const [pendingAnalysis, setPendingAnalysis] = useState<any>(null);
-  const [pendingVideoId, setPendingVideoId] = useState<string | null>(null);
   const { logout } = useAuth();
 
   useEffect(() => {
@@ -371,11 +367,16 @@ function Screen0({ setScreen, userId }: { setScreen: (n: number) => void; userId
                                   const analysis = await analyzeMatchVideo(video.videoUrl);
                                   sessionStorage.setItem('matchAnalysis', JSON.stringify(analysis));
 
-                                  // Store pending analysis and show opponent modal
-                                  setPendingAnalysis(analysis);
-                                  setPendingVideoId(video.id);
-                                  setShowOpponentModal(true);
-                                  setOpponentName('');
+                                  // Auto-save analysis to Firestore
+                                  try {
+                                    await saveVideoAnalysis(userId, video.id, analysis);
+                                    console.log('✅ Analysis auto-saved to Firestore');
+                                  } catch (saveErr) {
+                                    console.error('⚠️ Failed to save analysis to Firestore:', saveErr);
+                                    // Don't throw - allow user to view analysis even if save fails
+                                  }
+
+                                  setScreen(10);
                                 } catch (err: any) {
                                   console.error('Analysis failed:', err);
                                   alert('❌ Analysis failed: ' + (err?.message || 'Unknown error'));
@@ -473,150 +474,8 @@ function Screen0({ setScreen, userId }: { setScreen: (n: number) => void; userId
           </>
         )}
       </div>
-
-      {/* Player Selector Modal - Supports 1v1 or 2v2 */}
-      {showOpponentModal && pendingAnalysis?.detectedPlayers && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-lg mx-4 shadow-lg max-h-96 overflow-y-auto">
-            <h3 className="text-lg font-bold text-gray-800 mb-2">Which player(s) are you?</h3>
-            <p className="text-sm text-gray-600 mb-4">Click your clothing to identify yourself (for doubles, you can select your partner)</p>
-
-            <div className="grid grid-cols-2 gap-3 mb-6">
-              {pendingAnalysis.detectedPlayers.map((player) => {
-                const shirtBg = getColorBg(player.clothing.shirtColor);
-                const shortsBg = getColorBg(player.clothing.shortsColor);
-                const isSelected = opponentName.split(',').includes(`player${player.playerId}`);
-
-                return (
-                  <button
-                    key={player.playerId}
-                    onClick={() => {
-                      // Toggle selection for doubles support
-                      const current = opponentName.split(',').filter((p: string) => p);
-                      if (current.includes(`player${player.playerId}`)) {
-                        // Remove if already selected
-                        setOpponentName(current.filter((p: string) => p !== `player${player.playerId}`).join(','));
-                      } else {
-                        // Add to selection
-                        setOpponentName([...current, `player${player.playerId}`].join(','));
-                      }
-                    }}
-                    className={`p-3 rounded-lg border-2 transition ${
-                      isSelected
-                        ? 'border-green-500 bg-green-50'
-                        : 'border-gray-200 hover:border-blue-300 bg-gray-50'
-                    }`}
-                  >
-                    <div className="text-center">
-                      <div className="text-sm font-semibold mb-2">Player {player.playerId}</div>
-                      <div className="flex justify-center gap-2 mb-2">
-                        <div className={`w-6 h-10 rounded ${shirtBg} border border-gray-300`}></div>
-                        <div className={`w-6 h-5 rounded ${shortsBg} border border-gray-300`}></div>
-                      </div>
-                      <div className="text-xs text-gray-700">{player.description}</div>
-                      {isSelected && (
-                        <div className="mt-1 text-xs font-bold text-green-600">✓ Selected</div>
-                      )}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-
-            <div className="text-sm text-gray-600 mb-4 p-3 bg-blue-50 rounded">
-              Selected: {opponentName || 'None'} | Opponent(s): All others
-            </div>
-
-            <div className="flex gap-3">
-              <button
-                onClick={() => {
-                  setShowOpponentModal(false);
-                  setPendingAnalysis(null);
-                  setPendingVideoId(null);
-                  setAnalyzing(false);
-                  setAnalyzingVideoId(null);
-                  setOpponentName('');
-                }}
-                className="flex-1 px-4 py-2 bg-gray-300 text-gray-800 rounded-lg font-semibold hover:bg-gray-400"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleOpponentSubmit}
-                disabled={!opponentName}
-                className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg font-semibold hover:bg-green-700 disabled:opacity-50"
-              >
-                Save Analysis
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
-
-  async function handleOpponentSubmit() {
-    if (!pendingAnalysis || !pendingVideoId || !opponentName) return;
-
-    try {
-      // Get selected player IDs (supports 1v1 or 2v2)
-      const selectedIds = opponentName.split(',').map(p => parseInt(p.replace('player', '')) as 1 | 2 | 3 | 4);
-      const selectedPlayers = pendingAnalysis.detectedPlayers?.filter(p => selectedIds.includes(p.playerId)) || [];
-
-      // Get opponent players (all others)
-      const opponentPlayers = pendingAnalysis.detectedPlayers?.filter(p => !selectedIds.includes(p.playerId)) || [];
-
-      // Create opponent identifier (supports singles and doubles)
-      const opponentIdentifier = opponentPlayers.length > 0
-        ? opponentPlayers.map(p => `${p.clothing.shirtColor} shirt, ${p.clothing.shortsColor} shorts`).join(' & ')
-        : 'Unknown opponent';
-
-      const matchType = selectedPlayers.length === 1 ? '1v1' : `${selectedPlayers.length}v${opponentPlayers.length}`;
-
-      // Add opponent clothing to analysis
-      const analysisWithOpponent = {
-        ...pendingAnalysis,
-        opponent: opponentIdentifier,
-        selectedPlayers: selectedPlayers.map(p => p.playerId),
-        matchType: matchType,
-        opponentClothing: opponentPlayers.length === 1 ? opponentPlayers[0]?.clothing : undefined,
-      };
-
-      // Save to Firestore
-      await saveVideoAnalysis(userId, pendingVideoId, analysisWithOpponent);
-      console.log(`✅ Analysis auto-saved (${matchType}). Opponent:`, opponentIdentifier);
-
-      // Clear modal and go to results
-      setShowOpponentModal(false);
-      setPendingAnalysis(null);
-      setPendingVideoId(null);
-      setAnalyzing(false);
-      setAnalyzingVideoId(null);
-      setOpponentName('');
-      setScreen(10);
-    } catch (err: any) {
-      console.error('Error saving analysis:', err);
-      alert('❌ Failed to save analysis: ' + (err?.message || 'Unknown error'));
-    }
-  }
-
-  // Helper function to map color names to Tailwind classes
-  function getColorBg(color: string): string {
-    const colorMap: Record<string, string> = {
-      Red: 'bg-red-500',
-      Blue: 'bg-blue-500',
-      Black: 'bg-black',
-      White: 'bg-white border-2 border-gray-300',
-      Yellow: 'bg-yellow-400',
-      Green: 'bg-green-500',
-      Orange: 'bg-orange-500',
-      Purple: 'bg-purple-500',
-      Navy: 'bg-blue-900',
-      Gray: 'bg-gray-500',
-      Khaki: 'bg-yellow-100 border-2 border-yellow-300',
-    };
-    return colorMap[color] || 'bg-gray-400';
-  }
 }
 
 function Screen1({ setScreen }: { setScreen: (n: number) => void }) {
@@ -1384,9 +1243,8 @@ function Screen7({ setScreen, userId }: { setScreen: (n: number) => void; userId
   const [userProfile, setUserProfile] = useState<User | null>(null);
   const [videoAnalyses, setVideoAnalyses] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<'overview' | 'player-breakdown' | 'history'>('overview');
+  const [tab, setTab] = useState<'overview' | 'player-breakdown'>('overview');
   const [selectedOpponent, setSelectedOpponent] = useState<string | null>(null);
-  const [selectedAnalysis, setSelectedAnalysis] = useState<any | null>(null);
 
   useEffect(() => {
     const loadData = async () => {
@@ -1423,19 +1281,7 @@ function Screen7({ setScreen, userId }: { setScreen: (n: number) => void; userId
     let count = 0;
 
     videoAnalyses.forEach((analysis: any) => {
-      // Try shotBreakdown.shotCounts first (correct structure from analyzeMatchVideo)
-      if (analysis.shotBreakdown && analysis.shotBreakdown.shotCounts) {
-        const shots = analysis.shotBreakdown.shotCounts;
-        totals.dinks += shots.dinks || 0;
-        totals.drives += shots.drives || 0;
-        totals.drops += shots.drops || 0;
-        totals.lobs += shots.lobs || 0;
-        totals.volleys += shots.volleys || 0;
-        totals.smashes += shots.smashes || 0;
-        totals.serves += shots.serves || 0;
-        count++;
-      } else if (analysis.shotSummary) {
-        // Fallback to shotSummary if it exists
+      if (analysis.shotSummary) {
         totals.dinks += analysis.shotSummary.dinks || 0;
         totals.drives += analysis.shotSummary.drives || 0;
         totals.drops += analysis.shotSummary.drops || 0;
@@ -1447,9 +1293,9 @@ function Screen7({ setScreen, userId }: { setScreen: (n: number) => void; userId
       }
     });
 
-    const total = Object.values(totals).reduce((a: number, b: number) => a + b, 0);
+    const total = Object.values(totals).reduce((a, b) => a + b, 0);
     if (total === 0) {
-      return { dinks: 0, drives: 0, drops: 0, lobs: 0, volleys: 0, smashes: 0, serves: 0, total: 0, count };
+      return { dinks: 0, drives: 0, drops: 0, lobs: 0, volleys: 0, smashes: 0, serves: 0, total: 0 };
     }
 
     return {
@@ -1461,7 +1307,6 @@ function Screen7({ setScreen, userId }: { setScreen: (n: number) => void; userId
       smashes: total > 0 ? Math.round((totals.smashes / total) * 100) : 0,
       serves: total > 0 ? Math.round((totals.serves / total) * 100) : 0,
       total,
-      count,
     };
   };
 
@@ -1475,15 +1320,7 @@ function Screen7({ setScreen, userId }: { setScreen: (n: number) => void; userId
     let count = 0;
 
     videoAnalyses.forEach((analysis: any) => {
-      // Try techniqueAnalysis first (correct structure from analyzeMatchVideo)
-      if (analysis.techniqueAnalysis) {
-        totals.footwork += (analysis.techniqueAnalysis.footwork?.rating || 0) * 20; // Convert 1-5 to 0-100
-        totals.positioning += (analysis.techniqueAnalysis.positioning?.rating || 0) * 20;
-        // Use racketTechnique as consistency proxy
-        totals.consistency += (analysis.techniqueAnalysis.racketTechnique?.rating || 0) * 20;
-        count++;
-      } else if (analysis.playerTechnique) {
-        // Fallback to playerTechnique if it exists
+      if (analysis.playerTechnique) {
         totals.footwork += analysis.playerTechnique.footwork || 0;
         totals.positioning += analysis.playerTechnique.positioning || 0;
         totals.consistency += analysis.playerTechnique.consistency || 0;
@@ -1500,19 +1337,18 @@ function Screen7({ setScreen, userId }: { setScreen: (n: number) => void; userId
       : { footwork: 0, positioning: 0, consistency: 0 };
   };
 
-  // Get opponent records from actual analysis data
+  // Get opponent records
   const getOpponentRecords = () => {
     const records: Record<string, { wins: number; losses: number; scores: number[] }> = {};
 
-    videoAnalyses.forEach((analysis: any) => {
-      // Use opponent name from analysis, or fallback to Unknown
-      const opponent = analysis.opponent || 'Unknown Opponent';
-
+    // For now, simulate opponent data from analyses
+    // In a full implementation, this would be connected to match data
+    videoAnalyses.forEach((analysis, idx) => {
+      const opponent = `Player ${idx + 1}`;
       if (!records[opponent]) {
         records[opponent] = { wins: 0, losses: 0, scores: [] };
       }
-
-      // Randomly assign W/L for demo (in production would use actual match results)
+      // Randomly assign W/L for demo
       if (Math.random() > 0.5) {
         records[opponent].wins++;
       } else {
@@ -1556,10 +1392,10 @@ function Screen7({ setScreen, userId }: { setScreen: (n: number) => void; userId
         </div>
 
         {/* Tab Navigation */}
-        <div className="flex gap-2 mb-6 overflow-x-auto">
+        <div className="flex gap-2 mb-6">
           <button
             onClick={() => { setTab('overview'); setSelectedOpponent(null); }}
-            className={`py-2 px-3 rounded-lg font-semibold text-sm transition whitespace-nowrap ${
+            className={`flex-1 py-2 rounded-lg font-semibold text-sm transition ${
               tab === 'overview'
                 ? 'bg-blue-600 text-white'
                 : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -1569,23 +1405,13 @@ function Screen7({ setScreen, userId }: { setScreen: (n: number) => void; userId
           </button>
           <button
             onClick={() => setTab('player-breakdown')}
-            className={`py-2 px-3 rounded-lg font-semibold text-sm transition whitespace-nowrap ${
+            className={`flex-1 py-2 rounded-lg font-semibold text-sm transition ${
               tab === 'player-breakdown'
                 ? 'bg-blue-600 text-white'
                 : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
             }`}
           >
-            Opponents
-          </button>
-          <button
-            onClick={() => setTab('history')}
-            className={`py-2 px-3 rounded-lg font-semibold text-sm transition whitespace-nowrap ${
-              tab === 'history'
-                ? 'bg-blue-600 text-white'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
-          >
-            📚 History
+            Player Breakdown
           </button>
         </div>
 
@@ -1679,7 +1505,7 @@ function Screen7({ setScreen, userId }: { setScreen: (n: number) => void; userId
               </div>
             </div>
           </>
-        ) : tab === 'player-breakdown' ? (
+        ) : (
           // Player Breakdown Tab
           <>
             {selectedOpponent === null ? (
@@ -1702,3 +1528,468 @@ function Screen7({ setScreen, userId }: { setScreen: (n: number) => void; userId
                           <div className="text-sm font-bold text-red-600">{record.losses}L</div>
                         </div>
                       </div>
+                    </button>
+                  ))
+                ) : (
+                  <div className="text-center py-8 text-gray-500">
+                    <p className="text-sm">Analyze videos to track opponent records</p>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div>
+                <button
+                  onClick={() => setSelectedOpponent(null)}
+                  className="text-sm font-semibold text-blue-600 hover:text-blue-700 mb-4"
+                >
+                  ← Back to Opponents
+                </button>
+
+                {opponentRecords[selectedOpponent] && (
+                  <>
+                    <div className="bg-gradient-to-r from-blue-50 to-blue-100 rounded-lg p-4 mb-4 border border-blue-200">
+                      <div className="text-lg font-bold text-gray-800 mb-3">{selectedOpponent}</div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="bg-white rounded-lg p-3 text-center">
+                          <div className="text-2xl font-bold text-green-600">{opponentRecords[selectedOpponent].wins}</div>
+                          <div className="text-xs text-gray-600">Wins</div>
+                        </div>
+                        <div className="bg-white rounded-lg p-3 text-center">
+                          <div className="text-2xl font-bold text-red-600">{opponentRecords[selectedOpponent].losses}</div>
+                          <div className="text-xs text-gray-600">Losses</div>
+                        </div>
+                      </div>
+                      <div className="mt-3 text-center">
+                        <div className="text-sm text-gray-700">
+                          Win Rate: <span className="font-bold">{
+                            opponentRecords[selectedOpponent].wins + opponentRecords[selectedOpponent].losses > 0
+                              ? Math.round((opponentRecords[selectedOpponent].wins / (opponentRecords[selectedOpponent].wins + opponentRecords[selectedOpponent].losses)) * 100)
+                              : 0
+                          }%</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="bg-amber-50 rounded-lg p-4">
+                      <div className="text-xs font-bold text-amber-900 mb-3">GAME STYLE COMPARISON</div>
+                      <div className="space-y-2 text-sm">
+                        <p className="text-gray-700"><span className="font-semibold">Your Strategy:</span> Aggressive net play with frequent volleys</p>
+                        <p className="text-gray-700"><span className="font-semibold">Their Style:</span> Baseline control with patient dinking</p>
+                        <p className="text-gray-700"><span className="font-semibold">Key Matchup:</span> Serve dominance favors your game</p>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+          </>
+        )}
+
+        <div className="flex gap-3 mt-6">
+          <button
+            onClick={() => setScreen(6)}
+            className="flex-1 bg-gray-200 hover:bg-gray-300 text-black py-3 rounded-lg font-bold"
+          >
+            ← Back
+          </button>
+          <button
+            onClick={() => setScreen(0)}
+            className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg font-bold"
+          >
+            Home
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Screen8({ setScreen }: { setScreen: (n: number) => void }) {
+  const [topPlayers, setTopPlayers] = useState<(User & { uid: string })[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [filterRange, setFilterRange] = useState<'all' | 'pro' | 'intermediate' | 'beginner'>('all');
+
+  useEffect(() => {
+    const loadTopPlayers = async () => {
+      try {
+        const players = await getTopPlayers(50);
+        setTopPlayers(players);
+      } catch (error) {
+        console.error('Error loading leaderboard:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadTopPlayers();
+  }, []);
+
+  const filteredPlayers = topPlayers.filter(player => {
+    const rating = player.proRating;
+    switch (filterRange) {
+      case 'pro':
+        return rating >= 3.5;
+      case 'intermediate':
+        return rating >= 2.5 && rating < 3.5;
+      case 'beginner':
+        return rating < 2.5;
+      default:
+        return true;
+    }
+  });
+
+  const getRankColor = (rank: number) => {
+    if (rank === 1) return 'text-yellow-600';
+    if (rank === 2) return 'text-gray-500';
+    if (rank === 3) return 'text-amber-700';
+    return 'text-gray-400';
+  };
+
+  const getRankMedal = (rank: number) => {
+    if (rank === 1) return '🥇';
+    if (rank === 2) return '🥈';
+    if (rank === 3) return '🥉';
+    return `${rank}`;
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-b from-purple-50 to-white p-4">
+      <div className="max-w-md mx-auto">
+        <div className="flex justify-between items-center mb-6">
+          <button onClick={() => setScreen(0)} className="text-sm font-semibold text-gray-600 hover:text-gray-900">← Home</button>
+          <h1 className="text-lg font-bold">🏆 Leaderboard</h1>
+          <div></div>
+        </div>
+
+        <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
+          {[
+            { key: 'all', label: 'All', icon: '👥' },
+            { key: 'pro', label: 'Pro', icon: '⭐' },
+            { key: 'intermediate', label: 'Intermediate', icon: '📈' },
+            { key: 'beginner', label: 'Beginner', icon: '🌱' }
+          ].map(f => (
+            <button
+              key={f.key}
+              onClick={() => setFilterRange(f.key as any)}
+              className={`px-3 py-2 rounded-full text-xs font-semibold whitespace-nowrap transition ${
+                filterRange === f.key
+                  ? 'bg-purple-600 text-white'
+                  : 'bg-white border border-purple-300 text-purple-700 hover:bg-purple-50'
+              }`}
+            >
+              {f.icon} {f.label}
+            </button>
+          ))}
+        </div>
+
+        {loading ? (
+          <div className="text-center py-8">Loading leaderboard...</div>
+        ) : filteredPlayers.length > 0 ? (
+          <div className="space-y-3">
+            {filteredPlayers.map((player, idx) => {
+              const rank = topPlayers.indexOf(player) + 1;
+              const totalMatches = (player.wins || 0) + (player.losses || 0);
+              return (
+                <div
+                  key={player.uid}
+                  className={`flex items-center gap-3 p-4 rounded-lg border ${
+                    rank <= 3
+                      ? 'bg-gradient-to-r from-yellow-50 to-white border-yellow-300'
+                      : 'bg-white border-gray-200'
+                  }`}
+                >
+                  <div className={`text-2xl font-black w-10 text-center ${getRankColor(rank)}`}>
+                    {getRankMedal(rank)}
+                  </div>
+                  <div className="flex-1">
+                    <div className="font-bold text-gray-800">
+                      {player.displayName || `Player ${player.uid.slice(0, 8)}`}
+                    </div>
+                    <div className="text-xs text-gray-600">
+                      {totalMatches} match{totalMatches !== 1 ? 'es' : ''} • {player.wins || 0} wins
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-2xl font-black text-purple-600">
+                      {player.proRating?.toFixed(2)}
+                    </div>
+                    <div className="text-xs text-gray-500">Rating</div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="text-center py-8">
+            <p className="text-gray-500">No players in this range yet</p>
+          </div>
+        )}
+
+        <button
+          onClick={() => setScreen(0)}
+          className="w-full mt-6 bg-purple-600 hover:bg-purple-700 text-white py-3 rounded-lg font-bold"
+        >
+          Back to Dashboard
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function Screen9({ setScreen, userId }: { setScreen: (n: number) => void; userId: string }) {
+  const [userProfile, setUserProfile] = useState<User | null>(null);
+  const [displayName, setDisplayName] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [saveMessage, setSaveMessage] = useState('');
+
+  useEffect(() => {
+    const loadProfile = async () => {
+      try {
+        const profile = await getUserProfile(userId);
+        if (profile) {
+          setUserProfile(profile);
+          setDisplayName(profile.displayName || '');
+        }
+      } catch (error) {
+        console.error('Error loading profile:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadProfile();
+  }, [userId]);
+
+  const handleSaveProfile = async () => {
+    if (!displayName.trim()) {
+      setSaveMessage('Display name cannot be empty');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      await updateDisplayName(userId, displayName);
+      setSaveMessage('✓ Profile updated successfully!');
+      setUserProfile(prev => prev ? { ...prev, displayName } : null);
+      setTimeout(() => setSaveMessage(''), 2000);
+    } catch (error) {
+      console.error('Error updating profile:', error);
+      setSaveMessage('Failed to update profile');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-b from-purple-50 to-white p-4">
+      <div className="max-w-md mx-auto">
+        <div className="flex justify-between items-center mb-6">
+          <button onClick={() => setScreen(0)} className="text-sm font-semibold text-gray-600 hover:text-gray-900">← Back</button>
+          <h1 className="text-lg font-bold">⚙️ Edit Profile</h1>
+          <div></div>
+        </div>
+
+        {loading ? (
+          <div className="text-center py-8">Loading profile...</div>
+        ) : (
+          <div className="bg-white rounded-lg border border-gray-200 p-6 space-y-6">
+            {/* Email (Read-only) */}
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">Email</label>
+              <input
+                type="email"
+                value={userProfile?.email || ''}
+                disabled
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-100 text-gray-600"
+              />
+              <p className="text-xs text-gray-500 mt-1">Email cannot be changed</p>
+            </div>
+
+            {/* Display Name */}
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">Display Name</label>
+              <input
+                type="text"
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+                placeholder="Your player name"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-600"
+              />
+              <p className="text-xs text-gray-500 mt-1">This name will appear on the leaderboard</p>
+            </div>
+
+            {/* Stats (Read-only) */}
+            <div className="border-t pt-4">
+              <p className="text-sm font-semibold text-gray-700 mb-3">Your Stats</p>
+              <div className="grid grid-cols-3 gap-2">
+                <div className="bg-green-50 rounded p-3 text-center">
+                  <div className="text-lg font-bold text-green-600">{userProfile?.wins || 0}</div>
+                  <div className="text-xs text-gray-600">Wins</div>
+                </div>
+                <div className="bg-gray-50 rounded p-3 text-center">
+                  <div className="text-lg font-bold text-gray-600">{(userProfile?.wins || 0) + (userProfile?.losses || 0)}</div>
+                  <div className="text-xs text-gray-600">Matches</div>
+                </div>
+                <div className="bg-purple-50 rounded p-3 text-center">
+                  <div className="text-lg font-bold text-purple-600">{userProfile?.proRating?.toFixed(2)}</div>
+                  <div className="text-xs text-gray-600">Rating</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Save Message */}
+            {saveMessage && (
+              <div className={`p-3 rounded text-sm ${
+                saveMessage.includes('✓')
+                  ? 'bg-green-100 text-green-700'
+                  : 'bg-red-100 text-red-700'
+              }`}>
+                {saveMessage}
+              </div>
+            )}
+
+            {/* Save Button */}
+            <button
+              onClick={handleSaveProfile}
+              disabled={saving || !displayName.trim()}
+              className="w-full bg-purple-600 hover:bg-purple-700 disabled:bg-gray-400 text-white font-bold py-3 rounded-lg transition"
+            >
+              {saving ? 'Saving...' : '💾 Save Changes'}
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function Screen10({ setScreen }: { setScreen: (n: number) => void }) {
+  const [analysis, setAnalysis] = useState<MatchAnalysis | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const analysisData = sessionStorage.getItem('matchAnalysis');
+    if (analysisData) {
+      try {
+        setAnalysis(JSON.parse(analysisData));
+      } catch (err) {
+        console.error('Error loading analysis:', err);
+      }
+    }
+    setLoading(false);
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-blue-50 to-white">
+        <div className="text-center">
+          <div className="text-2xl font-bold text-blue-700 mb-4">🎬 Analyzing...</div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!analysis) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white p-4">
+        <div className="max-w-md mx-auto text-center">
+          <button onClick={() => setScreen(0)} className="text-sm font-semibold text-gray-600 mb-6">← Back to Home</button>
+          <p className="text-gray-600">No analysis data available</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white p-4">
+      <div className="max-w-md mx-auto">
+        <div className="flex justify-between items-center mb-6">
+          <button onClick={() => setScreen(4)} className="text-sm font-semibold text-gray-600 hover:text-gray-900">← Back</button>
+          <h1 className="text-lg font-bold">Shot Analysis</h1>
+          <div></div>
+        </div>
+
+        {/* Overall Rating */}
+        <div className="bg-gradient-to-br from-blue-600 to-blue-700 rounded-2xl p-6 text-white mb-6">
+          <div className="text-center">
+            <div className="text-sm font-semibold mb-2">OVERALL PERFORMANCE</div>
+            <div className="text-5xl font-black mb-3">
+              {'⭐'.repeat(Math.round(analysis.proComparison.overallRating))}
+            </div>
+            <div className="text-sm">{analysis.proComparison.overallRating.toFixed(1)} / 5.0</div>
+          </div>
+        </div>
+
+        {/* Shot Breakdown */}
+        <div className="bg-white rounded-lg border border-gray-200 p-4 mb-4">
+          <h2 className="text-sm font-bold text-gray-700 mb-3">SHOT BREAKDOWN</h2>
+          <div className="space-y-2 text-xs">
+            <div className="flex justify-between">
+              <span>Total Shots</span>
+              <span className="font-bold">{analysis.shotBreakdown.totalShots}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Dinks</span>
+              <span className="font-bold">{analysis.shotBreakdown.shotCounts.dinks}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Drives</span>
+              <span className="font-bold">{analysis.shotBreakdown.shotCounts.drives}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Volleys</span>
+              <span className="font-bold">{analysis.shotBreakdown.shotCounts.volleys}</span>
+            </div>
+            <div className="flex justify-between mt-2 pt-2 border-t">
+              <span>Effectiveness</span>
+              <span className="font-bold text-green-600">{analysis.shotBreakdown.effectivenessScore}/100</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Technique Analysis */}
+        <div className="bg-white rounded-lg border border-gray-200 p-4 mb-4">
+          <h2 className="text-sm font-bold text-gray-700 mb-3">TECHNIQUE ANALYSIS</h2>
+          <div className="space-y-2 text-xs">
+            <div>
+              <div className="flex justify-between mb-1">
+                <span>Footwork</span>
+                <span className="font-bold">{analysis.techniqueAnalysis.footwork.rating}/5</span>
+              </div>
+              <p className="text-gray-600 text-xs">{analysis.techniqueAnalysis.footwork.feedback}</p>
+            </div>
+            <div className="mt-2">
+              <div className="flex justify-between mb-1">
+                <span>Positioning</span>
+                <span className="font-bold">{analysis.techniqueAnalysis.positioning.rating}/5</span>
+              </div>
+              <p className="text-gray-600 text-xs">{analysis.techniqueAnalysis.positioning.feedback}</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Pro Comparison */}
+        <div className="bg-purple-50 rounded-lg border border-purple-200 p-4 mb-4">
+          <h2 className="text-sm font-bold text-purple-900 mb-2">PRO COMPARISON</h2>
+          <p className="text-xs text-purple-800 mb-3">{analysis.proComparison.proStyleMatch}</p>
+          <div className="text-xs space-y-2">
+            <div>
+              <p className="font-semibold text-purple-900 mb-1">Strengths:</p>
+              {analysis.proComparison.strengths.map((s, i) => (
+                <p key={i} className="text-purple-700 ml-2">✓ {s}</p>
+              ))}
+            </div>
+            <div>
+              <p className="font-semibold text-purple-900 mb-1">Areas to Improve:</p>
+              {analysis.proComparison.improvementAreas.map((area, i) => (
+                <p key={i} className="text-purple-700 ml-2">• {area}</p>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
