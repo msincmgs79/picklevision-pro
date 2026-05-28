@@ -15,21 +15,49 @@ export async function extractFrameFromVideoBlob(videoBlob: Blob): Promise<string
     const ctx = canvas.getContext('2d');
     if (!ctx) { reject(new Error('Canvas context failed')); return; }
     const blobUrl = URL.createObjectURL(videoBlob);
+
     video.onloadedmetadata = () => {
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
       video.currentTime = video.duration / 2;
     };
+
     video.onseeked = () => {
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      const frameBase64 = canvas.toDataURL('image/jpeg', 0.85).split(',')[1];
-      URL.revokeObjectURL(blobUrl);
-      resolve(frameBase64);
+      try {
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+        // Use toBlob for more reliable encoding
+        canvas.toBlob((blob) => {
+          if (!blob) {
+            throw new Error('Canvas toBlob failed');
+          }
+          const reader = new FileReader();
+          reader.onload = () => {
+            const result = reader.result as string;
+            const frameBase64 = result.split(',')[1];
+            if (!frameBase64 || frameBase64.length === 0) {
+              throw new Error('Empty base64 data');
+            }
+            URL.revokeObjectURL(blobUrl);
+            resolve(frameBase64);
+          };
+          reader.onerror = () => {
+            URL.revokeObjectURL(blobUrl);
+            reject(new Error('FileReader failed'));
+          };
+          reader.readAsDataURL(blob);
+        }, 'image/jpeg', 0.85);
+      } catch (err) {
+        URL.revokeObjectURL(blobUrl);
+        reject(err);
+      }
     };
+
     video.onerror = () => {
       URL.revokeObjectURL(blobUrl);
       reject(new Error('Video load failed'));
     };
+
     video.src = blobUrl;
   });
 }
