@@ -910,6 +910,8 @@ function Screen3({ setScreen }: { setScreen: (n: number) => void }) {
               return;
             }
 
+            const videoBlob = currentVideoBlob; // Type narrowing for TypeScript
+
             // Properly handle async FileReader
             const videoBase64 = await new Promise<string>((resolve, reject) => {
               const reader = new FileReader();
@@ -938,7 +940,7 @@ function Screen3({ setScreen }: { setScreen: (n: number) => void }) {
                 reject(new Error('FileReader error: ' + reader.error));
               };
 
-              reader.readAsDataURL(currentVideoBlob);
+              reader.readAsDataURL(videoBlob);
             });
 
             console.log('✓ Video converted to base64');
