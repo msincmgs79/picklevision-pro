@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/authContext';
 import { getUserProfile, getUserMatches, calculateProRating, saveMatch, updateUserStats, getTopPlayers, updateDisplayName, uploadMatchVideo, saveStandaloneVideo, getUserVideos, deleteVideo, saveVideoAnalysis, getUserVideoAnalyses } from '@/lib/db';
 import { searchDUPRPlayer, getDUPRPlayer, getCombinedRating } from '@/lib/dupr';
-import { analyzeMatchVideo, type MatchAnalysis } from '@/lib/shotAnalysis';
+import { analyzeMatchVideo, type MatchAnalysis, extractFrameFromVideoBlob } from '@/lib/shotAnalysis';
 import { Timestamp } from 'firebase/firestore';
 import type { User, Match } from '@/lib/db';
 
@@ -898,6 +898,29 @@ function Screen3({ setScreen }: { setScreen: (n: number) => void }) {
       if (matchData.hasVideo && currentVideoBlob) {
         setUploading(true);
         try {
+          // Extract frame from video for analysis
+          setAnalyzing(true);
+          try {
+            console.log('Extracting frame from video...');
+            const frameBase64 = await extractFrameFromVideoBlob(currentVideoBlob);
+
+            // Analyze the extracted frame
+            console.log('Analyzing frame with Claude Vision...');
+            const analysisResult = await analyzeMatchVideo(frameBase64);
+            setAnalysis(analysisResult);
+            sessionStorage.setItem('matchAnalysis', JSON.stringify(analysisResult));
+
+            // Save detected player colors if available
+            if (analysisResult.detectedPlayerColors) {
+              sessionStorage.setItem('detectedPlayerColors', JSON.stringify(analysisResult.detectedPlayerColors));
+            }
+          } catch (analysisErr) {
+            console.error('Error analyzing video frame:', analysisErr);
+            // Don't fail if analysis fails, video is still saved
+          } finally {
+            setAnalyzing(false);
+          }
+
           // Upload video to Firebase Cloud Storage with progress tracking
           const videoUrl = await uploadMatchVideo(user.uid, docRef, currentVideoBlob, (progress) => {
             setUploadProgress(Math.round(progress * 100));
@@ -905,19 +928,6 @@ function Screen3({ setScreen }: { setScreen: (n: number) => void }) {
 
           // Store video URL in match data for future use
           sessionStorage.setItem('matchVideoUrl', videoUrl);
-
-          // Trigger AI shot analysis
-          setAnalyzing(true);
-          try {
-            const analysisResult = await analyzeMatchVideo(videoUrl);
-            setAnalysis(analysisResult);
-            sessionStorage.setItem('matchAnalysis', JSON.stringify(analysisResult));
-          } catch (analysisErr) {
-            console.error('Error analyzing video:', analysisErr);
-            // Don't fail if analysis fails, video is still saved
-          } finally {
-            setAnalyzing(false);
-          }
 
           // Clear the global blob after upload
           currentVideoBlob = null;

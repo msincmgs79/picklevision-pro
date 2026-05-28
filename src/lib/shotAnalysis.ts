@@ -5,6 +5,35 @@
 
 import { analyzeGameVideo } from './videoAnalysisService';
 
+/**
+ * Extract a frame from a video blob using Canvas API
+ */
+export async function extractFrameFromVideoBlob(videoBlob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const video = document.createElement('video');
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    if (!ctx) { reject(new Error('Canvas context failed')); return; }
+    const blobUrl = URL.createObjectURL(videoBlob);
+    video.onloadedmetadata = () => {
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      video.currentTime = video.duration / 2;
+    };
+    video.onseeked = () => {
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const frameBase64 = canvas.toDataURL('image/jpeg', 0.85).split(',')[1];
+      URL.revokeObjectURL(blobUrl);
+      resolve(frameBase64);
+    };
+    video.onerror = () => {
+      URL.revokeObjectURL(blobUrl);
+      reject(new Error('Video load failed'));
+    };
+    video.src = blobUrl;
+  });
+}
+
 export interface ShotDetection {
   type: 'dink' | 'drive' | 'drop' | 'lob' | 'volley' | 'smash' | 'serve' | 'unknown';
   confidence: number; // 0-1
@@ -101,15 +130,22 @@ function generateDetectedPlayerColors(): DetectedPlayerColor[] {
   }));
 }
 
-export async function analyzeMatchVideo(videoUrl: string): Promise<MatchAnalysis> {
+export async function analyzeMatchVideo(frameBase64: string): Promise<MatchAnalysis> {
   let shotDetections = generateShotDetections();
   let breakdown = calculateShotBreakdown(shotDetections);
+  let detectedPlayerColors = generateDetectedPlayerColors();
 
-  // Try to analyze real video if URL is provided
-  if (videoUrl && videoUrl.length > 0) {
+  // Analyze video frame with Claude Vision API
+  if (frameBase64 && frameBase64.length > 0) {
     try {
-      console.log('Analyzing video with Claude Vision API:', videoUrl);
-      const videoAnalysis = await analyzeGameVideo(videoUrl);
+      console.log('Analyzing video frame with Claude Vision API');
+      const videoAnalysis = await analyzeGameVideo(frameBase64);
+      
+      // Use detected player colors from API
+      if (videoAnalysis.playerColors && videoAnalysis.playerColors.length > 0) {
+        detectedPlayerColors = videoAnalysis.playerColors;
+        console.log('✓ Detected player colors from video:', detectedPlayerColors);
+      }
 
       breakdown = {
         totalShots: videoAnalysis.totalShots,
@@ -159,10 +195,9 @@ export async function analyzeMatchVideo(videoUrl: string): Promise<MatchAnalysis
   const technique = evaluateTechnique();
   const proComparison = compareToProBenchmark(breakdown, technique);
   const coachingTips = generateCoachingTips(technique, breakdown, proComparison);
-  const detectedPlayerColors = generateDetectedPlayerColors();
 
   return {
-    videoUrl,
+    videoUrl: frameBase64,
     analysisDate: new Date().toISOString(),
     shotBreakdown: breakdown,
     detectedShots: shotDetections,

@@ -1,7 +1,12 @@
 /**
- * Video Analysis Service - Calls backend API to analyze videos with Claude Vision
- * The actual analysis happens on the server side for security
+ * Video Analysis Service - Analyzes extracted video frames with Claude Vision
  */
+
+export interface PlayerColor {
+  id: number;
+  shirtColor: string;
+  shortsColor: string;
+}
 
 export interface VideoAnalysisResult {
   shotSummary: {
@@ -21,39 +26,30 @@ export interface VideoAnalysisResult {
   gameStyle: 'aggressive' | 'defensive' | 'balanced';
   gameInsights: string[];
   totalShots: number;
+  playerColors?: PlayerColor[];
 }
 
-/**
- * Analyze complete video for game breakdown by calling the backend API
- */
-export async function analyzeGameVideo(videoUrl: string): Promise<VideoAnalysisResult> {
+export async function analyzeGameVideo(frameBase64: string): Promise<VideoAnalysisResult> {
   try {
-    console.log('Calling video analysis API for:', videoUrl);
-
+    console.log('Calling video analysis API with frame data');
     const response = await fetch('/api/analyze-video', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ videoUrl }),
+      body: JSON.stringify({ frameBase64 }),
     });
-
     if (!response.ok) {
       const error = await response.json();
       throw new Error(`API error: ${error.error}`);
     }
-
     const result = await response.json();
-
     if (!result.success) {
       throw new Error('Video analysis failed');
     }
-
     return result.analysis;
   } catch (error) {
     console.error('Error analyzing video:', error);
-
-    // Return empty result on error
     return {
       shotSummary: {
         dinks: 0,
