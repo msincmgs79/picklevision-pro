@@ -13,7 +13,6 @@ import AnalyticsDashboard from '@/components/AnalyticsDashboard';
 import CourtHeatmap from '@/components/CourtHeatmap';
 import { usePlayerTracker } from '@/hooks/usePlayerTracker';
 
-
 // Types for 4-player detection feature
 interface DetectedPlayer {
   id: number;
@@ -1672,7 +1671,6 @@ function Screen7({ setScreen, userId }: { setScreen: (n: number) => void; userId
                 isLoading={loading}
               />
             </div>
-
 
             <div className="bg-purple-50 rounded-lg p-4 mb-4">
               <div className="text-xs font-bold text-purple-900 mb-3">TECHNIQUE ANALYSIS</div>
