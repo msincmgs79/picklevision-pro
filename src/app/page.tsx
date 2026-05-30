@@ -147,7 +147,14 @@ export default function HomeRedesigned() {
         <Navigation
           items={navItems}
           activeItemId={activeNav}
-          onItemClick={setActiveNav}
+          onItemClick={(itemId) => {
+            setActiveNav(itemId);
+            if (itemId === 'dashboard') router.push('/');
+            if (itemId === 'videos') router.push('/videos');
+            if (itemId === 'analytics') router.push('/analytics');
+            if (itemId === 'leaderboard') router.push('/leaderboard');
+            if (itemId === 'profile') router.push('/profile');
+          }}
           collapsed={sidebarCollapsed}
           onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
         />
