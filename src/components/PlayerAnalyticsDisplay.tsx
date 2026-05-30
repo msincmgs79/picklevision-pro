@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState } from 'react';
-import { AlertCircle, BarChart3, Users, Zap } from 'lucide-react';
 
 interface PlayerStats {
   primary_zone: string;
@@ -56,7 +55,7 @@ const PlayerAnalyticsDisplay: React.FC<Props> = ({ results, loading, error }) =>
     return (
       <div className="bg-red-900/20 border border-red-700 rounded-lg p-6">
         <div className="flex gap-3">
-          <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+          <div className="text-2xl flex-shrink-0">❌</div>
           <div>
             <h3 className="font-semibold text-red-200">Analysis Failed</h3>
             <p className="text-red-300 text-sm">{error}</p>
@@ -78,7 +77,7 @@ const PlayerAnalyticsDisplay: React.FC<Props> = ({ results, loading, error }) =>
       {/* Video Info Summary */}
       <div className="bg-slate-900 border border-slate-700 rounded-lg p-6">
         <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-          <Zap className="w-5 h-5 text-yellow-400" />
+          <span>⚡</span>
           Analysis Summary
         </h3>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -104,7 +103,7 @@ const PlayerAnalyticsDisplay: React.FC<Props> = ({ results, loading, error }) =>
       {/* Players Grid */}
       <div className="bg-slate-900 border border-slate-700 rounded-lg p-6">
         <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-          <Users className="w-5 h-5 text-blue-400" />
+          <span>👥</span>
           Player Analytics
         </h3>
 
@@ -167,7 +166,7 @@ const PlayerAnalyticsDisplay: React.FC<Props> = ({ results, loading, error }) =>
       {/* Zone Distribution */}
       <div className="bg-slate-900 border border-slate-700 rounded-lg p-6">
         <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-          <BarChart3 className="w-5 h-5 text-green-400" />
+          <span>📊</span>
           Zone Distribution
         </h3>
         <div className="grid grid-cols-2 gap-3">
@@ -183,6 +182,7 @@ const PlayerAnalyticsDisplay: React.FC<Props> = ({ results, loading, error }) =>
       </div>
     </div>
   );
+  </div>
 };
 
 export default PlayerAnalyticsDisplay;
