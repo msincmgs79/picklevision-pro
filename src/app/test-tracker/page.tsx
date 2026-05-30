@@ -5,7 +5,7 @@ import { usePlayerTracker } from '@/hooks/usePlayerTracker';
 import PlayerAnalyticsDisplay from '@/components/PlayerAnalyticsDisplay';
 
 export default function TestTrackerPage() {
-  const [videoPath, setVideoPath] = useState('C:\\Users\\marti\\picklevision-pro\\tracked_game.mp4');
+  const [videoPath, setVideoPath] = useState('');
   const { analyzeVideo, loading, error, results } = usePlayerTracker();
 
   const handleAnalyze = async () => {
@@ -43,19 +43,16 @@ export default function TestTrackerPage() {
                 {loading ? 'Analyzing...' : 'Analyze'}
               </button>
             </div>
-            <p className="text-xs text-slate-500">
-              Example: C:\Users\marti\picklevision-pro\tracked_game.mp4
-            </p>
           </div>
         </div>
 
         {/* Quick info */}
         <div className="bg-slate-900 border border-slate-700 rounded-lg p-4">
-          <h3 className="text-sm font-semibold text-slate-300 mb-2">ℹ️ How it works</h3>
+          <h3 className="text-sm font-semibold text-slate-300 mb-2">How it works</h3>
           <ol className="text-xs text-slate-400 space-y-1 list-decimal list-inside">
             <li>Enter the path to your video file</li>
-            <li>Click "Analyze" button</li>
-            <li>Wait for processing (2-4 minutes for 60s video)</li>
+            <li>Click Analyze button</li>
+            <li>Wait for processing</li>
             <li>View player analytics below</li>
           </ol>
         </div>
@@ -64,7 +61,7 @@ export default function TestTrackerPage() {
         <PlayerAnalyticsDisplay
           results={results}
           loading={loading}
-          error={error}
+          error={error || undefined}
         />
       </div>
     </div>
