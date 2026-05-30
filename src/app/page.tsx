@@ -2399,4 +2399,365 @@ function Screen13({ setScreen, userId }: { setScreen: (n: number) => void; userI
       const videoPath = data.tempPath;
 
       console.log('[Screen13] Video uploaded to:', videoPath);
-      se
+      setVideoPath(videoPath);
+      sessionStorage.setItem('currentVideoPath', videoPath);
+      setAutoRunning(true);
+
+    } catch (err: any) {
+      console.error('[Screen13] Upload failed:', err);
+      alert('❌ Upload failed: ' + err.message);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  // Auto-populate video path from sessionStorage on mount (only local files, not Cloud Storage URLs)
+  useEffect(() => {
+    const storedPath = sessionStorage.getItem('currentVideoPath');
+
+    if (storedPath) {
+      setVideoPath(storedPath);
+      setAutoRunning(true);
+    }
+    // Don't use matchVideoUrl (Cloud Storage) - it's already analyzed by Gemini
+  }, []);
+
+  // Auto-run tracker if video path was pre-populated (only for local files, not Cloud Storage URLs)
+  useEffect(() => {
+    if (!autoRunning || (loading || results)) return;
+
+    const runAutoAnalysis = async () => {
+      // Only use the currentVideoPath (from file selection), don't fall back to matchVideoUrl
+      const pathToAnalyze = videoPath;
+      if (!pathToAnalyze) return;
+
+      // Don't try to analyze Cloud Storage URLs (they're already analyzed by Gemini)
+      if (pathToAnalyze.startsWith('https://firebasestorage')) {
+        console.log('[Auto-Detect] Skipping tracker for Cloud Storage URL (already analyzed by Gemini)');
+        return;
+      }
+
+      try {
+        console.log('[Auto-Detect] Auto-starting tracker on:', pathToAnalyze);
+        await analyzeVideo(pathToAnalyze);
+      } catch (err) {
+        console.error('[Auto-Detect] Tracker failed:', err);
+      }
+    };
+
+    runAutoAnalysis();
+  }, [autoRunning, videoPath]);
+
+  // Auto-detect teams from zone data
+  useEffect(() => {
+    if (!results || !results.players) return;
+
+    const players = results.players;
+    const playerIds = Object.keys(players);
+
+    // Analyze zone patterns to suggest teams
+    // Strategy: Players in opposing zones likely on same team (diagonal pairing)
+    const zoneMap: Record<string, string[]> = {
+      'P1-Front-Left': [],
+      'P2-Front-Right': [],
+      'P3-Back-Left': [],
+      'P4-Back-Right': [],
+    };
+
+    // Map players to their primary zones
+    playerIds.forEach(playerId => {
+      const player = players[playerId];
+      const primaryZone = player.primary_zone;
+      if (zoneMap[primaryZone]) {
+        zoneMap[primaryZone].push(playerId);
+      }
+    });
+
+    // Suggest teams based on zone positioning
+    // Diagonal pairings: (P1 + P4) vs (P2 + P3)
+    const team1 = [...zoneMap['P1-Front-Left'], ...zoneMap['P4-Back-Right']];
+    const team2 = [...zoneMap['P2-Front-Right'], ...zoneMap['P3-Back-Left']];
+
+    const teams = {
+      team1: {
+        players: team1.filter(p => p), // Remove undefined
+        zones: team1.length > 0 ? ['Front-Left', 'Back-Right'] : [],
+        confidence: 0.85,
+      },
+      team2: {
+        players: team2.filter(p => p), // Remove undefined
+        zones: team2.length > 0 ? ['Front-Right', 'Back-Left'] : [],
+        confidence: 0.85,
+      },
+    };
+
+    setSuggestedTeams(teams);
+    console.log('[Auto-Detect] Suggested teams:', teams);
+  }, [results]);
+
+  const handleConfirmTeams = async () => {
+    if (!suggestedTeams || confirming) return;
+
+    setConfirming(true);
+    try {
+      const analysis = sessionStorage.getItem('matchAnalysis');
+      const videoPath = sessionStorage.getItem('matchVideoUrl');
+
+      // Build opponent identifier from auto-detected teams
+      const opponentIdentifier = `Teams auto-detected: ${suggestedTeams.team1.players.join(',')} vs ${suggestedTeams.team2.players.join(',')}`;
+
+      // Save video analysis to Firestore
+      await saveVideoAnalysis(userId, {
+        opponent: opponentIdentifier,
+        suggestedTeams: suggestedTeams,
+        autoDetected: true,
+        trackerResults: results,
+        shotBreakdown: analysis ? JSON.parse(analysis).shotBreakdown : {},
+        techniqueAnalysis: analysis ? JSON.parse(analysis).techniqueAnalysis : {},
+        proComparison: analysis ? JSON.parse(analysis).proComparison : {},
+        coachingTips: analysis ? JSON.parse(analysis).coachingTips : {},
+        overallInsights: analysis ? JSON.parse(analysis).overallInsights : {},
+        analysisDate: new Date().toISOString(),
+        videoUrl: videoPath || '',
+      });
+
+      console.log('✅ Analysis saved with auto-detected teams');
+      alert('✅ Teams confirmed and analysis saved!');
+
+      // Stay on Screen13 briefly to show results, or navigate after a moment
+      setTimeout(() => {
+        setScreen(0); // Back to dashboard to see saved analysis
+      }, 2000);
+    } catch (err) {
+      console.error('Error saving analysis:', err);
+      alert('Failed to save analysis');
+    } finally {
+      setConfirming(false);
+    }
+  };
+
+  const handleManualOverride = () => {
+    // Go back to manual selection if user wants to override
+    setScreen(11); // Identify Opponents (manual)
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white p-4">
+      <div className="max-w-2xl mx-auto">
+        {/* Header */}
+        <div className="mb-6">
+          <button
+            onClick={() => setScreen(0)}
+            className="text-sm text-gray-600 hover:text-gray-900 mb-4"
+          >
+            ← Back to Dashboard
+          </button>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">Auto-Detect Teams</h1>
+          <p className="text-gray-600">Using player position analysis</p>
+        </div>
+
+        {/* Video Input Section - Drag & Drop */}
+        {!results && (
+          <div className="bg-white rounded-lg border-2 border-dashed border-gray-300 p-8 mb-6">
+            <div
+              onDragOver={(e) => {
+                e.preventDefault();
+                e.currentTarget.classList.add('border-purple-500', 'bg-purple-50');
+              }}
+              onDragLeave={(e) => {
+                e.currentTarget.classList.remove('border-purple-500', 'bg-purple-50');
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                e.currentTarget.classList.remove('border-purple-500', 'bg-purple-50');
+                const files = e.dataTransfer.files;
+                if (files.length > 0) {
+                  const file = files[0];
+                  if (file.type.startsWith('video/')) {
+                    handleFileSelect(file);
+                  } else {
+                    alert('Please select a video file');
+                  }
+                }
+              }}
+              className="text-center space-y-4 transition-colors"
+            >
+              <div className="text-4xl">🎥</div>
+              <h3 className="font-semibold text-gray-900">Drop your video here</h3>
+              <p className="text-sm text-gray-600">or click below to select from your computer</p>
+
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                className="inline-block px-6 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-semibold"
+              >
+                📁 Choose Video File
+              </button>
+
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="video/*"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    handleFileSelect(file);
+                  }
+                }}
+                className="hidden"
+              />
+            </div>
+
+            {/* Status messages */}
+            {loading && (
+              <div className="mt-4 text-center">
+                <p className="text-sm font-semibold text-blue-600">📤 Uploading and analyzing...</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Loading State with Progress Bar */}
+        {loading && (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-6">
+            <p className="text-blue-900 font-semibold mb-4">🎥 Analyzing video...</p>
+            <p className="text-sm text-blue-700 mb-3">Running player position tracker...</p>
+
+            {/* Progress Bar */}
+            <div className="w-full bg-blue-200 rounded-full h-3 overflow-hidden">
+              <div
+                className="bg-gradient-to-r from-blue-500 to-blue-600 h-full rounded-full transition-all duration-300 ease-out"
+                style={{ width: `${progress}%` }}
+              />
+            </div>
+
+            {/* Progress Percentage */}
+            <div className="mt-3 flex items-center justify-between">
+              <p className="text-sm font-semibold text-blue-700">{progress}% Complete</p>
+              <p className="text-xs text-blue-600">
+                {progress < 50 && '⏳ Processing frames...'}
+                {progress >= 50 && progress < 100 && '✓ Frames processed, analyzing...'}
+                {progress === 100 && '✓ Complete!'}
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Error State */}
+        {error && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-6 mb-6">
+            <p className="text-red-900 font-semibold">❌ Error: {error}</p>
+          </div>
+        )}
+
+        {/* Debug: Show if suggestedTeams state exists */}
+        {results && !suggestedTeams && !loading && (
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
+            <p className="text-yellow-900 font-semibold">⏳ Processing teams...</p>
+            <p className="text-xs text-yellow-700 mt-1">Raw players detected: {Object.keys(results.players || {}).join(', ')}</p>
+          </div>
+        )}
+
+        {/* Suggested Teams Display */}
+        {suggestedTeams && !loading && (
+          <div className="space-y-6">
+            {/* Teams Summary */}
+            <div className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-lg p-6">
+              <h2 className="text-xl font-bold text-gray-900 mb-4">✅ Teams Detected</h2>
+
+              <div className="grid grid-cols-2 gap-4 mb-6">
+                {/* Team 1 */}
+                <div className="bg-white rounded-lg p-4 border-2 border-blue-300">
+                  <h3 className="font-bold text-blue-900 mb-3">
+                    Team 1 {suggestedTeams.team1.players.length > 0 && `(${suggestedTeams.team1.players.length})`}
+                  </h3>
+                  <div className="space-y-2">
+                    {suggestedTeams.team1.players && suggestedTeams.team1.players.length > 0 ? (
+                      suggestedTeams.team1.players.map((playerId: string) => (
+                        <div key={playerId} className="text-sm text-gray-700 flex items-center gap-2">
+                          <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
+                          Player {playerId}
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-xs text-gray-500 italic">No players assigned</p>
+                    )}
+                  </div>
+                  {suggestedTeams.team1.zones && suggestedTeams.team1.zones.length > 0 && (
+                    <p className="text-xs text-gray-500 mt-3">
+                      Zones: {suggestedTeams.team1.zones.join(', ')}
+                    </p>
+                  )}
+                </div>
+
+                {/* Team 2 */}
+                <div className="bg-white rounded-lg p-4 border-2 border-red-300">
+                  <h3 className="font-bold text-red-900 mb-3">
+                    Team 2 {suggestedTeams.team2.players.length > 0 && `(${suggestedTeams.team2.players.length})`}
+                  </h3>
+                  <div className="space-y-2">
+                    {suggestedTeams.team2.players && suggestedTeams.team2.players.length > 0 ? (
+                      suggestedTeams.team2.players.map((playerId: string) => (
+                        <div key={playerId} className="text-sm text-gray-700 flex items-center gap-2">
+                          <span className="w-2 h-2 bg-red-500 rounded-full"></span>
+                          Player {playerId}
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-xs text-gray-500 italic">No players assigned</p>
+                    )}
+                  </div>
+                  {suggestedTeams.team2.zones && suggestedTeams.team2.zones.length > 0 && (
+                    <p className="text-xs text-gray-500 mt-3">
+                      Zones: {suggestedTeams.team2.zones.join(', ')}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <p className="text-sm text-gray-600 text-center mb-4">
+                Confidence: {Math.round(suggestedTeams.team1.confidence * 100)}%
+              </p>
+            </div>
+
+            {/* Tracker Results Summary */}
+            {results && (
+              <div className="bg-slate-50 rounded-lg p-4 border border-gray-200">
+                <h3 className="font-semibold text-gray-900 mb-2">📊 Position Data</h3>
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <p className="text-gray-600">Video Duration</p>
+                    <p className="font-semibold text-gray-900">
+                      {results.video_info?.duration_seconds || 'N/A'}s
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-gray-600">Players Detected</p>
+                    <p className="font-semibold text-gray-900">
+                      {Object.keys(results.players || {}).length}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Action Buttons */}
+            <div className="flex gap-3">
+              <button
+                onClick={handleManualOverride}
+                className="flex-1 px-4 py-3 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-lg font-semibold"
+              >
+                Manual Selection
+              </button>
+              <button
+                onClick={handleConfirmTeams}
+                disabled={confirming}
+                className="flex-1 px-4 py-3 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white rounded-lg font-semibold"
+              >
+                {confirming ? 'Saving...' : '✅ Confirm & Save'}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
