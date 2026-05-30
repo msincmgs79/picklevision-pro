@@ -144,4 +144,67 @@ export async function POST(request: NextRequest) {
     try {
       if (!fs.existsSync(outputPath)) {
         return NextResponse.json(
-          { error: 'Tracker did not produce o
+          { error: 'Tracker did not produce output file' },
+          { status: 500 }
+        );
+      }
+
+      const jsonContent = fs.readFileSync(outputPath, 'utf-8');
+      results = JSON.parse(jsonContent);
+
+      // Clean up
+      fs.unlinkSync(outputPath);
+
+    } catch (error) {
+      console.error('[Player Tracker] Failed to parse results:', error);
+      return NextResponse.json(
+        { error: 'Failed to parse tracking results' },
+        { status: 500 }
+      );
+    }
+
+    console.log('[Player Tracker] Complete - players detected:', Object.keys(results.players).length);
+
+    return NextResponse.json({
+      success: true,
+      data: results,
+      timestamp: new Date().toISOString(),
+    });
+
+  } catch (error: any) {
+    console.error('[Player Tracker] Error:', error);
+    return NextResponse.json(
+      {
+        error: 'Server error',
+        message: error.message
+      },
+      { status: 500 }
+    );
+  }
+}
+
+/**
+ * GET /api/track-players
+ * Health check or progress query
+ */
+export async function GET(request: NextRequest) {
+  const searchParams = request.nextUrl.searchParams;
+  const videoPath = searchParams.get('videoPath');
+
+  // If querying for progress
+  if (videoPath) {
+    const progress = progressMap.get(videoPath) ?? null;
+    return NextResponse.json({
+      videoPath,
+      progress,
+      isProcessing: progress !== null && progress < 100,
+    });
+  }
+
+  // Health check
+  return NextResponse.json({
+    service: 'player-tracker',
+    status: 'ready',
+    version: '1.0',
+  });
+}
