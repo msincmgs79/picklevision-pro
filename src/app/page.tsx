@@ -2759,5 +2759,5 @@ function Screen13({ setScreen, userId }: { setScreen: (n: number) => void; userI
           </div>
         )}
       </div>
-    </div>
   );
+}
