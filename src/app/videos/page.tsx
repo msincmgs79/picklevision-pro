@@ -35,6 +35,7 @@ export default function VideosRedesigned() {
   const { user, loading } = useAuth();
   const router = useRouter();
   const [userProfile, setUserProfile] = useState<User | null>(null);
+  const [videos, setVideos] = useState<VideoFile[]>([]);
   const [pageLoading, setPageLoading] = useState(true);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [activeNav, setActiveNav] = useState('videos');
@@ -53,8 +54,24 @@ export default function VideosRedesigned() {
       try {
         const profile = await getUserProfile(user.uid);
         setUserProfile(profile);
+
+        // Fetch user's video analyses
+        const analyses = await getUserVideoAnalyses(user.uid);
+        const formattedVideos: VideoFile[] = (analyses || []).map((analysis: any) => ({
+          id: analysis.id,
+          title: analysis.title || 'Video',
+          date: analysis.recordedDate?.toDate?.() || new Date(),
+          duration: Math.round(analysis.duration || 0),
+          fileSize: Math.round((analysis.fileSize || 0) / 1024 / 1024),
+          status: analysis.status || 'analyzed',
+          opponent: analysis.opponent || 'Unknown',
+          score: analysis.score || 'N/A',
+        }));
+        setVideos(formattedVideos);
       } catch (error) {
         console.error('Error loading user data:', error);
+        // Use empty array if fetch fails
+        setVideos([]);
       } finally {
         setPageLoading(false);
       }
@@ -110,71 +127,7 @@ export default function VideosRedesigned() {
     { id: 'favorites', label: 'Favorites', icon: undefined },
   ];
 
-  // Sample video data
-  const allVideos: VideoFile[] = [
-    {
-      id: '1',
-      title: 'Match vs John Doe',
-      date: new Date('2026-05-28'),
-      duration: 45,
-      fileSize: 850,
-      status: 'analyzed',
-      opponent: 'John Doe',
-      score: '11-9',
-    },
-    {
-      id: '2',
-      title: 'Practice Session - Kitchen Work',
-      date: new Date('2026-05-27'),
-      duration: 30,
-      fileSize: 620,
-      status: 'analyzed',
-      opponent: 'Solo Practice',
-      score: 'N/A',
-    },
-    {
-      id: '3',
-      title: 'Tournament Game',
-      date: new Date('2026-05-26'),
-      duration: 52,
-      fileSize: 920,
-      status: 'processing',
-      opponent: 'Sarah Smith',
-      score: '13-11',
-    },
-    {
-      id: '4',
-      title: 'Doubles Match',
-      date: new Date('2026-05-25'),
-      duration: 38,
-      fileSize: 780,
-      status: 'pending',
-      opponent: 'Tom & Jerry',
-      score: '15-14',
-    },
-    {
-      id: '5',
-      title: 'Third Shot Practice',
-      date: new Date('2026-05-24'),
-      duration: 25,
-      fileSize: 450,
-      status: 'analyzed',
-      opponent: 'Solo Practice',
-      score: 'N/A',
-    },
-    {
-      id: '6',
-      title: 'Dinking Drills',
-      date: new Date('2026-05-23'),
-      duration: 20,
-      fileSize: 380,
-      status: 'analyzed',
-      opponent: 'Solo Practice',
-      score: 'N/A',
-    },
-  ];
-
-  const filteredVideos = allVideos.filter((video) => {
+  const filteredVideos = videos.filter((video) => {
     const matchesSearch =
       video.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       video.opponent?.toLowerCase().includes(searchQuery.toLowerCase());
@@ -302,7 +255,7 @@ export default function VideosRedesigned() {
                     marginBottom: '4px',
                   }}
                 >
-                  {allVideos.length}
+                  {videos.length}
                 </div>
                 <div style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.6)' }}>
                   All time
@@ -331,7 +284,7 @@ export default function VideosRedesigned() {
                     marginBottom: '4px',
                   }}
                 >
-                  {allVideos.filter((v) => v.status === 'analyzed').length}
+                  {videos.filter((v) => v.status === 'analyzed').length}
                 </div>
                 <div style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.6)' }}>
                   With insights
@@ -360,7 +313,7 @@ export default function VideosRedesigned() {
                     marginBottom: '4px',
                   }}
                 >
-                  {Math.round(allVideos.reduce((sum, v) => sum + v.duration, 0) / 60)}h
+                  {Math.round(videos.reduce((sum, v) => sum + v.duration, 0) / 60)}h
                 </div>
                 <div style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.6)' }}>
                   Recorded
