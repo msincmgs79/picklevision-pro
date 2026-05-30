@@ -182,7 +182,6 @@ const PlayerAnalyticsDisplay: React.FC<Props> = ({ results, loading, error }) =>
       </div>
     </div>
   );
-  </div>
 };
 
 export default PlayerAnalyticsDisplay;
