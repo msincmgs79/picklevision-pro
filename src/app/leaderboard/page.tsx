@@ -56,7 +56,6 @@ export default function LeaderboardPage() {
       try {
         const profile = await getUserProfile(user.uid);
         setUserProfile(profile);
-
         const topPlayers = await getTopPlayers();
         const formatted: Player[] = (topPlayers || []).map((u: any, idx: number) => ({
           id: u.uid || `player-${idx}`,
@@ -122,43 +121,23 @@ export default function LeaderboardPage() {
       footer={<div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px', color: 'rgba(255, 255, 255, 0.6)' }}><span>© 2026 PickleVision Pro</span><div style={{ display: 'flex', gap: '16px' }}><a href="#" style={{ color: 'rgba(255, 255, 255, 0.6)', textDecoration: 'none' }}>Privacy</a><a href="#" style={{ color: 'rgba(255, 255, 255, 0.6)', textDecoration: 'none' }}>Terms</a></div></div>}
     >
       {pageLoading ? (
-        <div style={{ textAlign: 'center', padding: '48px 0' }}>
-          <p style={{ color: 'rgba(255, 255, 255, 0.7)' }}>Loading leaderboard...</p>
-        </div>
+        <div style={{ textAlign: 'center', padding: '48px 0' }}><p style={{ color: 'rgba(255, 255, 255, 0.7)' }}>Loading leaderboard...</p></div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-          <div>
-            <h1 style={{ margin: '0 0 8px 0', fontSize: '28px', fontWeight: '600', color: 'white' }}>Leaderboard</h1>
-            <p style={{ margin: 0, color: 'rgba(255, 255, 255, 0.6)', fontSize: '14px' }}>Top ranked players</p>
-          </div>
-
+          <div><h1 style={{ margin: '0 0 8px 0', fontSize: '28px', fontWeight: '600', color: 'white' }}>Leaderboard</h1><p style={{ margin: 0, color: 'rgba(255, 255, 255, 0.6)', fontSize: '14px' }}>Top ranked players</p></div>
           <Tabs items={tabItems} activeTab={activeTab} onTabChange={setActiveTab} variant="default" size="md" />
-
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             {filtered.slice(0, 10).map((player) => (
-              <Card key={player.id} variant="interactive" shadow="sm" padding="md" hoverable>
+              <Card key={player.id} variant="interactive" shadow="sm" padding="md">
                 <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
                   <div style={{ width: '40px', height: '40px', background: 'linear-gradient(135deg, #00ff88, #00d4ff)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '700', color: '#0a0e27' }}>{player.rank}</div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: '14px', fontWeight: '600', color: 'white' }}>{player.name}</div>
-                    <div style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.6)' }}>Rating: {player.rating.toFixed(2)} | {player.wins}W-{player.losses}L | WR: {player.winRate}%</div>
-                  </div>
-                  <div style={{ display: 'flex', gap: '8px' }}>
-                    <Badge variant={getSkillVariant(player.skillLevel)} size="sm">{player.skillLevel.toUpperCase()}</Badge>
-                    <Badge variant={getTrendVariant(player.trend)} size="sm">{player.trend === 'up' ? '↑' : '↓'} {Math.abs(player.trendValue * 100).toFixed(0)}%</Badge>
-                  </div>
+                  <div style={{ flex: 1 }}><div style={{ fontSize: '14px', fontWeight: '600', color: 'white' }}>{player.name}</div><div style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.6)' }}>Rating: {player.rating.toFixed(2)} | {player.wins}W-{player.losses}L | WR: {player.winRate}%</div></div>
+                  <div style={{ display: 'flex', gap: '8px' }}><Badge variant={getSkillVariant(player.skillLevel)} size="sm">{player.skillLevel.toUpperCase()}</Badge><Badge variant={getTrendVariant(player.trend)} size="sm">{player.trend === 'up' ? '↑' : '↓'} {Math.abs(player.trendValue * 100).toFixed(0)}%</Badge></div>
                 </div>
               </Card>
             ))}
           </div>
-
-          {filtered.length === 0 && (
-            <Card variant="default" shadow="md" padding="lg">
-              <div style={{ textAlign: 'center', padding: '48px 0' }}>
-                <p style={{ color: 'rgba(255, 255, 255, 0.7)' }}>No players found</p>
-              </div>
-            </Card>
-          )}
+          {filtered.length === 0 && (<Card variant="default" shadow="md" padding="lg"><div style={{ textAlign: 'center', padding: '48px 0' }}><p style={{ color: 'rgba(255, 255, 255, 0.7)' }}>No players found</p></div></Card>)}
         </div>
       )}
     </PageLayout>
