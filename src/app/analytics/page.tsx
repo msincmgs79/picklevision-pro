@@ -294,7 +294,7 @@ export default function AnalyticsPage() {
           <Tabs
             items={tabItems}
             activeTab={activeTab}
-            onTabChange={() => {}}
+            onTabChange={setActiveTab}
             variant="default"
             size="md"
           />
