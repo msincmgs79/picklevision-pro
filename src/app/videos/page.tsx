@@ -365,7 +365,7 @@ export default function VideosPage() {
           <div
             style={{
               display: 'grid',
-              gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fill, minmax(280px, 1fr))',
+              gridTemplateColumns: isMobile ? 'minmax(0, 1fr)' : 'repeat(auto-fill, minmax(280px, 1fr))',
               gap: isMobile ? '12px' : '16px',
               padding: isMobile ? '0 12px' : '0',
             }}
