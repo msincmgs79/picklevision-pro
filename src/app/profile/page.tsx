@@ -167,35 +167,38 @@ export default function ProfilePage() {
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
           <Card variant="highlighted" shadow="md" padding="lg" hoverable>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '24px', marginBottom: '16px' }}>
-              <div
-                style={{
-                  width: '100px',
-                  height: '100px',
-                  background: 'linear-gradient(135deg, #00ff88, #00d4ff)',
-                  borderRadius: '50%',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: '40px',
-                  fontWeight: '700',
-                  color: '#0a0e27',
-                }}
-              >
-                {(userProfile?.displayName || 'User')
-                  .split(' ')
-                  .map((n) => n[0])
-                  .join('')}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                <div
+                  style={{
+                    width: '80px',
+                    height: '80px',
+                    minWidth: '80px',
+                    background: 'linear-gradient(135deg, #00ff88, #00d4ff)',
+                    borderRadius: '50%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '32px',
+                    fontWeight: '700',
+                    color: '#0a0e27',
+                  }}
+                >
+                  {(userProfile?.displayName || 'User')
+                    .split(' ')
+                    .map((n) => n[0])
+                    .join('')}
+                </div>
+                <div style={{ flex: 1 }}>
+                  <h2 style={{ margin: '0 0 4px 0', fontSize: '20px', fontWeight: '700', color: 'white' }}>
+                    {userProfile?.displayName || 'User Profile'}
+                  </h2>
+                  <p style={{ margin: '0', color: 'rgba(255, 255, 255, 0.6)', fontSize: '13px', wordBreak: 'break-all' }}>
+                    {userProfile?.email || 'user@example.com'}
+                  </p>
+                </div>
               </div>
-              <div style={{ flex: 1 }}>
-                <h2 style={{ margin: '0 0 8px 0', fontSize: '24px', fontWeight: '700', color: 'white' }}>
-                  {userProfile?.displayName || 'User Profile'}
-                </h2>
-                <p style={{ margin: '0', color: 'rgba(255, 255, 255, 0.6)', fontSize: '14px' }}>
-                  {userProfile?.email || 'user@example.com'}
-                </p>
-              </div>
-              <Button variant="primary" size="md">
+              <Button variant="primary" size="md" style={{ width: '100%' }}>
                 Edit Profile
               </Button>
             </div>
