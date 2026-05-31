@@ -578,10 +578,10 @@ export default function HomeRedesigned() {
               gap: '12px',
             }}
           >
-            <Button variant="primary" size="md" fullWidth>
+            <Button variant="primary" size="md" fullWidth onClick={() => router.push('/videos')}>
               🎥 Record Match
             </Button>
-            <Button variant="secondary" size="md" fullWidth>
+            <Button variant="secondary" size="md" fullWidth onClick={() => router.push('/analytics')}>
               📊 Analytics
             </Button>
           </div>
