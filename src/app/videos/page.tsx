@@ -51,13 +51,9 @@ export default function VideosPage() {
   const handleDeleteVideo = async (videoId: string) => {
     if (!user) return;
     try {
-      // Remove from UI immediately
       setVideos(videos.filter((v) => v.id !== videoId));
-      // TODO: Delete from Firebase when delete endpoint is available
-      // await fetch(`/api/videos/${videoId}`, { method: 'DELETE' });
     } catch (error) {
       console.error('Error deleting video:', error);
-      // Reload videos on error
       const analyses = await getUserVideoAnalyses(user.uid);
       const formattedVideos: VideoFile[] = (analyses || []).map((analysis: any) => ({
         id: analysis.id,
@@ -502,4 +498,8 @@ export default function VideosPage() {
                     style={{
                       flex: 1,
                       padding: '8px 12px',
-     
+                      background: 'rgba(239, 68, 68, 0.1)',
+                      border: '1px solid rgba(239, 68, 68, 0.3)',
+                      color: '#ef4444',
+                      borderRadius: '6px',
+    
