@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 
 interface HeaderProps extends React.HTMLAttributes<HTMLDivElement> {
   logoText?: string;
@@ -28,16 +28,25 @@ const Header = React.forwardRef<HTMLDivElement, HeaderProps>(
     },
     ref
   ) => {
-    const [searchValue, setSearchValue] = React.useState('');
+    const [searchValue, setSearchValue] = useState('');
+    const [isMobile, setIsMobile] = useState(false);
+
+    useEffect(() => {
+      const checkSize = () => setIsMobile(window.innerWidth < 768);
+      checkSize();
+      window.addEventListener('resize', checkSize);
+      return () => window.removeEventListener('resize', checkSize);
+    }, []);
 
     const headerStyle: React.CSSProperties = {
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'space-between',
-      padding: '16px 24px',
+      padding: isMobile ? '12px 16px' : '16px 24px',
       background: 'rgba(10, 14, 39, 0.8)',
       borderBottom: '1px solid rgba(0, 255, 136, 0.1)',
       backdropFilter: 'blur(10px)',
+      gap: isMobile ? '8px' : '16px',
       ...(sticky && {
         position: 'sticky',
         top: 0,
@@ -49,8 +58,8 @@ const Header = React.forwardRef<HTMLDivElement, HeaderProps>(
     const logoStyle: React.CSSProperties = {
       display: 'flex',
       alignItems: 'center',
-      gap: '8px',
-      fontSize: '18px',
+      gap: isMobile ? '4px' : '8px',
+      fontSize: isMobile ? '14px' : '18px',
       fontWeight: '700',
       background: 'linear-gradient(90deg, #00ff88, #00d4ff)',
       backgroundClip: 'text',
@@ -58,13 +67,15 @@ const Header = React.forwardRef<HTMLDivElement, HeaderProps>(
       WebkitTextFillColor: 'transparent',
       minWidth: 'auto',
       cursor: 'pointer',
+      whiteSpace: 'nowrap',
     };
 
     const searchContainerStyle: React.CSSProperties = {
-      flex: 1,
+      flex: isMobile ? 0 : 1,
       maxWidth: '400px',
-      marginLeft: '24px',
-      marginRight: '24px',
+      marginLeft: isMobile ? '0' : '24px',
+      marginRight: isMobile ? '0' : '24px',
+      display: isMobile ? 'none' : 'block',
     };
 
     const searchInputStyle: React.CSSProperties = {
@@ -89,11 +100,16 @@ const Header = React.forwardRef<HTMLDivElement, HeaderProps>(
       background: 'none',
       border: 'none',
       color: 'rgba(255, 255, 255, 0.6)',
-      fontSize: '20px',
+      fontSize: isMobile ? '24px' : '20px',
       cursor: 'pointer',
       position: 'relative',
-      padding: '0',
+      padding: isMobile ? '8px' : '0',
       transition: 'color 150ms ease-in-out',
+      minWidth: isMobile ? '44px' : 'auto',
+      minHeight: isMobile ? '44px' : 'auto',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
     };
 
     const notificationBadgeStyle: React.CSSProperties = {
@@ -116,13 +132,15 @@ const Header = React.forwardRef<HTMLDivElement, HeaderProps>(
       background: 'linear-gradient(135deg, #00ff88, #00d4ff)',
       border: 'none',
       color: '#0a0e27',
-      width: '32px',
-      height: '32px',
+      width: isMobile ? '40px' : '32px',
+      height: isMobile ? '40px' : '32px',
       borderRadius: '50%',
       cursor: 'pointer',
       fontWeight: '700',
-      fontSize: '14px',
+      fontSize: isMobile ? '18px' : '14px',
       transition: 'all 150ms ease-in-out',
+      minWidth: '44px',
+      minHeight: '44px',
     };
 
     return (
@@ -163,36 +181,3 @@ const Header = React.forwardRef<HTMLDivElement, HeaderProps>(
             style={notificationButtonStyle}
             onMouseEnter={(e) => {
               (e.target as HTMLButtonElement).style.color = '#00ff88';
-            }}
-            onMouseLeave={(e) => {
-              (e.target as HTMLButtonElement).style.color = 'rgba(255, 255, 255, 0.6)';
-            }}
-          >
-            🔔
-            {notificationCount > 0 && (
-              <div style={notificationBadgeStyle}>{notificationCount}</div>
-            )}
-          </button>
-
-          {/* Profile */}
-          <button
-            onClick={onProfileClick}
-            style={profileButtonStyle}
-            onMouseEnter={(e) => {
-              (e.target as HTMLButtonElement).style.transform = 'scale(1.05)';
-            }}
-            onMouseLeave={(e) => {
-              (e.target as HTMLButtonElement).style.transform = 'scale(1)';
-            }}
-          >
-            👤
-          </button>
-        </div>
-      </div>
-    );
-  }
-);
-
-Header.displayName = 'Header';
-
-export default Header;

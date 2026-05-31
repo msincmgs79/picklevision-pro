@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 
 interface PageLayoutProps extends React.HTMLAttributes<HTMLDivElement> {
   header?: React.ReactNode;
@@ -14,6 +14,18 @@ const PageLayout = React.forwardRef<HTMLDivElement, PageLayoutProps>(
     { header, sidebar, footer, sidebarPosition = 'left', children, className, style, ...props },
     ref
   ) => {
+    const [isMobile, setIsMobile] = useState(false);
+    const [sidebarOpen, setSidebarOpen] = useState(false);
+
+    useEffect(() => {
+      const checkSize = () => {
+        setIsMobile(window.innerWidth < 768);
+      };
+      checkSize();
+      window.addEventListener('resize', checkSize);
+      return () => window.removeEventListener('resize', checkSize);
+    }, []);
+
     const containerStyle: React.CSSProperties = {
       display: 'flex',
       flexDirection: 'column',
@@ -32,11 +44,23 @@ const PageLayout = React.forwardRef<HTMLDivElement, PageLayoutProps>(
       display: 'flex',
       flex: 1,
       overflow: 'hidden',
+      position: 'relative',
     };
 
     const sidebarStyle: React.CSSProperties = {
       flexShrink: 0,
       overflow: 'auto',
+      ...(isMobile && {
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        zIndex: 1000,
+        transform: sidebarOpen ? 'translateX(0)' : 'translateX(-100%)',
+        transition: 'transform 0.3s ease-in-out',
+        width: '280px',
+      }),
       ...(sidebarPosition === 'right' && {
         order: 2,
       }),
@@ -45,7 +69,7 @@ const PageLayout = React.forwardRef<HTMLDivElement, PageLayoutProps>(
     const contentStyle: React.CSSProperties = {
       flex: 1,
       overflow: 'auto',
-      padding: '24px',
+      padding: isMobile ? '16px' : '24px',
       display: 'flex',
       flexDirection: 'column',
       ...(sidebarPosition === 'right' && {
@@ -55,34 +79,5 @@ const PageLayout = React.forwardRef<HTMLDivElement, PageLayoutProps>(
 
     const footerStyle: React.CSSProperties = {
       flexShrink: 0,
-      padding: '16px 24px',
-      borderTop: '1px solid rgba(0, 255, 136, 0.1)',
-      background: 'rgba(10, 14, 39, 0.4)',
-      fontSize: '13px',
-      color: 'rgba(255, 255, 255, 0.6)',
-    };
-
-    return (
-      <div ref={ref} style={containerStyle} className={className} {...props}>
-        {/* Header */}
-        {header && <div style={headerStyle}>{header}</div>}
-
-        {/* Main Container */}
-        <div style={mainContainerStyle}>
-          {/* Sidebar */}
-          {sidebar && <div style={sidebarStyle}>{sidebar}</div>}
-
-          {/* Content */}
-          <div style={contentStyle}>{children}</div>
-        </div>
-
-        {/* Footer */}
-        {footer && <div style={footerStyle}>{footer}</div>}
-      </div>
-    );
-  }
-);
-
-PageLayout.displayName = 'PageLayout';
-
-export default PageLayout;
+      padding: isMobile ? '12px 16px' : '16px 24px',
+      bord
