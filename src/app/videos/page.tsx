@@ -461,15 +461,16 @@ export default function VideosPage() {
                   <button
                     style={{
                       flex: 1,
-                      padding: isMobile ? '4px 6px' : '8px 12px',
+                      padding: isMobile ? '3px 4px' : '8px 12px',
                       background: 'rgba(0, 255, 136, 0.1)',
-                      border: '1px solid rgba(0, 255, 136, 0.3)',
+                      border: isMobile ? 'none' : '1px solid rgba(0, 255, 136, 0.3)',
                       color: '#00ff88',
-                      borderRadius: '4px',
+                      borderRadius: '3px',
                       cursor: 'pointer',
-                      fontSize: isMobile ? '10px' : '12px',
+                      fontSize: isMobile ? '9px' : '12px',
                       fontWeight: '600',
                       transition: 'all 0.2s',
+                      lineHeight: isMobile ? '1' : 'normal',
                     }}
                     onMouseEnter={(e) => {
                       (e.target as HTMLButtonElement).style.background = 'rgba(0, 255, 136, 0.2)';
@@ -478,20 +479,21 @@ export default function VideosPage() {
                       (e.target as HTMLButtonElement).style.background = 'rgba(0, 255, 136, 0.1)';
                     }}
                   >
-                    ▶ Play
+                    Play
                   </button>
                   <button
                     style={{
                       flex: 1,
-                      padding: isMobile ? '4px 6px' : '8px 12px',
+                      padding: isMobile ? '3px 4px' : '8px 12px',
                       background: 'rgba(0, 212, 255, 0.1)',
-                      border: '1px solid rgba(0, 212, 255, 0.3)',
+                      border: isMobile ? 'none' : '1px solid rgba(0, 212, 255, 0.3)',
                       color: '#00d4ff',
-                      borderRadius: '4px',
+                      borderRadius: '3px',
                       cursor: 'pointer',
-                      fontSize: isMobile ? '10px' : '12px',
+                      fontSize: isMobile ? '9px' : '12px',
                       fontWeight: '600',
                       transition: 'all 0.2s',
+                      lineHeight: isMobile ? '1' : 'normal',
                     }}
                     onMouseEnter={(e) => {
                       (e.target as HTMLButtonElement).style.background = 'rgba(0, 212, 255, 0.2)';
@@ -500,21 +502,22 @@ export default function VideosPage() {
                       (e.target as HTMLButtonElement).style.background = 'rgba(0, 212, 255, 0.1)';
                     }}
                   >
-                    📊 Analyze
+                    Analyze
                   </button>
                   <button
                     onClick={() => handleDeleteVideo(video.id)}
                     style={{
                       flex: 1,
-                      padding: isMobile ? '4px 6px' : '8px 12px',
+                      padding: isMobile ? '3px 4px' : '8px 12px',
                       background: 'rgba(239, 68, 68, 0.1)',
-                      border: '1px solid rgba(239, 68, 68, 0.3)',
+                      border: isMobile ? 'none' : '1px solid rgba(239, 68, 68, 0.3)',
                       color: '#ef4444',
-                      borderRadius: '4px',
+                      borderRadius: '3px',
                       cursor: 'pointer',
-                      fontSize: isMobile ? '10px' : '12px',
+                      fontSize: isMobile ? '9px' : '12px',
                       fontWeight: '600',
                       transition: 'all 0.2s',
+                      lineHeight: isMobile ? '1' : 'normal',
                     }}
                     onMouseEnter={(e) => {
                       (e.target as HTMLButtonElement).style.background = 'rgba(239, 68, 68, 0.2)';
@@ -523,7 +526,7 @@ export default function VideosPage() {
                       (e.target as HTMLButtonElement).style.background = 'rgba(239, 68, 68, 0.1)';
                     }}
                   >
-                    🗑️ Delete
+                    Delete
                   </button>
                 </div>
               </Card>
