@@ -58,56 +58,36 @@ export default function LeaderboardPage() {
         setUserProfile(profile);
 
         const topPlayers = await getTopPlayers();
-        const formattedPlayers: Player[] = (topPlayers || []).map((user: any, index: number) => ({
-          id: user.uid || `player-${index}`,
-          rank: index + 1,
-          name: user.displayName || 'Unknown Player',
-          rating: user.rating || 0,
-          wins: user.wins || 0,
-          losses: user.losses || 0,
-          winRate: user.wins && user.losses ? Math.round((user.wins / (user.wins + user.losses)) * 100) : 0,
+        const formatted: Player[] = (topPlayers || []).map((u: any, idx: number) => ({
+          id: u.uid || `player-${idx}`,
+          rank: idx + 1,
+          name: u.displayName || 'Unknown',
+          rating: u.rating || 0,
+          wins: u.wins || 0,
+          losses: u.losses || 0,
+          winRate: u.wins && u.losses ? Math.round((u.wins / (u.wins + u.losses)) * 100) : 0,
           region: 'USA',
-          skillLevel: user.wins > 50 ? 'pro' : user.wins > 20 ? 'advanced' : 'intermediate',
+          skillLevel: u.wins > 50 ? 'pro' : u.wins > 20 ? 'advanced' : 'intermediate',
           trend: Math.random() > 0.5 ? 'up' : 'down',
           trendValue: Math.random() * 0.15,
         }));
-        setPlayers(formattedPlayers);
+        setPlayers(formatted);
       } catch (error) {
-        console.error('Error loading data:', error);
+        console.error('Error:', error);
         setPlayers([]);
       } finally {
         setPageLoading(false);
       }
     };
-
     loadUserData();
   }, [user]);
 
   if (loading) {
     return (
-      <div
-        style={{
-          minHeight: '100vh',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          background: 'linear-gradient(180deg, #0a0e27 0%, #1a1f3a 100%)',
-          color: 'white',
-        }}
-      >
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(180deg, #0a0e27 0%, #1a1f3a 100%)', color: 'white' }}>
         <div style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: '32px', fontWeight: '700', marginBottom: '16px' }}>
-            PickleVision Pro
-          </div>
-          <div
-            style={{
-              width: '48px',
-              height: '48px',
-              border: '3px solid rgba(0, 255, 136, 0.3)',
-              borderTop: '3px solid #00ff88',
-              borderRadius: '50%',
-            }}
-          />
+          <div style={{ fontSize: '32px', fontWeight: '700', marginBottom: '16px' }}>PickleVision Pro</div>
+          <div style={{ width: '48px', height: '48px', border: '3px solid rgba(0, 255, 136, 0.3)', borderTop: '3px solid #00ff88', borderRadius: '50%' }} />
         </div>
       </div>
     );
@@ -130,83 +110,16 @@ export default function LeaderboardPage() {
     { id: 'monthly', label: 'Monthly', icon: undefined },
   ];
 
-  const getTrendBadgeVariant = (trend: string) => {
-    switch (trend) {
-      case 'up':
-        return 'success';
-      case 'down':
-        return 'danger';
-      default:
-        return 'secondary';
-    }
-  };
+  const getTrendVariant = (trend: string) => (trend === 'up' ? 'success' : 'danger');
+  const getSkillVariant = (level: string) => (level === 'pro' ? 'primary' : level === 'advanced' ? 'success' : level === 'intermediate' ? 'warning' : 'secondary');
 
-  const getSkillBadgeVariant = (level: string) => {
-    switch (level) {
-      case 'pro':
-        return 'primary';
-      case 'advanced':
-        return 'success';
-      case 'intermediate':
-        return 'warning';
-      default:
-        return 'secondary';
-    }
-  };
-
-  const filteredPlayers = players.filter((p) =>
-    p.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filtered = players.filter((p) => p.name.toLowerCase().includes(searchQuery.toLowerCase()));
 
   return (
     <PageLayout
-      header={
-        <Header
-          logoText="PickleVision Pro"
-          onSearchChange={setSearchQuery}
-          notificationCount={1}
-          onNotificationClick={() => console.log('Notifications')}
-          onProfileClick={() => router.push('/profile')}
-          searchPlaceholder="Search players..."
-        />
-      }
-      sidebar={
-        <Navigation
-          items={navItems}
-          activeItemId={activeNav}
-          onItemClick={(itemId) => {
-            setActiveNav(itemId);
-            if (itemId === 'dashboard') router.push('/');
-            if (itemId === 'videos') router.push('/videos');
-            if (itemId === 'analytics') router.push('/analytics');
-            if (itemId === 'leaderboard') router.push('/leaderboard');
-            if (itemId === 'profile') router.push('/profile');
-          }}
-          collapsed={sidebarCollapsed}
-          onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
-        />
-      }
-      footer={
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            fontSize: '12px',
-            color: 'rgba(255, 255, 255, 0.6)',
-          }}
-        >
-          <span>© 2026 PickleVision Pro</span>
-          <div style={{ display: 'flex', gap: '16px' }}>
-            <a href="#" style={{ color: 'rgba(255, 255, 255, 0.6)', textDecoration: 'none' }}>
-              Privacy
-            </a>
-            <a href="#" style={{ color: 'rgba(255, 255, 255, 0.6)', textDecoration: 'none' }}>
-              Terms
-            </a>
-          </div>
-        </div>
-      }
+      header={<Header logoText="PickleVision Pro" onSearchChange={setSearchQuery} notificationCount={1} onNotificationClick={() => {}} onProfileClick={() => router.push('/profile')} searchPlaceholder="Search players..." />}
+      sidebar={<Navigation items={navItems} activeItemId={activeNav} onItemClick={(id) => { setActiveNav(id); if (id === 'dashboard') router.push('/'); else if (id === 'videos') router.push('/videos'); else if (id === 'analytics') router.push('/analytics'); else if (id === 'leaderboard') router.push('/leaderboard'); else if (id === 'profile') router.push('/profile'); }} collapsed={sidebarCollapsed} onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)} />}
+      footer={<div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px', color: 'rgba(255, 255, 255, 0.6)' }}><span>© 2026 PickleVision Pro</span><div style={{ display: 'flex', gap: '16px' }}><a href="#" style={{ color: 'rgba(255, 255, 255, 0.6)', textDecoration: 'none' }}>Privacy</a><a href="#" style={{ color: 'rgba(255, 255, 255, 0.6)', textDecoration: 'none' }}>Terms</a></div></div>}
     >
       {pageLoading ? (
         <div style={{ textAlign: 'center', padding: '48px 0' }}>
@@ -215,83 +128,39 @@ export default function LeaderboardPage() {
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
           <div>
-            <h1
-              style={{
-                margin: '0 0 8px 0',
-                fontSize: '28px',
-                fontWeight: '600',
-                color: 'white',
-              }}
-            >
-              Leaderboard
-            </h1>
-            <p style={{ margin: 0, color: 'rgba(255, 255, 255, 0.6)', fontSize: '14px' }}>
-              Top ranked players and your position
-            </p>
+            <h1 style={{ margin: '0 0 8px 0', fontSize: '28px', fontWeight: '600', color: 'white' }}>Leaderboard</h1>
+            <p style={{ margin: 0, color: 'rgba(255, 255, 255, 0.6)', fontSize: '14px' }}>Top ranked players</p>
           </div>
 
-          <Tabs
-            items={tabItems}
-            activeTab={activeTab}
-            onTabChange={setActiveTab}
-            variant="default"
-            size="md"
-          />
+          <Tabs items={tabItems} activeTab={activeTab} onTabChange={setActiveTab} variant="default" size="md" />
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            {filteredPlayers.slice(0, 10).map((player) => (
+            {filtered.slice(0, 10).map((player) => (
               <Card key={player.id} variant="interactive" shadow="sm" padding="md" hoverable>
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '16px',
-                  }}
-                >
-                  <div
-                    style={{
-                      width: '40px',
-                      height: '40px',
-                      background: 'linear-gradient(135deg, #00ff88, #00d4ff)',
-                      borderRadius: '50%',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontWeight: '700',
-                      color: '#0a0e27',
-                      fontSize: '16px',
-                    }}
-                  >
-                    {player.rank}
-                  </div>
-
+                <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                  <div style={{ width: '40px', height: '40px', background: 'linear-gradient(135deg, #00ff88, #00d4ff)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '700', color: '#0a0e27' }}>{player.rank}</div>
                   <div style={{ flex: 1 }}>
-                    <div
-                      style={{
-                        fontSize: '14px',
-                        fontWeight: '600',
-                        color: 'white',
-                        marginBottom: '4px',
-                      }}
-                    >
-                      {player.name}
-                    </div>
-                    <div
-                      style={{
-                        fontSize: '12px',
-                        color: 'rgba(255, 255, 255, 0.6)',
-                        display: 'flex',
-                        gap: '12px',
-                      }}
-                    >
-                      <span>Rating: {player.rating.toFixed(2)}</span>
-                      <span>{player.wins}W-{player.losses}L</span>
-                      <span>WR: {player.winRate}%</span>
-                    </div>
+                    <div style={{ fontSize: '14px', fontWeight: '600', color: 'white' }}>{player.name}</div>
+                    <div style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.6)' }}>Rating: {player.rating.toFixed(2)} | {player.wins}W-{player.losses}L | WR: {player.winRate}%</div>
                   </div>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <Badge variant={getSkillVariant(player.skillLevel)} size="sm">{player.skillLevel.toUpperCase()}</Badge>
+                    <Badge variant={getTrendVariant(player.trend)} size="sm">{player.trend === 'up' ? '↑' : '↓'} {Math.abs(player.trendValue * 100).toFixed(0)}%</Badge>
+                  </div>
+                </div>
+              </Card>
+            ))}
+          </div>
 
-                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                    <Badge variant={getSkillBadgeVariant(player.skillLevel)} size="sm">
-                      {player.skillLevel.toUpperCase()}
-                    </Badge>
-                    <Badge
+          {filtered.length === 0 && (
+            <Card variant="default" shadow="md" padding="lg">
+              <div style={{ textAlign: 'center', padding: '48px 0' }}>
+                <p style={{ color: 'rgba(255, 255, 255, 0.7)' }}>No players found</p>
+              </div>
+            </Card>
+          )}
+        </div>
+      )}
+    </PageLayout>
+  );
+}
