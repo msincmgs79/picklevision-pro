@@ -497,4 +497,69 @@ export default function VideosPage() {
                       (e.target as HTMLButtonElement).style.background = 'rgba(0, 212, 255, 0.2)';
                     }}
                     onMouseLeave={(e) => {
-                      (e.target as HTMLButtonElement).style.
+                      (e.target as HTMLButtonElement).style.background = 'rgba(0, 212, 255, 0.1)';
+                    }}
+                  >
+                    📊 Analyze
+                  </button>
+                  <button
+                    onClick={() => handleDeleteVideo(video.id)}
+                    style={{
+                      flex: 1,
+                      padding: isMobile ? '6px 8px' : '8px 12px',
+                      background: 'rgba(239, 68, 68, 0.1)',
+                      border: '1px solid rgba(239, 68, 68, 0.3)',
+                      color: '#ef4444',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      fontSize: isMobile ? '11px' : '12px',
+                      fontWeight: '600',
+                      transition: 'all 0.2s',
+                    }}
+                    onMouseEnter={(e) => {
+                      (e.target as HTMLButtonElement).style.background = 'rgba(239, 68, 68, 0.2)';
+                    }}
+                    onMouseLeave={(e) => {
+                      (e.target as HTMLButtonElement).style.background = 'rgba(239, 68, 68, 0.1)';
+                    }}
+                  >
+                    🗑️ Delete
+                  </button>
+                </div>
+              </Card>
+            ))}
+          </div>
+
+          {filteredVideos.length === 0 && (
+            <Card variant="default" shadow="md" padding="lg">
+              <div style={{ textAlign: 'center', padding: '48px 0' }}>
+                <div style={{ fontSize: '48px', marginBottom: '16px' }}>🎥</div>
+                <p style={{ color: 'rgba(255, 255, 255, 0.7)', marginBottom: '16px' }}>
+                  No videos found
+                </p>
+                <p style={{ color: 'rgba(255, 255, 255, 0.5)', fontSize: '14px' }}>
+                  {searchQuery ? 'Try adjusting your search' : 'Upload your first match video to get started'}
+                </p>
+              </div>
+            </Card>
+          )}
+
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(2, 1fr)',
+              gap: '12px',
+            }}
+          >
+            <Button variant="primary" size="md" fullWidth>
+              🎥 Upload Video
+            </Button>
+            <Button variant="secondary" size="md" fullWidth>
+              📁 Manage Library
+            </Button>
+          </div>
+        </div>
+      )}
+    </PageLayout>
+  );
+}
