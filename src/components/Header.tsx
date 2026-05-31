@@ -181,36 +181,3 @@ const Header = React.forwardRef<HTMLDivElement, HeaderProps>(
             style={notificationButtonStyle}
             onMouseEnter={(e) => {
               (e.target as HTMLButtonElement).style.color = '#00ff88';
-            }}
-            onMouseLeave={(e) => {
-              (e.target as HTMLButtonElement).style.color = 'rgba(255, 255, 255, 0.6)';
-            }}
-          >
-            🔔
-            {notificationCount > 0 && (
-              <div style={notificationBadgeStyle}>{notificationCount}</div>
-            )}
-          </button>
-
-          {/* Profile */}
-          <button
-            onClick={onProfileClick}
-            style={profileButtonStyle}
-            onMouseEnter={(e) => {
-              (e.target as HTMLButtonElement).style.transform = 'scale(1.05)';
-            }}
-            onMouseLeave={(e) => {
-              (e.target as HTMLButtonElement).style.transform = 'scale(1)';
-            }}
-          >
-            👤
-          </button>
-        </div>
-      </div>
-    );
-  }
-);
-
-Header.displayName = 'Header';
-
-export default Header;
