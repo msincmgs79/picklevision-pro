@@ -58,7 +58,20 @@ export default function LeaderboardPage() {
         setUserProfile(profile);
 
         const topPlayers = await getTopPlayers();
-        setPlayers(topPlayers || []);
+        const formattedPlayers: Player[] = (topPlayers || []).map((user: any, index: number) => ({
+          id: user.uid || `player-${index}`,
+          rank: index + 1,
+          name: user.displayName || 'Unknown Player',
+          rating: user.rating || 0,
+          wins: user.wins || 0,
+          losses: user.losses || 0,
+          winRate: user.wins && user.losses ? Math.round((user.wins / (user.wins + user.losses)) * 100) : 0,
+          region: 'USA',
+          skillLevel: user.wins > 50 ? 'pro' : user.wins > 20 ? 'advanced' : 'intermediate',
+          trend: Math.random() > 0.5 ? 'up' : 'down',
+          trendValue: Math.random() * 0.15,
+        }));
+        setPlayers(formattedPlayers);
       } catch (error) {
         console.error('Error loading data:', error);
         setPlayers([]);
@@ -281,24 +294,4 @@ export default function LeaderboardPage() {
                     <Badge variant={getSkillBadgeVariant(player.skillLevel)} size="sm">
                       {player.skillLevel.toUpperCase()}
                     </Badge>
-                    <Badge variant={getTrendBadgeVariant(player.trend)} size="sm">
-                      {player.trend === 'up' ? '↑' : '↓'} {Math.abs(player.trendValue * 100).toFixed(0)}%
-                    </Badge>
-                  </div>
-                </div>
-              </Card>
-            ))}
-          </div>
-
-          {filteredPlayers.length === 0 && (
-            <Card variant="default" shadow="md" padding="lg">
-              <div style={{ textAlign: 'center', padding: '48px 0' }}>
-                <p style={{ color: 'rgba(255, 255, 255, 0.7)' }}>No players found</p>
-              </div>
-            </Card>
-          )}
-        </div>
-      )}
-    </PageLayout>
-  );
-}
+                    <Badge
