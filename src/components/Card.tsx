@@ -77,18 +77,8 @@ const Card = React.forwardRef<HTMLDivElement, CardProps>(
       },
     };
 
-    // Hoverable styles
-    const hoverableStyles: React.CSSProperties = hoverable
-      ? {
-          cursor: 'pointer',
-          ':hover': {
-            background: 'rgba(10, 14, 39, 0.7)',
-            borderColor: 'rgba(0, 255, 136, 0.3)',
-            transform: 'translateY(-2px)',
-            boxShadow: '0 8px 24px rgba(0, 0, 0, 0.5)',
-          },
-        }
-      : {};
+    // Hoverable styles (inline styles don't support :hover pseudo-class)
+    const hoverableStyles: React.CSSProperties = hoverable ? { cursor: 'pointer' } : {};
 
     // Combine all styles
     const finalStyle: React.CSSProperties = {
