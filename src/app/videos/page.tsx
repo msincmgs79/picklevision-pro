@@ -41,12 +41,20 @@ export default function VideosPage() {
   const [activeNav, setActiveNav] = useState('videos');
   const [activeTab, setActiveTab] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
     if (!loading && !user) {
       router.push('/login');
     }
   }, [user, loading, router]);
+
+  useEffect(() => {
+    const checkSize = () => setIsMobile(window.innerWidth < 768);
+    checkSize();
+    window.addEventListener('resize', checkSize);
+    return () => window.removeEventListener('resize', checkSize);
+  }, []);
 
   const handleDeleteVideo = async (videoId: string) => {
     if (!user) return;
@@ -357,8 +365,8 @@ export default function VideosPage() {
           <div
             style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
-              gap: '16px',
+              gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fill, minmax(280px, 1fr))',
+              gap: isMobile ? '12px' : '16px',
             }}
           >
             {filteredVideos.map((video) => (
@@ -494,63 +502,4 @@ export default function VideosPage() {
                     📊 Analyze
                   </button>
                   <button
-                    onClick={() => handleDeleteVideo(video.id)}
-                    style={{
-                      flex: 1,
-                      padding: '8px 12px',
-                      background: 'rgba(239, 68, 68, 0.1)',
-                      border: '1px solid rgba(239, 68, 68, 0.3)',
-                      color: '#ef4444',
-                      borderRadius: '6px',
-                      cursor: 'pointer',
-                      fontSize: '12px',
-                      fontWeight: '600',
-                      transition: 'all 0.2s',
-                    }}
-                    onMouseEnter={(e) => {
-                      (e.target as HTMLButtonElement).style.background = 'rgba(239, 68, 68, 0.2)';
-                    }}
-                    onMouseLeave={(e) => {
-                      (e.target as HTMLButtonElement).style.background = 'rgba(239, 68, 68, 0.1)';
-                    }}
-                  >
-                    🗑️ Delete
-                  </button>
-                </div>
-              </Card>
-            ))}
-          </div>
-
-          {filteredVideos.length === 0 && (
-            <Card variant="default" shadow="md" padding="lg">
-              <div style={{ textAlign: 'center', padding: '48px 0' }}>
-                <div style={{ fontSize: '48px', marginBottom: '16px' }}>🎥</div>
-                <p style={{ color: 'rgba(255, 255, 255, 0.7)', marginBottom: '16px' }}>
-                  No videos found
-                </p>
-                <p style={{ color: 'rgba(255, 255, 255, 0.5)', fontSize: '14px' }}>
-                  {searchQuery ? 'Try adjusting your search' : 'Upload your first match video to get started'}
-                </p>
-              </div>
-            </Card>
-          )}
-
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(2, 1fr)',
-              gap: '12px',
-            }}
-          >
-            <Button variant="primary" size="md" fullWidth>
-              🎥 Upload Video
-            </Button>
-            <Button variant="secondary" size="md" fullWidth>
-              📁 Manage Library
-            </Button>
-          </div>
-        </div>
-      )}
-    </PageLayout>
-  );
-}
+                    onClick={() => handleDeleteVideo(video.i
