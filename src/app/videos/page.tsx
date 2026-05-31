@@ -462,17 +462,17 @@ export default function VideosPage() {
                   <button
                     style={{
                       flex: 1,
-                      padding: isMobile ? '2px 3px' : '8px 12px',
+                      padding: isMobile ? '6px 8px' : '8px 12px',
                       background: 'rgba(0, 255, 136, 0.1)',
-                      border: isMobile ? 'none' : '1px solid rgba(0, 255, 136, 0.3)',
+                      border: '1px solid rgba(0, 255, 136, 0.3)',
                       color: '#00ff88',
-                      borderRadius: '2px',
+                      borderRadius: '4px',
                       cursor: 'pointer',
-                      fontSize: isMobile ? '8px' : '12px',
+                      fontSize: isMobile ? '11px' : '12px',
                       fontWeight: '600',
                       transition: 'all 0.2s',
-                      lineHeight: '1',
-                      minHeight: isMobile ? '20px' : 'auto',
+                      lineHeight: '1.2',
+                      minHeight: 'auto',
                     }}
                     onMouseEnter={(e) => {
                       (e.target as HTMLButtonElement).style.background = 'rgba(0, 255, 136, 0.2)';
@@ -481,22 +481,22 @@ export default function VideosPage() {
                       (e.target as HTMLButtonElement).style.background = 'rgba(0, 255, 136, 0.1)';
                     }}
                   >
-                    {isMobile ? 'P' : '▶ Play'}
+                    ▶ Play
                   </button>
                   <button
                     style={{
                       flex: 1,
-                      padding: isMobile ? '2px 3px' : '8px 12px',
+                      padding: isMobile ? '6px 8px' : '8px 12px',
                       background: 'rgba(0, 212, 255, 0.1)',
-                      border: isMobile ? 'none' : '1px solid rgba(0, 212, 255, 0.3)',
+                      border: '1px solid rgba(0, 212, 255, 0.3)',
                       color: '#00d4ff',
-                      borderRadius: '2px',
+                      borderRadius: '4px',
                       cursor: 'pointer',
-                      fontSize: isMobile ? '8px' : '12px',
+                      fontSize: isMobile ? '11px' : '12px',
                       fontWeight: '600',
                       transition: 'all 0.2s',
-                      lineHeight: '1',
-                      minHeight: isMobile ? '20px' : 'auto',
+                      lineHeight: '1.2',
+                      minHeight: 'auto',
                     }}
                     onMouseEnter={(e) => {
                       (e.target as HTMLButtonElement).style.background = 'rgba(0, 212, 255, 0.2)';
@@ -505,23 +505,23 @@ export default function VideosPage() {
                       (e.target as HTMLButtonElement).style.background = 'rgba(0, 212, 255, 0.1)';
                     }}
                   >
-                    {isMobile ? 'A' : '📊 Analyze'}
+                    📊 Analyze
                   </button>
                   <button
                     onClick={() => handleDeleteVideo(video.id)}
                     style={{
                       flex: 1,
-                      padding: isMobile ? '2px 3px' : '8px 12px',
+                      padding: isMobile ? '6px 8px' : '8px 12px',
                       background: 'rgba(239, 68, 68, 0.1)',
-                      border: isMobile ? 'none' : '1px solid rgba(239, 68, 68, 0.3)',
+                      border: '1px solid rgba(239, 68, 68, 0.3)',
                       color: '#ef4444',
-                      borderRadius: '2px',
+                      borderRadius: '4px',
                       cursor: 'pointer',
-                      fontSize: isMobile ? '8px' : '12px',
+                      fontSize: isMobile ? '11px' : '12px',
                       fontWeight: '600',
                       transition: 'all 0.2s',
-                      lineHeight: '1',
-                      minHeight: isMobile ? '20px' : 'auto',
+                      lineHeight: '1.2',
+                      minHeight: 'auto',
                     }}
                     onMouseEnter={(e) => {
                       (e.target as HTMLButtonElement).style.background = 'rgba(239, 68, 68, 0.2)';
@@ -530,7 +530,7 @@ export default function VideosPage() {
                       (e.target as HTMLButtonElement).style.background = 'rgba(239, 68, 68, 0.1)';
                     }}
                   >
-                    {isMobile ? 'D' : '🗑️ Delete'}
+                    🗑️ Delete
                   </button>
                 </div>
               </Card>
