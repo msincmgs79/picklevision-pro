@@ -122,7 +122,7 @@ export default function HomeRedesigned() {
     {
       id: 'billing',
       label: 'Unlock Features',
-      icon: '🔓',
+      icon: '⭐',
     },
   ];
 

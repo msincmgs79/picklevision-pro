@@ -145,7 +145,7 @@ export default function VideosPage() {
     { id: 'analytics', label: 'Analytics', icon: '📈' },
     { id: 'leaderboard', label: 'Leaderboard', icon: '🏆' },
     { id: 'profile', label: 'Profile', icon: '👤' },
-    { id: 'billing', label: 'Unlock Features', icon: '🔓' },
+    { id: 'billing', label: 'Unlock Features', icon: '⭐' },
   ];
 
   const tabItems = [

@@ -75,8 +75,10 @@ const Tabs = React.forwardRef<HTMLDivElement, TabsProps>(
 
     const containerStyles: React.CSSProperties = {
       display: 'flex',
-      gap: variant === 'default' ? '4px' : '8px',
+      alignItems: 'center',
+      gap: variant === 'default' ? '24px' : '12px',
       borderBottom: variant === 'default' ? '1px solid rgba(0, 255, 136, 0.1)' : 'none',
+      paddingBottom: '12px',
       ...style,
     };
 
