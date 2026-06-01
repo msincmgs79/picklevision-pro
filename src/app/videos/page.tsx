@@ -67,7 +67,13 @@ export default function VideosPage() {
       // Find the video in state
       const video = videos.find((v) => v.id === videoId);
       if (!video) {
-        console.error('Video not found in state');
+        console.error('❌ Video not found in state');
+        return;
+      }
+
+      if (!video.videoUrl) {
+        console.error('❌ Video URL is missing');
+        alert('Video URL is not available. Cannot analyze.');
         return;
       }
 
@@ -78,33 +84,82 @@ export default function VideosPage() {
         )
       );
 
-      // Fetch video from URL
+      // Fetch video from URL with error handling
       console.log('📥 Fetching video from URL:', video.videoUrl);
-      const response = await fetch(video.videoUrl || '');
-      const blob = await response.blob();
+      let blob: Blob;
+      try {
+        const response = await fetch(video.videoUrl, {
+          method: 'GET',
+          headers: {
+            'Accept': 'video/*',
+          },
+        });
 
-      // Extract frame as base64
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+
+        blob = await response.blob();
+        console.log('✅ Video fetched successfully:', blob.size, 'bytes');
+      } catch (fetchError) {
+        console.error('❌ Failed to fetch video:', fetchError);
+        throw new Error(`Failed to fetch video: ${fetchError instanceof Error ? fetchError.message : 'Unknown error'}`);
+      }
+
+      // Extract frame as base64 with timeout
       console.log('🎬 Extracting frame from video...');
-      const frameBase64 = await extractFrameFromVideoBlob(blob);
+      let frameBase64: string;
+      try {
+        const framePromise = extractFrameFromVideoBlob(blob);
+        frameBase64 = await Promise.race([
+          framePromise,
+          new Promise<string>((_, reject) =>
+            setTimeout(() => reject(new Error('Frame extraction timeout after 30s')), 30000)
+          ),
+        ]);
+        console.log('✅ Frame extracted, base64 length:', frameBase64.length);
+      } catch (frameError) {
+        console.error('❌ Failed to extract frame:', frameError);
+        throw new Error(`Failed to extract frame: ${frameError instanceof Error ? frameError.message : 'Unknown error'}`);
+      }
 
-      // Analyze video with AI
+      // Analyze video with AI with error handling
       console.log('🤖 Analyzing video with AI...');
-      const analysis = await analyzeMatchVideo(frameBase64);
+      let analysis;
+      try {
+        const analysisPromise = analyzeMatchVideo(frameBase64);
+        analysis = await Promise.race([
+          analysisPromise,
+          new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('Analysis timeout after 60s')), 60000)
+          ),
+        ]);
+        console.log('✅ Video analysis complete');
+      } catch (analysisError) {
+        console.error('❌ Failed to analyze video:', analysisError);
+        throw new Error(`Failed to analyze video: ${analysisError instanceof Error ? analysisError.message : 'Unknown error'}`);
+      }
 
       // Save analysis to Firestore
       console.log('💾 Saving analysis to Firestore...');
-      await saveVideoAnalysis(user.uid, videoId, {
-        ...analysis,
-        videoId,
-        title: video.title,
-        status: 'analyzed',
-        recordedDate: video.date,
-        opponent: video.opponent,
-        score: video.score,
-        duration: video.duration,
-        fileSize: video.fileSize,
-        videoUrl: video.videoUrl,
-      });
+      try {
+        await saveVideoAnalysis(user.uid, videoId, {
+          ...analysis,
+          videoId,
+          title: video.title,
+          status: 'analyzed',
+          recordedDate: video.date,
+          opponent: video.opponent,
+          score: video.score,
+          duration: video.duration,
+          fileSize: video.fileSize,
+          videoUrl: video.videoUrl,
+        });
+        console.log('✅ Analysis saved to Firestore');
+      } catch (saveError) {
+        console.error('❌ Failed to save analysis:', saveError);
+        throw new Error(`Failed to save analysis: ${saveError instanceof Error ? saveError.message : 'Unknown error'}`);
+      }
 
       // Update UI to show analyzed state
       setVideos(
@@ -113,9 +168,15 @@ export default function VideosPage() {
         )
       );
 
-      console.log('✅ Video analysis complete');
+      console.log('✅ Video analysis workflow complete');
     } catch (error) {
-      console.error('Error analyzing video:', error);
+      console.error('❌ Error analyzing video:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error during analysis';
+      console.error('Error details:', errorMessage);
+
+      // Show user-friendly error
+      alert(`Video analysis failed: ${errorMessage}`);
+
       // Revert to previous status on error
       setVideos(
         videos.map((v) =>
