@@ -54,7 +54,8 @@ export const getFeatureAccess = (subscription?: SubscriptionLevel): FeatureAcces
     },
   };
 
-  return baseFeatures[subscription] || baseFeatures.free;
+  const sub = subscription ?? 'free';
+  return baseFeatures[sub];
 };
 
 /**
@@ -81,7 +82,8 @@ export const canAccessFeature = (
  * Returns true if user is free (or undefined) and feature requires pro
  */
 export const requiresProUpgrade = (subscription: SubscriptionLevel | undefined, feature: keyof FeatureAccess): boolean => {
-  return subscription === 'free' && !canAccessFeature(subscription, feature);
+  const sub = subscription ?? 'free';
+  return sub === 'free' && !canAccessFeature(subscription, feature);
 };
 
 /**
