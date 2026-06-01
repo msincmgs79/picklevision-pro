@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/authContext';
-import { getUserProfile, getUserVideoAnalyses } from '@/lib/db';
+import { getUserProfile, getUserVideoAnalyses, deleteVideo } from '@/lib/db';
 import type { User } from '@/lib/db';
 import Header from '@/components/Header';
 import Navigation from '@/components/Navigation';
@@ -29,6 +29,7 @@ interface VideoFile {
   status: 'analyzed' | 'pending' | 'processing';
   opponent?: string;
   score?: string;
+  videoUrl?: string;
 }
 
 export default function VideosPage() {
@@ -59,6 +60,17 @@ export default function VideosPage() {
   const handleDeleteVideo = async (videoId: string) => {
     if (!user) return;
     try {
+      // Find the video to get its videoUrl
+      const videoToDelete = videos.find((v) => v.id === videoId);
+      if (!videoToDelete || !videoToDelete.videoUrl) {
+        console.error('Video or video URL not found');
+        return;
+      }
+
+      // Call Firebase delete function
+      await deleteVideo(videoId, videoToDelete.videoUrl);
+
+      // Remove from UI state
       setVideos(videos.filter((v) => v.id !== videoId));
     } catch (error) {
       console.error('Error deleting video:', error);
@@ -72,6 +84,7 @@ export default function VideosPage() {
         status: analysis.status || 'analyzed',
         opponent: analysis.opponent || 'Unknown',
         score: analysis.score || 'N/A',
+        videoUrl: analysis.videoUrl,
       }));
       setVideos(formattedVideos);
     }
@@ -94,6 +107,7 @@ export default function VideosPage() {
           status: analysis.status || 'analyzed',
           opponent: analysis.opponent || 'Unknown',
           score: analysis.score || 'N/A',
+          videoUrl: analysis.videoUrl,
         }));
         setVideos(formattedVideos);
       } catch (error) {
