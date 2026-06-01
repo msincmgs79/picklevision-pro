@@ -24,6 +24,9 @@ export interface User {
   proRating: number;
   wins: number;
   losses: number;
+  subscription?: 'free' | 'pro' | 'admin';
+  subscriptionStartDate?: Timestamp;
+  subscriptionEndDate?: Timestamp;
   createdAt: Timestamp;
 }
 
@@ -41,7 +44,7 @@ export interface Match {
   createdAt: Timestamp;
 }
 
-export async function createUserProfile(uid: string, email: string, displayName?: string) {
+export async function createUserProfile(uid: string, email: string, displayName?: string, subscription: 'free' | 'pro' | 'admin' = 'free') {
   const userRef = doc(db, 'users', uid);
   const userData: User = {
     uid,
@@ -50,6 +53,7 @@ export async function createUserProfile(uid: string, email: string, displayName?
     proRating: 2.0,
     wins: 0,
     losses: 0,
+    subscription,
     createdAt: Timestamp.now()
   };
   await setDoc(userRef, userData);
