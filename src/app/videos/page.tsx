@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/authContext';
 import { getUserProfile, getUserVideoAnalyses, deleteVideo, saveVideoAnalysis } from '@/lib/db';
 import type { User } from '@/lib/db';
-import { analyzeMatchVideo } from '@/lib/shotAnalysis';
+import { analyzeMatchVideo, type MatchAnalysis } from '@/lib/shotAnalysis';
 import { extractFrameFromVideoBlob } from '@/lib/shotAnalysis';
 import Header from '@/components/Header';
 import Navigation from '@/components/Navigation';
@@ -125,12 +125,12 @@ export default function VideosPage() {
 
       // Analyze video with AI with error handling
       console.log('🤖 Analyzing video with AI...');
-      let analysis;
+      let analysis: MatchAnalysis;
       try {
         const analysisPromise = analyzeMatchVideo(frameBase64);
-        analysis = await Promise.race([
+        analysis = await Promise.race<MatchAnalysis>([
           analysisPromise,
-          new Promise((_, reject) =>
+          new Promise<MatchAnalysis>((_, reject) =>
             setTimeout(() => reject(new Error('Analysis timeout after 60s')), 60000)
           ),
         ]);
@@ -705,9 +705,4 @@ export default function VideosPage() {
             <Button variant="secondary" size="md" fullWidth>
               📁 Manage Library
             </Button>
-          </div>
-        </div>
-      )}
-    </PageLayout>
-  );
-}
+ 
