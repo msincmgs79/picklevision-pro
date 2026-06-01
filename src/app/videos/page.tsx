@@ -3,8 +3,10 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/authContext';
-import { getUserProfile, getUserVideoAnalyses, deleteVideo } from '@/lib/db';
+import { getUserProfile, getUserVideoAnalyses, deleteVideo, saveVideoAnalysis } from '@/lib/db';
 import type { User } from '@/lib/db';
+import { analyzeMatchVideo } from '@/lib/shotAnalysis';
+import { extractFrameFromVideoBlob } from '@/lib/shotAnalysis';
 import Header from '@/components/Header';
 import Navigation from '@/components/Navigation';
 import PageLayout from '@/components/PageLayout';
@@ -56,6 +58,72 @@ export default function VideosPage() {
     window.addEventListener('resize', checkSize);
     return () => window.removeEventListener('resize', checkSize);
   }, []);
+
+  const handleAnalyze = async (videoId: string) => {
+    if (!user) return;
+    try {
+      console.log('🔍 Starting video analysis for:', videoId);
+
+      // Find the video in state
+      const video = videos.find((v) => v.id === videoId);
+      if (!video) {
+        console.error('Video not found in state');
+        return;
+      }
+
+      // Update UI to show analyzing state
+      setVideos(
+        videos.map((v) =>
+          v.id === videoId ? { ...v, status: 'analyzing' } : v
+        )
+      );
+
+      // Fetch video from URL
+      console.log('📥 Fetching video from URL:', video.videoUrl);
+      const response = await fetch(video.videoUrl || '');
+      const blob = await response.blob();
+
+      // Extract frame as base64
+      console.log('🎬 Extracting frame from video...');
+      const frameBase64 = await extractFrameFromVideoBlob(blob);
+
+      // Analyze video with AI
+      console.log('🤖 Analyzing video with AI...');
+      const analysis = await analyzeMatchVideo(frameBase64);
+
+      // Save analysis to Firestore
+      console.log('💾 Saving analysis to Firestore...');
+      await saveVideoAnalysis(user.uid, videoId, {
+        ...analysis,
+        videoId,
+        title: video.title,
+        status: 'analyzed',
+        recordedDate: video.date,
+        opponent: video.opponent,
+        score: video.score,
+        duration: video.duration,
+        fileSize: video.fileSize,
+        videoUrl: video.videoUrl,
+      });
+
+      // Update UI to show analyzed state
+      setVideos(
+        videos.map((v) =>
+          v.id === videoId ? { ...v, status: 'analyzed' } : v
+        )
+      );
+
+      console.log('✅ Video analysis complete');
+    } catch (error) {
+      console.error('Error analyzing video:', error);
+      // Revert to previous status on error
+      setVideos(
+        videos.map((v) =>
+          v.id === videoId ? { ...v, status: 'uploaded' } : v
+        )
+      );
+    }
+  };
 
   const handleDeleteVideo = async (videoId: string) => {
     if (!user) return;
@@ -495,6 +563,7 @@ export default function VideosPage() {
                     ▶ Play
                   </button>
                   <button
+                    onClick={() => handleAnalyze(video.id)}
                     style={{
                       flex: 1,
                       padding: isMobile ? '6px 8px' : '8px 12px',
@@ -516,7 +585,7 @@ export default function VideosPage() {
                       (e.target as HTMLButtonElement).style.background = 'rgba(0, 212, 255, 0.1)';
                     }}
                   >
-                    📊 Analyze
+                    {video.status === 'analyzing' ? '⏳ Analyzing...' : '📊 Analyze'}
                   </button>
                   <button
                     onClick={() => handleDeleteVideo(video.id)}
