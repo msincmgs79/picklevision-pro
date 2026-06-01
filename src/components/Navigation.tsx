@@ -60,6 +60,7 @@ const Navigation = React.forwardRef<HTMLDivElement, NavigationProps>(
     const itemStyle = (isActive: boolean, isDisabled: boolean): React.CSSProperties => ({
       display: 'flex',
       alignItems: 'center',
+      justifyContent: collapsed ? 'center' : 'flex-start',
       gap: '12px',
       padding: collapsed ? '16px 12px' : '12px 20px',
       margin: '0 12px',
@@ -87,7 +88,7 @@ const Navigation = React.forwardRef<HTMLDivElement, NavigationProps>(
       whiteSpace: 'nowrap',
       opacity: collapsed ? 0 : 1,
       transition: 'opacity 200ms ease-in-out',
-      flex: 1,
+      flex: collapsed ? 0 : 1,
     };
 
     const badgeStyle: React.CSSProperties = {
@@ -150,9 +151,3 @@ const Navigation = React.forwardRef<HTMLDivElement, NavigationProps>(
         </div>
       </div>
     );
-  }
-);
-
-Navigation.displayName = 'Navigation';
-
-export default Navigation;
