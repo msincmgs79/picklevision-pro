@@ -34,7 +34,7 @@ interface AnalyticsMetrics {
 }
 
 // Helper function to calculate metrics from video analyses (STEP 1 - VERIFICATION POINT 1)
-export function calculateAnalyticsMetrics(analyses: any[]): AnalyticsMetrics {
+function calculateAnalyticsMetrics(analyses: any[]): AnalyticsMetrics {
   console.log('🔍 STEP 1: calculateAnalyticsMetrics called with', analyses.length, 'analyses');
 
   // Default metrics if no data
