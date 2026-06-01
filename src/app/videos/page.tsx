@@ -74,7 +74,7 @@ export default function VideosPage() {
       // Update UI to show analyzing state
       setVideos(
         videos.map((v) =>
-          v.id === videoId ? { ...v, status: 'analyzing' } : v
+          v.id === videoId ? { ...v, status: 'processing' } : v
         )
       );
 
@@ -585,7 +585,7 @@ export default function VideosPage() {
                       (e.target as HTMLButtonElement).style.background = 'rgba(0, 212, 255, 0.1)';
                     }}
                   >
-                    {video.status === 'analyzing' ? '⏳ Analyzing...' : '📊 Analyze'}
+                    {video.status === 'processing' ? '⏳ Processing...' : '📊 Analyze'}
                   </button>
                   <button
                     onClick={() => handleDeleteVideo(video.id)}
