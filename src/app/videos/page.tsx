@@ -119,7 +119,7 @@ export default function VideosPage() {
       // Revert to previous status on error
       setVideos(
         videos.map((v) =>
-          v.id === videoId ? { ...v, status: 'uploaded' } : v
+          v.id === videoId ? { ...v, status: 'pending' } : v
         )
       );
     }
