@@ -151,3 +151,9 @@ const Navigation = React.forwardRef<HTMLDivElement, NavigationProps>(
         </div>
       </div>
     );
+  }
+);
+
+Navigation.displayName = 'Navigation';
+
+export default Navigation;
