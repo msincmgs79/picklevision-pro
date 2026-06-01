@@ -705,4 +705,9 @@ export default function VideosPage() {
             <Button variant="secondary" size="md" fullWidth>
               📁 Manage Library
             </Button>
- 
+          </div>
+        </div>
+      )}
+    </PageLayout>
+  );
+}
