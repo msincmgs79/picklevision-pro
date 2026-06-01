@@ -161,10 +161,19 @@ export async function getUserVideos(
   return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Array<{ id: string; userId: string; videoUrl: string; title?: string; uploadedAt: Timestamp }>;
 }
 
-export async function deleteVideo(videoId: string, videoUrl: string) {
+export async function deleteVideo(videoId: string, videoUrl: string, userId?: string) {
   try {
+    // Delete from main videos collection
     const videoRef = doc(db, 'videos', videoId);
     await deleteDoc(videoRef);
+
+    // Delete from user's videoAnalyses subcollection if userId provided
+    if (userId) {
+      const userAnalysisRef = doc(db, `users/${userId}/videoAnalyses`, videoId);
+      await deleteDoc(userAnalysisRef);
+    }
+
+    // Try to delete from Cloud Storage (non-critical)
     try {
       const url = new URL(videoUrl);
       const pathParts = url.pathname.split('/o/')[1].split('?')[0];

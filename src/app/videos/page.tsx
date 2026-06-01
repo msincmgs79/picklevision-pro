@@ -67,8 +67,8 @@ export default function VideosPage() {
         return;
       }
 
-      // Call Firebase delete function
-      await deleteVideo(videoId, videoToDelete.videoUrl);
+      // Call Firebase delete function (deletes from both collections and Cloud Storage)
+      await deleteVideo(videoId, videoToDelete.videoUrl, user.uid);
 
       // Remove from UI state
       setVideos(videos.filter((v) => v.id !== videoId));
