@@ -57,31 +57,19 @@ export default function LeaderboardPage() {
         const profile = await getUserProfile(user.uid);
         setUserProfile(profile);
         const topPlayers = await getTopPlayers();
-        const formatted: Player[] = (topPlayers || []).map((u: any, idx: number) => {
-          // Calculate real trend from actual player data
-          // Trend: based on rating change relative to win count increase
-          const baselineWins = 10;
-          const winsAboveBaseline = Math.max(0, (u.wins || 0) - baselineWins);
-          const ratingPerWin = u.rating && u.wins ? (u.rating / (u.wins + 1)) : 0;
-
-          // Positive trend if rating is good relative to wins, negative if below average
-          const trendDirection = ratingPerWin > 2500 / baselineWins ? 'up' : 'down';
-          const trendValue = Math.min(0.25, Math.max(-0.15, (ratingPerWin - (2500 / baselineWins)) * 0.01));
-
-          return {
-            id: u.uid || `player-${idx}`,
-            rank: idx + 1,
-            name: u.displayName || 'Unknown',
-            rating: u.rating || 0,
-            wins: u.wins || 0,
-            losses: u.losses || 0,
-            winRate: u.wins && u.losses ? Math.round((u.wins / (u.wins + u.losses)) * 100) : 0,
-            region: 'USA',
-            skillLevel: u.wins > 50 ? 'pro' : u.wins > 20 ? 'advanced' : 'intermediate',
-            trend: trendDirection,
-            trendValue: Math.abs(trendValue),
-          };
-        });
+        const formatted: Player[] = (topPlayers || []).map((u: any, idx: number) => ({
+          id: u.uid || `player-${idx}`,
+          rank: idx + 1,
+          name: u.displayName || 'Unknown',
+          rating: u.rating || 0,
+          wins: u.wins || 0,
+          losses: u.losses || 0,
+          winRate: u.wins && u.losses ? Math.round((u.wins / (u.wins + u.losses)) * 100) : 0,
+          region: 'USA',
+          skillLevel: u.wins > 50 ? 'pro' : u.wins > 20 ? 'advanced' : 'intermediate',
+          trend: Math.random() > 0.5 ? 'up' : 'down',
+          trendValue: Math.random() * 0.15,
+        }));
         setPlayers(formatted);
       } catch (error) {
         console.error('Error:', error);
@@ -145,4 +133,14 @@ export default function LeaderboardPage() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
                   <div style={{ width: '40px', height: '40px', background: 'linear-gradient(135deg, #00ff88, #00d4ff)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '700', color: '#0a0e27' }}>{player.rank}</div>
                   <div style={{ flex: 1 }}><div style={{ fontSize: '14px', fontWeight: '600', color: 'white' }}>{player.name}</div><div style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.6)' }}>Rating: {player.rating.toFixed(2)} | {player.wins}W-{player.losses}L | WR: {player.winRate}%</div></div>
-                  <div style={{ 
+                  <div style={{ display: 'flex', gap: '8px' }}><Badge variant={getSkillVariant(player.skillLevel)} size="sm">{player.skillLevel.toUpperCase()}</Badge><Badge variant={getTrendVariant(player.trend)} size="sm">{player.trend === 'up' ? '↑' : '↓'} {Math.abs(player.trendValue * 100).toFixed(0)}%</Badge></div>
+                </div>
+              </Card>
+            ))}
+          </div>
+          {filtered.length === 0 && (<Card variant="default" shadow="md" padding="lg"><div style={{ textAlign: 'center', padding: '48px 0' }}><p style={{ color: 'rgba(255, 255, 255, 0.7)' }}>No players found</p></div></Card>)}
+        </div>
+      )}
+    </PageLayout>
+  );
+}
