@@ -60,20 +60,15 @@ export default function VideosPage() {
   const handleDeleteVideo = async (videoId: string) => {
     if (!user) return;
     try {
-      // Find the video to get its videoUrl
-      const videoToDelete = videos.find((v) => v.id === videoId);
-      if (!videoToDelete || !videoToDelete.videoUrl) {
-        console.error('Video or video URL not found');
-        return;
-      }
+      // Call Firebase delete function (deletes from both Firestore collections)
+      // Pass empty string for videoUrl since Cloud Storage files may not exist
+      await deleteVideo(videoId, '', user.uid);
 
-      // Call Firebase delete function (deletes from both collections and Cloud Storage)
-      await deleteVideo(videoId, videoToDelete.videoUrl, user.uid);
-
-      // Remove from UI state
+      // Remove from UI state immediately
       setVideos(videos.filter((v) => v.id !== videoId));
     } catch (error) {
       console.error('Error deleting video:', error);
+      // On error, reload from Firestore to sync UI with database
       const analyses = await getUserVideoAnalyses(user.uid);
       const formattedVideos: VideoFile[] = (analyses || []).map((analysis: any) => ({
         id: analysis.id,

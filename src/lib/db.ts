@@ -166,11 +166,33 @@ export async function deleteVideo(videoId: string, videoUrl: string, userId?: st
     // Delete from main videos collection
     const videoRef = doc(db, 'videos', videoId);
     await deleteDoc(videoRef);
+    console.log('✅ Deleted from videos collection:', videoId);
 
     // Delete from user's videoAnalyses subcollection if userId provided
     if (userId) {
-      const userAnalysisRef = doc(db, `users/${userId}/videoAnalyses`, videoId);
-      await deleteDoc(userAnalysisRef);
+      try {
+        // Try deleting by exact document ID first (Pattern 1: matching IDs)
+        const userAnalysisRef = doc(db, `users/${userId}/videoAnalyses`, videoId);
+        await deleteDoc(userAnalysisRef);
+        console.log('✅ Deleted from videoAnalyses by ID:', videoId);
+      } catch (exactMatchError) {
+        console.warn('Could not delete by exact ID, attempting query...');
+
+        // Fall back to querying by videoId field (Pattern 2: timestamp-based IDs)
+        try {
+          const analysesRef = collection(db, `users/${userId}/videoAnalyses`);
+          const q = query(analysesRef, where('videoId', '==', videoId));
+          const querySnapshot = await getDocs(q);
+
+          // Delete all matching documents
+          for (const analysisDoc of querySnapshot.docs) {
+            await deleteDoc(analysisDoc.ref);
+            console.log('✅ Deleted from videoAnalyses by query:', analysisDoc.id);
+          }
+        } catch (queryError) {
+          console.warn('Could not delete videoAnalyses by query:', queryError);
+        }
+      }
     }
 
     // Try to delete from Cloud Storage (non-critical)
@@ -197,10 +219,20 @@ export async function saveVideoAnalysis(userId: string, videoIdOrData: string | 
 
     if (typeof videoIdOrData === 'string' && analysisData) {
       docId = videoIdOrData;
-      dataToSave = { ...analysisData, videoId: videoIdOrData, analyzedAt: Timestamp.now() };
+      dataToSave = {
+        ...analysisData,
+        videoId: videoIdOrData,
+        documentId: docId,  // ← Store the document ID for reliable deletion
+        analyzedAt: Timestamp.now()
+      };
     } else {
       docId = Date.now().toString();
-      dataToSave = { ...videoIdOrData, analyzedAt: Timestamp.now(), createdAt: Timestamp.now() };
+      dataToSave = {
+        ...videoIdOrData,
+        documentId: docId,  // ← Store the document ID for reliable deletion
+        analyzedAt: Timestamp.now(),
+        createdAt: Timestamp.now()
+      };
     }
 
     const analysisRef = doc(db, `users/${userId}/videoAnalyses`, docId);
