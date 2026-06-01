@@ -100,6 +100,7 @@ export default function LeaderboardPage() {
     { id: 'analytics', label: 'Analytics', icon: '📈' },
     { id: 'leaderboard', label: 'Leaderboard', icon: '🏆' },
     { id: 'profile', label: 'Profile', icon: '👤' },
+    { id: 'billing', label: 'Unlock Features', icon: '🔓' },
   ];
 
   const tabItems = [
@@ -117,7 +118,7 @@ export default function LeaderboardPage() {
   return (
     <PageLayout
       header={<Header logoText="PickleVision Pro" onSearchChange={setSearchQuery} notificationCount={1} onNotificationClick={() => {}} onProfileClick={() => router.push('/profile')} searchPlaceholder="Search players..." />}
-      sidebar={<Navigation items={navItems} activeItemId={activeNav} onItemClick={(id) => { setActiveNav(id); if (id === 'dashboard') router.push('/'); else if (id === 'videos') router.push('/videos'); else if (id === 'analytics') router.push('/analytics'); else if (id === 'leaderboard') router.push('/leaderboard'); else if (id === 'profile') router.push('/profile'); }} collapsed={sidebarCollapsed} onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)} />}
+      sidebar={<Navigation items={navItems} activeItemId={activeNav} onItemClick={(id) => { setActiveNav(id); if (id === 'dashboard') router.push('/'); else if (id === 'videos') router.push('/videos'); else if (id === 'analytics') router.push('/analytics'); else if (id === 'leaderboard') router.push('/leaderboard'); else if (id === 'profile') router.push('/profile'); else if (id === 'billing') router.push('/billing'); }} collapsed={sidebarCollapsed} onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)} />}
       footer={<div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px', color: 'rgba(255, 255, 255, 0.6)' }}><span>© 2026 PickleVision Pro</span><div style={{ display: 'flex', gap: '16px' }}><a href="#" style={{ color: 'rgba(255, 255, 255, 0.6)', textDecoration: 'none' }}>Privacy</a><a href="#" style={{ color: 'rgba(255, 255, 255, 0.6)', textDecoration: 'none' }}>Terms</a></div></div>}
     >
       {pageLoading ? (

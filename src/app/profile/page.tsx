@@ -89,6 +89,7 @@ export default function ProfilePage() {
     { id: 'analytics', label: 'Analytics', icon: '📈' },
     { id: 'leaderboard', label: 'Leaderboard', icon: '🏆' },
     { id: 'profile', label: 'Profile', icon: '👤' },
+    { id: 'billing', label: 'Unlock Features', icon: '🔓' },
   ];
 
   const tabItems = [
@@ -133,6 +134,7 @@ export default function ProfilePage() {
             if (itemId === 'analytics') router.push('/analytics');
             if (itemId === 'leaderboard') router.push('/leaderboard');
             if (itemId === 'profile') router.push('/profile');
+            if (itemId === 'billing') router.push('/billing');
           }}
           collapsed={sidebarCollapsed}
           onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
