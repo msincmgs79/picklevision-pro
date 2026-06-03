@@ -81,16 +81,26 @@ export default function VideosPage() {
 
       setVideos(videos.map((v) => (v.id === videoId ? { ...v, status: 'processing' } : v)));
 
-      console.log('📥 Fetching video from URL:', video.videoUrl);
+      console.log('📥 Fetching video from backend API...');
       let blob: Blob;
       try {
-        const response = await fetch(video.videoUrl, {
-          method: 'GET',
-          headers: { 'Accept': 'video/*' },
+        const apiResponse = await fetch('/api/fetch-video', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ videoUrl: video.videoUrl }),
         });
-        if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-        blob = await response.blob();
-        console.log('✅ Video fetched successfully:', blob.size, 'bytes');
+        if (!apiResponse.ok) throw new Error(`API error: ${apiResponse.status}`);
+        const apiData = await apiResponse.json();
+        if (!apiData.success) throw new Error(apiData.error);
+
+        // Convert base64 back to blob
+        const binaryString = atob(apiData.data);
+        const bytes = new Uint8Array(binaryString.length);
+        for (let i = 0; i < binaryString.length; i++) {
+          bytes[i] = binaryString.charCodeAt(i);
+        }
+        blob = new Blob([bytes], { type: 'video/mp4' });
+        console.log('✅ Video fetched successfully:', apiData.size, 'bytes');
       } catch (fetchError) {
         console.error('❌ Failed to fetch video:', fetchError);
         throw new Error(`Failed to fetch video: ${fetchError instanceof Error ? fetchError.message : 'Unknown error'}`);

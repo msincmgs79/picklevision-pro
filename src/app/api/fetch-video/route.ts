@@ -1,7 +1,3 @@
-import { getBytes } from 'firebase/storage';
-import { ref } from 'firebase/storage';
-import { storage } from '@/lib/firebase';
-
 export async function POST(request: Request) {
   try {
     const { videoUrl } = await request.json();
@@ -10,32 +6,34 @@ export async function POST(request: Request) {
       return Response.json({ success: false, error: 'No video URL provided' }, { status: 400 });
     }
 
-    // Extract the storage path from the download URL
-    // URL format: https://firebasestorage.googleapis.com/v0/b/{bucket}/o/{path}?alt=media&token={token}
-    const urlObj = new URL(videoUrl);
-    const pathMatch = urlObj.pathname.match(/\/o\/(.*?)$/);
+    // Fetch video from Firebase Storage URL directly on server (no CORS issues)
+    console.log('📥 Fetching video from Firebase Storage URL:', videoUrl);
 
-    if (!pathMatch) {
-      return Response.json({ success: false, error: 'Invalid video URL format' }, { status: 400 });
+    const response = await fetch(videoUrl, {
+      method: 'GET',
+      headers: { 'Accept': 'video/*' },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch video: HTTP ${response.status} ${response.statusText}`);
     }
 
-    const encodedPath = pathMatch[1];
-    const storagePath = decodeURIComponent(encodedPath);
+    // Get video data as buffer
+    const arrayBuffer = await response.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
 
-    // Fetch video from Firebase Storage using admin SDK
-    const videoRef = ref(storage, storagePath);
-    const blob = await getBytes(videoRef);
+    // Convert to base64
+    const base64 = buffer.toString('base64');
 
-    // Return as base64
-    const base64 = Buffer.from(blob).toString('base64');
+    console.log('✅ Video fetched successfully:', buffer.length, 'bytes');
 
     return Response.json({
       success: true,
       data: base64,
-      size: blob.length,
+      size: buffer.length,
     });
   } catch (error) {
-    console.error('Error fetching video:', error);
+    console.error('❌ Error fetching video:', error);
     return Response.json({
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error',
