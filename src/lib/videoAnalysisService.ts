@@ -51,7 +51,7 @@ export interface VideoAnalysisResult {
   courtData?: ShotContextData;
 }
 
-export async function analyzeGameVideo(frameBase64: string): Promise<VideoAnalysisResult> {
+export async function analyzeGameVideo(frameBase64: string, userId?: string, videoId?: string): Promise<VideoAnalysisResult> {
   try {
     console.log('Calling video analysis API with frame data');
     const response = await fetch('/api/analyze-video', {
@@ -59,7 +59,7 @@ export async function analyzeGameVideo(frameBase64: string): Promise<VideoAnalys
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ frameBase64 }),
+      body: JSON.stringify({ frameBase64, userId, videoId }),
     });
     if (!response.ok) {
       const error = await response.json();
