@@ -3,6 +3,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
+import { uploadMatchVideo } from '@/lib/db';
 import Header from '@/components/Header';
 import Navigation from '@/components/Navigation';
 import PageLayout from '@/components/PageLayout';
@@ -124,33 +125,47 @@ export default function VideosPage() {
     const file = event.target.files?.[0];
     if (!file) return;
 
+    if (!user?.uid) {
+      alert('You must be logged in to upload videos.');
+      return;
+    }
+
     setUploading(true);
     try {
-      // Create FormData for file upload
-      const formData = new FormData();
-      formData.append('file', file);
+      // Convert file to blob
+      const videoBlob = new Blob([file], { type: file.type });
 
-      // Upload to server
-      const response = await fetch('/api/upload-video', {
-        method: 'POST',
-        body: formData,
-      });
+      // Generate match ID for storage organization
+      const matchId = `video_${Date.now()}`;
 
-      if (!response.ok) {
-        throw new Error('Failed to upload video');
-      }
+      // Upload directly to Firebase Cloud Storage
+      const downloadURL = await uploadMatchVideo(user.uid, matchId, videoBlob);
 
-      const result = await response.json();
-
-      // Add new video to list
+      // Add new video to list with Firebase URL
       const newVideo: Video = {
-        id: result.videoId || Date.now().toString(),
+        id: matchId,
         title: file.name.replace(/\.[^/.]+$/, ''),
         date: new Date(),
         duration: 0,
         status: 'pending',
         fileSize: file.size,
+        thumbnail: downloadURL,
       };
+
+      setVideos((prev) => [newVideo, ...prev]);
+
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    } catch (error) {
+      console.error('Upload error:', error);
+      alert('Failed to upload video. Please try again.');
+    } finally {
+      setUploading(false);
+    }
+  };
+
 
       setVideos((prev) => [newVideo, ...prev]);
 
