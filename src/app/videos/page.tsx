@@ -1,12 +1,14 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/authContext';
 import { getUserProfile, getUserVideoAnalyses, deleteVideo, saveVideoAnalysis } from '@/lib/db';
 import type { User } from '@/lib/db';
 import { analyzeMatchVideo, type MatchAnalysis } from '@/lib/shotAnalysis';
 import { extractFrameFromVideoBlob } from '@/lib/shotAnalysis';
+import { storage } from '@/lib/firebase';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import Header from '@/components/Header';
 import Navigation from '@/components/Navigation';
 import PageLayout from '@/components/PageLayout';
@@ -37,6 +39,7 @@ interface VideoFile {
 export default function VideosPage() {
   const { user, loading } = useAuth();
   const router = useRouter();
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [userProfile, setUserProfile] = useState<User | null>(null);
   const [videos, setVideos] = useState<VideoFile[]>([]);
   const [pageLoading, setPageLoading] = useState(true);
@@ -45,6 +48,7 @@ export default function VideosPage() {
   const [activeTab, setActiveTab] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [isMobile, setIsMobile] = useState(false);
+  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -211,6 +215,90 @@ export default function VideosPage() {
         videoUrl: analysis.videoUrl,
       }));
       setVideos(formattedVideos);
+    }
+  };
+
+  const handleUploadVideo = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || !user) return;
+
+    setUploading(true);
+    try {
+      console.log('📤 Starting video upload:', file.name);
+
+      // Validate file type
+      if (!file.type.startsWith('video/')) {
+        throw new Error('Please select a valid video file');
+      }
+
+      // Validate file size (max 500MB)
+      const maxSize = 500 * 1024 * 1024;
+      if (file.size > maxSize) {
+        throw new Error('Video file too large. Maximum size is 500MB.');
+      }
+
+      // Create unique filename
+      const timestamp = Date.now();
+      const videoFileName = `${user.uid}/${timestamp}_${file.name}`;
+
+      // Upload to Firebase Cloud Storage
+      console.log('🔼 Uploading to Cloud Storage...');
+      const videoRef = ref(storage, `videos/${videoFileName}`);
+      await uploadBytes(videoRef, file);
+      const videoUrl = await getDownloadURL(videoRef);
+      console.log('✅ Video uploaded successfully');
+
+      // Create video record
+      const videoId = `video_${timestamp}`;
+      const newVideo: VideoFile = {
+        id: videoId,
+        title: file.name.replace(/\.[^/.]+$/, ''),
+        date: new Date(),
+        duration: 0,
+        fileSize: Math.round(file.size / 1024 / 1024),
+        status: 'pending',
+        opponent: 'TBD',
+        score: '0-0',
+        videoUrl: videoUrl,
+      };
+
+      // Save to Firestore
+      console.log('💾 Saving video metadata to Firestore...');
+      await saveVideoAnalysis(user.uid, videoId, {
+        videoUrl: videoUrl,
+        analysisDate: new Date().toISOString(),
+        shotBreakdown: { totalShots: 0, shotCounts: { dinks: 0, drives: 0, drops: 0, lobs: 0, volleys: 0, smashes: 0, serves: 0, unknown: 0 }, effectivenessScore: 0, aggressivenessScore: 0 },
+        detectedShots: [],
+        techniqueAnalysis: { footwork: { rating: 0, feedback: '' }, positioning: { rating: 0, feedback: '' }, racketTechnique: { rating: 0, feedback: '' }, balance: { rating: 0, feedback: '' } },
+        proComparison: { overallRating: 0, comparisonToProAverage: '', strengths: [], improvementAreas: [], proStyleMatch: '' },
+        coachingTips: [],
+        overallInsights: '',
+        rallySummary: { totalRallies: 0, avgRallyLength: 0, longestRally: 0, winPercentage: 0 },
+        videoId: videoId,
+        title: newVideo.title,
+        status: 'pending',
+        recordedDate: new Date(),
+        opponent: newVideo.opponent,
+        score: newVideo.score,
+        duration: newVideo.duration,
+        fileSize: newVideo.fileSize,
+      });
+      console.log('✅ Video metadata saved');
+
+      // Update UI
+      setVideos([newVideo, ...videos]);
+      alert(`✅ Video uploaded successfully! Click "Analyze" to process it.`);
+
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    } catch (error) {
+      console.error('❌ Upload error:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error during upload';
+      alert(`❌ Upload failed: ${errorMessage}`);
+    } finally {
+      setUploading(false);
     }
   };
 
@@ -625,89 +713,4 @@ export default function VideosPage() {
                   </button>
                   <button
                     onClick={() => handleAnalyze(video.id)}
-                    style={{
-                      flex: 1,
-                      padding: isMobile ? '6px 8px' : '8px 12px',
-                      background: 'rgba(0, 212, 255, 0.1)',
-                      border: '1px solid rgba(0, 212, 255, 0.3)',
-                      color: '#00d4ff',
-                      borderRadius: '4px',
-                      cursor: 'pointer',
-                      fontSize: isMobile ? '11px' : '12px',
-                      fontWeight: '600',
-                      transition: 'all 0.2s',
-                      lineHeight: '1.2',
-                      minHeight: 'auto',
-                    }}
-                    onMouseEnter={(e) => {
-                      (e.target as HTMLButtonElement).style.background = 'rgba(0, 212, 255, 0.2)';
-                    }}
-                    onMouseLeave={(e) => {
-                      (e.target as HTMLButtonElement).style.background = 'rgba(0, 212, 255, 0.1)';
-                    }}
-                  >
-                    {video.status === 'processing' ? '⏳ Processing...' : '📊 Analyze'}
-                  </button>
-                  <button
-                    onClick={() => handleDeleteVideo(video.id)}
-                    style={{
-                      flex: 1,
-                      padding: isMobile ? '6px 8px' : '8px 12px',
-                      background: 'rgba(239, 68, 68, 0.1)',
-                      border: '1px solid rgba(239, 68, 68, 0.3)',
-                      color: '#ef4444',
-                      borderRadius: '4px',
-                      cursor: 'pointer',
-                      fontSize: isMobile ? '11px' : '12px',
-                      fontWeight: '600',
-                      transition: 'all 0.2s',
-                      lineHeight: '1.2',
-                      minHeight: 'auto',
-                    }}
-                    onMouseEnter={(e) => {
-                      (e.target as HTMLButtonElement).style.background = 'rgba(239, 68, 68, 0.2)';
-                    }}
-                    onMouseLeave={(e) => {
-                      (e.target as HTMLButtonElement).style.background = 'rgba(239, 68, 68, 0.1)';
-                    }}
-                  >
-                    🗑️ Delete
-                  </button>
-                </div>
-              </Card>
-            ))}
-          </div>
-
-          {filteredVideos.length === 0 && (
-            <Card variant="default" shadow="md" padding="lg">
-              <div style={{ textAlign: 'center', padding: '48px 0' }}>
-                <div style={{ fontSize: '48px', marginBottom: '16px' }}>🎥</div>
-                <p style={{ color: 'rgba(255, 255, 255, 0.7)', marginBottom: '16px' }}>
-                  No videos found
-                </p>
-                <p style={{ color: 'rgba(255, 255, 255, 0.5)', fontSize: '14px' }}>
-                  {searchQuery ? 'Try adjusting your search' : 'Upload your first match video to get started'}
-                </p>
-              </div>
-            </Card>
-          )}
-
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(2, 1fr)',
-              gap: '12px',
-            }}
-          >
-            <Button variant="primary" size="md" fullWidth>
-              🎥 Upload Video
-            </Button>
-            <Button variant="secondary" size="md" fullWidth>
-              📁 Manage Library
-            </Button>
-          </div>
-        </div>
-      )}
-    </PageLayout>
-  );
-}
+                    style
