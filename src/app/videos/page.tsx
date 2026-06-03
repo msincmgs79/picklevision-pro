@@ -3,13 +3,13 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
-import { Header } from '@/components/Header';
-import { Navigation } from '@/components/Navigation';
-import { PageLayout } from '@/components/PageLayout';
-import { Card } from '@/components/Card';
-import { Button } from '@/components/Button';
-import { Badge } from '@/components/Badge';
-import { Tabs } from '@/components/Tabs';
+import Header from '@/components/Header';
+import Navigation from '@/components/Navigation';
+import PageLayout from '@/components/PageLayout';
+import Card from '@/components/Card';
+import Button from '@/components/Button';
+import Badge from '@/components/Badge';
+import Tabs from '@/components/Tabs';
 
 interface Video {
   id: string;
@@ -89,7 +89,7 @@ export default function VideosPage() {
   const getStatusBadgeVariant = (status: string) => {
     if (status === 'analyzed') return 'success';
     if (status === 'processing') return 'warning';
-    return 'default';
+    return 'primary';
   };
 
   // Handle video analysis
