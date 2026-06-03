@@ -166,21 +166,6 @@ export default function VideosPage() {
     }
   };
 
-
-      setVideos((prev) => [newVideo, ...prev]);
-
-      // Reset file input
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
-    } catch (error) {
-      console.error('Upload error:', error);
-      alert('Failed to upload video. Please try again.');
-    } finally {
-      setUploading(false);
-    }
-  };
-
   // Navigation items
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: '📊' },
