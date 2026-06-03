@@ -131,7 +131,7 @@ export default function VideosPage() {
       formData.append('file', file);
 
       // Upload to server
-      const response = await fetch('/api/upload-video-temp', {
+      const response = await fetch('/api/upload-video', {
         method: 'POST',
         body: formData,
       });
