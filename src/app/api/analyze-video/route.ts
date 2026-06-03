@@ -1,7 +1,5 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
-
 interface CourtState {
   ballPosition: { zone: string; x: number; y: number } | null;
   playerPositions: { player: number; zone: string; x: number; y: number }[];
@@ -33,6 +31,18 @@ export async function POST(request: Request) {
       return Response.json({ success: false, error: 'No frame provided' }, { status: 400 });
     }
 
+    // Initialize Gemini client at runtime to read environment variable from current server instance
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      console.error('❌ GEMINI_API_KEY environment variable is not set');
+      return Response.json({
+        success: false,
+        error: 'Gemini API key not configured',
+        details: 'GEMINI_API_KEY environment variable is missing'
+      }, { status: 500 });
+    }
+
+    const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({ model: 'gemini-1.5-pro' });
 
     const analysisPrompt = `You are a professional pickleball coach analyzing a match frame. Extract detailed court state and shot analysis.
@@ -132,18 +142,4 @@ COLOR OPTIONS: Red, Blue, Black, White, Navy, Gray, Orange, Purple, Yellow, Gree
           detectedShot: analysis.detectedShot,
           courtStateBefore: analysis.courtStateBefore,
           courtStateAfter: analysis.courtStateAfter,
-          likelyOutcome: analysis.likelyOutcome,
-          proStyleMatch: analysis.proStyleMatch,
-          techniqueFeedback: analysis.techniqueFeedback,
-        },
-      },
-    });
-  } catch (error) {
-    console.error('Analysis error:', error);
-    return Response.json({
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
-      details: String(error)
-    }, { status: 500 });
-  }
-}
+          lik

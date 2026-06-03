@@ -393,17 +393,4 @@ export default function VideosPage() {
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
             <div onClick={() => fileInputRef.current?.click()} style={{ cursor: uploading ? 'not-allowed' : 'pointer', opacity: uploading ? 0.6 : 1 }}>
-              <Button variant="primary" size="md" fullWidth disabled={uploading}>
-                🎥 {uploading ? 'Uploading...' : 'Upload Video'}
-              </Button>
-            </div>
-            <input ref={fileInputRef} type="file" accept="video/*" onChange={handleUploadVideo} style={{ display: 'none' }} disabled={uploading} />
-            <Button variant="secondary" size="md" fullWidth>
-              📁 Manage Library
-            </Button>
-          </div>
-        </div>
-      )}
-    </PageLayout>
-  );
-}
+              <Button variant="primary" size="md" fullWidth
