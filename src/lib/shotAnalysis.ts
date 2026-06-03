@@ -133,6 +133,14 @@ export interface MatchAnalysis {
     longestRally: number;
     winPercentage: number;
   };
+  courtData?: {
+    detectedShot?: any;
+    courtStateBefore?: any;
+    courtStateAfter?: any;
+    likelyOutcome?: string;
+    proStyleMatch?: string;
+    techniqueFeedback?: string;
+  };
 }
 
 /**
@@ -162,6 +170,7 @@ export async function analyzeMatchVideo(videoBase64: string): Promise<MatchAnaly
   let shotDetections = generateShotDetections();
   let breakdown = calculateShotBreakdown(shotDetections);
   let detectedPlayerColors = generateDetectedPlayerColors();
+  let courtData: any = undefined;
 
   // Call Gemini API for video analysis
   if (videoBase64 && videoBase64.length > 0) {
@@ -173,6 +182,12 @@ export async function analyzeMatchVideo(videoBase64: string): Promise<MatchAnaly
       if (videoAnalysis.playerColors && videoAnalysis.playerColors.length > 0) {
         detectedPlayerColors = videoAnalysis.playerColors;
         console.log('✓ Detected player colors from Gemini:', detectedPlayerColors);
+      }
+
+      // Capture court state data for pro-benchmark model
+      if (videoAnalysis.courtData) {
+        courtData = videoAnalysis.courtData;
+        console.log('✓ Court state data captured:', courtData);
       }
 
       breakdown = {
@@ -208,7 +223,7 @@ export async function analyzeMatchVideo(videoBase64: string): Promise<MatchAnaly
         description: 'Drop shot detected',
       });
 
-      console.log('✓ Gemini analysis complete');
+      console.log('✓ Gemini analysis complete with court state data');
     } catch (error) {
       console.warn('⚠️ Gemini analysis failed, using fallback colors:', error);
     }
@@ -219,7 +234,7 @@ export async function analyzeMatchVideo(videoBase64: string): Promise<MatchAnaly
   const proComparison = compareToProBenchmark(breakdown, technique);
   const coachingTips = generateCoachingTips(technique, breakdown, proComparison);
 
-  return {
+  const analysis: MatchAnalysis = {
     videoUrl: videoBase64,
     analysisDate: new Date().toISOString(),
     shotBreakdown: breakdown,
@@ -236,6 +251,13 @@ export async function analyzeMatchVideo(videoBase64: string): Promise<MatchAnaly
       winPercentage: Math.floor(Math.random() * 30) + 40,
     },
   };
+
+  // Include court data if available
+  if (courtData) {
+    analysis.courtData = courtData;
+  }
+
+  return analysis;
 }
 
 function generateShotDetections(): ShotDetection[] {

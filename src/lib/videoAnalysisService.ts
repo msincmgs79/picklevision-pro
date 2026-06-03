@@ -1,11 +1,32 @@
 /**
- * Video Analysis Service - Analyzes extracted video frames with Claude Vision
+ * Video Analysis Service - Analyzes extracted video frames with Gemini Vision
+ * Enhanced to support court state analysis for pro-benchmark model training
  */
 
 export interface PlayerColor {
   id: number;
   shirtColor: string;
   shortsColor: string;
+}
+
+export interface CourtStateData {
+  ballPosition?: { zone: string; x: number; y: number } | null;
+  playerPositions?: { player: number; zone: string; x: number; y: number }[];
+  kitchenProximity?: 'in_kitchen' | 'near_kitchen' | 'baseline' | 'mid_court';
+  rallyStage?: 'service' | 'return' | 'third_shot' | 'dink_rally' | 'attack' | 'unknown';
+}
+
+export interface ShotContextData {
+  detectedShot?: {
+    type: 'dink' | 'drive' | 'drop' | 'lob' | 'volley' | 'smash' | 'serve' | 'unknown';
+    confidence: number;
+    playerExecuting: number;
+  };
+  courtStateBefore?: CourtStateData;
+  courtStateAfter?: CourtStateData;
+  likelyOutcome?: 'winning_shot' | 'continued_rally' | 'difficult_position' | 'unknown';
+  proStyleMatch?: string;
+  techniqueFeedback?: string;
 }
 
 export interface VideoAnalysisResult {
@@ -27,6 +48,7 @@ export interface VideoAnalysisResult {
   gameInsights: string[];
   totalShots: number;
   playerColors?: PlayerColor[];
+  courtData?: ShotContextData;
 }
 
 export async function analyzeGameVideo(frameBase64: string): Promise<VideoAnalysisResult> {
