@@ -1,342 +1,188 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuth } from '@/lib/authContext';
-import { getUserProfile, getUserVideoAnalyses, deleteVideo, saveVideoAnalysis } from '@/lib/db';
-import type { User } from '@/lib/db';
-import { analyzeMatchVideo, type MatchAnalysis } from '@/lib/shotAnalysis';
-import { extractFrameFromVideoBlob } from '@/lib/shotAnalysis';
-import { storage } from '@/lib/firebase';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import Header from '@/components/Header';
-import Navigation from '@/components/Navigation';
-import PageLayout from '@/components/PageLayout';
-import Card from '@/components/Card';
-import Badge from '@/components/Badge';
-import Tabs from '@/components/Tabs';
-import Button from '@/components/Button';
+import { useAuth } from '@/lib/auth';
+import { Header } from '@/components/Header';
+import { Navigation } from '@/components/Navigation';
+import { PageLayout } from '@/components/PageLayout';
+import { Card } from '@/components/Card';
+import { Button } from '@/components/Button';
+import { Badge } from '@/components/Badge';
+import { Tabs } from '@/components/Tabs';
 
-interface NavItem {
-  id: string;
-  label: string;
-  icon: React.ReactNode;
-  disabled?: boolean;
-}
-
-interface VideoFile {
+interface Video {
   id: string;
   title: string;
   date: Date;
   duration: number;
-  fileSize: number;
-  status: 'analyzed' | 'pending' | 'processing';
   opponent?: string;
   score?: string;
-  videoUrl?: string;
+  status: 'pending' | 'processing' | 'analyzed';
+  thumbnail?: string;
+  fileSize?: number;
 }
 
 export default function VideosPage() {
-  const { user, loading } = useAuth();
   const router = useRouter();
+  const { user } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [userProfile, setUserProfile] = useState<User | null>(null);
-  const [videos, setVideos] = useState<VideoFile[]>([]);
-  const [pageLoading, setPageLoading] = useState(true);
+
+  // State
+  const [videos, setVideos] = useState<Video[]>([
+    {
+      id: '1',
+      title: 'Match vs Sarah Chen',
+      date: new Date('2026-05-28'),
+      duration: 42,
+      opponent: 'Sarah Chen',
+      score: '11-9, 11-7',
+      status: 'analyzed',
+    },
+    {
+      id: '2',
+      title: 'Practice Rally #3',
+      date: new Date('2026-05-25'),
+      duration: 15,
+      opponent: 'Practice',
+      status: 'analyzed',
+    },
+    {
+      id: '3',
+      title: 'Tournament Round 2',
+      date: new Date('2026-05-20'),
+      duration: 38,
+      opponent: 'Mike Johnson',
+      score: '11-8, 8-11, 11-5',
+      status: 'analyzed',
+    },
+  ]);
+
+  const [searchQuery, setSearchQuery] = useState('');
+  const [activeTab, setActiveTab] = useState('all');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [activeNav, setActiveNav] = useState('videos');
-  const [activeTab, setActiveTab] = useState('all');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [isMobile, setIsMobile] = useState(false);
+  const [pageLoading, setPageLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
 
+  // Check for mobile
   useEffect(() => {
-    if (!loading && !user) {
-      router.push('/login');
-    }
-  }, [user, loading, router]);
-
-  useEffect(() => {
-    const checkSize = () => setIsMobile(window.innerWidth < 768);
-    checkSize();
-    window.addEventListener('resize', checkSize);
-    return () => window.removeEventListener('resize', checkSize);
+    const checkMobile = () => setIsMobile(window.innerWidth < 768);
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
+  // Filter videos
+  const filteredVideos = videos.filter((video) => {
+    const matchesSearch = video.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                         video.opponent?.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesTab = activeTab === 'all' ||
+                      (activeTab === 'analyzed' && video.status === 'analyzed') ||
+                      (activeTab === 'processing' && video.status === 'processing') ||
+                      (activeTab === 'pending' && video.status === 'pending');
+    return matchesSearch && matchesTab;
+  });
+
+  // Get status badge variant
+  const getStatusBadgeVariant = (status: string) => {
+    if (status === 'analyzed') return 'success';
+    if (status === 'processing') return 'warning';
+    return 'default';
+  };
+
+  // Handle video analysis
   const handleAnalyze = async (videoId: string) => {
-    if (!user) return;
-    try {
-      console.log('🔍 Starting video analysis for:', videoId);
+    const video = videos.find((v) => v.id === videoId);
+    if (!video) return;
 
-      const video = videos.find((v) => v.id === videoId);
-      if (!video) {
-        console.error('❌ Video not found in state');
-        return;
-      }
-      if (!video.videoUrl) {
-        console.error('❌ Video URL is missing');
-        alert('Video URL is not available. Cannot analyze.');
-        return;
-      }
+    const updatedVideos = videos.map((v) =>
+      v.id === videoId ? { ...v, status: 'processing' as const } : v
+    );
+    setVideos(updatedVideos);
 
-      setVideos(videos.map((v) => (v.id === videoId ? { ...v, status: 'processing' } : v)));
-
-      console.log('📥 Fetching video from backend API...');
-      let blob: Blob;
-      try {
-        const apiResponse = await fetch('/api/fetch-video', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ videoUrl: video.videoUrl }),
-        });
-        if (!apiResponse.ok) throw new Error(`API error: ${apiResponse.status}`);
-        const apiData = await apiResponse.json();
-        if (!apiData.success) throw new Error(apiData.error);
-
-        // Convert base64 back to blob
-        const binaryString = atob(apiData.data);
-        const bytes = new Uint8Array(binaryString.length);
-        for (let i = 0; i < binaryString.length; i++) {
-          bytes[i] = binaryString.charCodeAt(i);
-        }
-        blob = new Blob([bytes], { type: 'video/mp4' });
-        console.log('✅ Video fetched successfully:', apiData.size, 'bytes');
-      } catch (fetchError) {
-        console.error('❌ Failed to fetch video:', fetchError);
-        throw new Error(`Failed to fetch video: ${fetchError instanceof Error ? fetchError.message : 'Unknown error'}`);
-      }
-
-      console.log('🎬 Extracting frame from video...');
-      let frameBase64: string;
-      try {
-        const framePromise = extractFrameFromVideoBlob(blob);
-        frameBase64 = await Promise.race([
-          framePromise,
-          new Promise<string>((_, reject) => setTimeout(() => reject(new Error('Frame extraction timeout after 30s')), 30000)),
-        ]);
-        console.log('✅ Frame extracted, base64 length:', frameBase64.length);
-      } catch (frameError) {
-        console.error('❌ Failed to extract frame:', frameError);
-        throw new Error(`Failed to extract frame: ${frameError instanceof Error ? frameError.message : 'Unknown error'}`);
-      }
-
-      console.log('🤖 Analyzing video with AI...');
-      let analysis: MatchAnalysis;
-      try {
-        const analysisPromise = analyzeMatchVideo(frameBase64);
-        analysis = await Promise.race<MatchAnalysis>([
-          analysisPromise,
-          new Promise<MatchAnalysis>((_, reject) => setTimeout(() => reject(new Error('Analysis timeout after 60s')), 60000)),
-        ]);
-        console.log('✅ Video analysis complete');
-      } catch (analysisError) {
-        console.error('❌ Failed to analyze video:', analysisError);
-        throw new Error(`Failed to analyze video: ${analysisError instanceof Error ? analysisError.message : 'Unknown error'}`);
-      }
-
-      console.log('💾 Saving analysis to Firestore...');
-      try {
-        await saveVideoAnalysis(user.uid, videoId, {
-          ...analysis,
-          videoId,
-          title: video.title,
-          status: 'analyzed',
-          recordedDate: video.date,
-          opponent: video.opponent,
-          score: video.score,
-          duration: video.duration,
-          fileSize: video.fileSize,
-          videoUrl: video.videoUrl,
-        });
-        console.log('✅ Analysis saved to Firestore');
-      } catch (saveError) {
-        console.error('❌ Failed to save analysis:', saveError);
-        throw new Error(`Failed to save analysis: ${saveError instanceof Error ? saveError.message : 'Unknown error'}`);
-      }
-
-      setVideos(videos.map((v) => (v.id === videoId ? { ...v, status: 'analyzed' } : v)));
-      console.log('✅ Video analysis workflow complete');
-    } catch (error) {
-      console.error('❌ Error analyzing video:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error during analysis';
-      alert(`Video analysis failed: ${errorMessage}`);
-      setVideos(videos.map((v) => (v.id === videoId ? { ...v, status: 'pending' } : v)));
-    }
+    // Simulate analysis
+    setTimeout(() => {
+      setVideos((prev) =>
+        prev.map((v) =>
+          v.id === videoId ? { ...v, status: 'analyzed' as const } : v
+        )
+      );
+    }, 3000);
   };
 
+  // Handle video deletion
   const handleDeleteVideo = async (videoId: string) => {
-    if (!user) return;
-    try {
-      await deleteVideo(videoId, '', user.uid);
-      setVideos(videos.filter((v) => v.id !== videoId));
-    } catch (error) {
-      console.error('Error deleting video:', error);
-      const analyses = await getUserVideoAnalyses(user.uid);
-      const formattedVideos: VideoFile[] = (analyses || []).map((analysis: any) => ({
-        id: analysis.id,
-        title: analysis.title || 'Video',
-        date: analysis.recordedDate?.toDate?.() || new Date(),
-        duration: Math.round(analysis.duration || 0),
-        fileSize: Math.round((analysis.fileSize || 0) / 1024 / 1024),
-        status: analysis.status || 'analyzed',
-        opponent: analysis.opponent || 'Unknown',
-        score: analysis.score || 'N/A',
-        videoUrl: analysis.videoUrl,
-      }));
-      setVideos(formattedVideos);
+    if (confirm('Are you sure you want to delete this video?')) {
+      setVideos((prev) => prev.filter((v) => v.id !== videoId));
     }
   };
 
+  // Handle video upload
   const handleUploadVideo = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (!file || !user) return;
+    if (!file) return;
 
     setUploading(true);
     try {
-      console.log('📤 Starting video upload:', file.name);
-      if (!file.type.startsWith('video/')) {
-        throw new Error('Please select a valid video file');
+      // Create FormData for file upload
+      const formData = new FormData();
+      formData.append('file', file);
+
+      // Upload to server
+      const response = await fetch('/api/upload-video', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to upload video');
       }
-      const maxSize = 500 * 1024 * 1024;
-      if (file.size > maxSize) {
-        throw new Error('Video file too large. Maximum size is 500MB.');
-      }
 
-      const timestamp = Date.now();
-      const videoFileName = `${user.uid}/${timestamp}_${file.name}`;
+      const result = await response.json();
 
-      console.log('🔼 Uploading to Cloud Storage...');
-      const videoRef = ref(storage, `videos/${videoFileName}`);
-      await uploadBytes(videoRef, file);
-      const videoUrl = await getDownloadURL(videoRef);
-      console.log('✅ Video uploaded successfully');
-
-      const videoId = `video_${timestamp}`;
-      const newVideo: VideoFile = {
-        id: videoId,
+      // Add new video to list
+      const newVideo: Video = {
+        id: result.videoId || Date.now().toString(),
         title: file.name.replace(/\.[^/.]+$/, ''),
         date: new Date(),
         duration: 0,
-        fileSize: Math.round(file.size / 1024 / 1024),
         status: 'pending',
-        opponent: 'TBD',
-        score: '0-0',
-        videoUrl: videoUrl,
+        fileSize: file.size,
       };
 
-      console.log('💾 Saving video metadata to Firestore...');
-      await saveVideoAnalysis(user.uid, videoId, {
-        videoUrl: videoUrl,
-        analysisDate: new Date().toISOString(),
-        shotBreakdown: { totalShots: 0, shotCounts: { dinks: 0, drives: 0, drops: 0, lobs: 0, volleys: 0, smashes: 0, serves: 0, unknown: 0 }, effectivenessScore: 0, aggressivenessScore: 0 },
-        detectedShots: [],
-        techniqueAnalysis: { footwork: { rating: 0, feedback: '' }, positioning: { rating: 0, feedback: '' }, racketTechnique: { rating: 0, feedback: '' }, balance: { rating: 0, feedback: '' } },
-        proComparison: { overallRating: 0, comparisonToProAverage: '', strengths: [], improvementAreas: [], proStyleMatch: '' },
-        coachingTips: [],
-        overallInsights: '',
-        rallySummary: { totalRallies: 0, avgRallyLength: 0, longestRally: 0, winPercentage: 0 },
-        videoId: videoId,
-        title: newVideo.title,
-        status: 'pending',
-        recordedDate: new Date(),
-        opponent: newVideo.opponent,
-        score: newVideo.score,
-        duration: newVideo.duration,
-        fileSize: newVideo.fileSize,
-      });
-      console.log('✅ Video metadata saved');
+      setVideos((prev) => [newVideo, ...prev]);
 
-      setVideos([newVideo, ...videos]);
-      alert('✅ Video uploaded successfully! Click "Analyze" to process it.');
-
+      // Reset file input
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
     } catch (error) {
-      console.error('❌ Upload error:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error during upload';
-      alert(`❌ Upload failed: ${errorMessage}`);
+      console.error('Upload error:', error);
+      alert('Failed to upload video. Please try again.');
     } finally {
       setUploading(false);
     }
   };
 
-  useEffect(() => {
-    const loadUserData = async () => {
-      if (!user) return;
-      try {
-        const profile = await getUserProfile(user.uid);
-        setUserProfile(profile);
-
-        const analyses = await getUserVideoAnalyses(user.uid);
-        const formattedVideos: VideoFile[] = (analyses || []).map((analysis: any) => ({
-          id: analysis.id,
-          title: analysis.title || 'Video',
-          date: analysis.recordedDate?.toDate?.() || new Date(),
-          duration: Math.round(analysis.duration || 0),
-          fileSize: Math.round((analysis.fileSize || 0) / 1024 / 1024),
-          status: analysis.status || 'analyzed',
-          opponent: analysis.opponent || 'Unknown',
-          score: analysis.score || 'N/A',
-          videoUrl: analysis.videoUrl,
-        }));
-        setVideos(formattedVideos);
-      } catch (error) {
-        console.error('Error loading user data:', error);
-        setVideos([]);
-      } finally {
-        setPageLoading(false);
-      }
-    };
-
-    loadUserData();
-  }, [user]);
-
-  if (loading) {
-    return (
-      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(180deg, #0a0e27 0%, #1a1f3a 100%)', color: 'white' }}>
-        <div style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: '32px', fontWeight: '700', marginBottom: '16px' }}>PickleVision Pro</div>
-          <div style={{ width: '48px', height: '48px', border: '3px solid rgba(0, 255, 136, 0.3)', borderTop: '3px solid #00ff88', borderRadius: '50%' }} />
-        </div>
-      </div>
-    );
-  }
-
-  if (!user) return null;
-
-  const navItems: NavItem[] = [
+  // Navigation items
+  const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: '📊' },
     { id: 'videos', label: 'Videos', icon: '🎥' },
     { id: 'analytics', label: 'Analytics', icon: '📈' },
     { id: 'leaderboard', label: 'Leaderboard', icon: '🏆' },
     { id: 'profile', label: 'Profile', icon: '👤' },
-    { id: 'billing', label: 'Unlock Features', icon: '⭐' },
+    { id: 'billing', label: 'Billing', icon: '💳' },
   ];
 
+  // Tab items
   const tabItems = [
-    { id: 'all', label: 'All Videos', icon: undefined },
-    { id: 'recent', label: 'Recent', icon: undefined },
-    { id: 'analyzed', label: 'Analyzed', icon: undefined },
-    { id: 'favorites', label: 'Favorites', icon: undefined },
+    { id: 'all', label: 'All Videos' },
+    { id: 'analyzed', label: 'Analyzed' },
+    { id: 'processing', label: 'Processing' },
+    { id: 'pending', label: 'Pending' },
   ];
-
-  const filteredVideos = videos.filter((video) => {
-    const matchesSearch = video.title.toLowerCase().includes(searchQuery.toLowerCase()) || video.opponent?.toLowerCase().includes(searchQuery.toLowerCase());
-    if (activeTab === 'recent') return matchesSearch && new Date().getTime() - video.date.getTime() < 7 * 24 * 60 * 60 * 1000;
-    if (activeTab === 'analyzed') return matchesSearch && video.status === 'analyzed';
-    if (activeTab === 'favorites') return matchesSearch && [1, 3, 5].includes(parseInt(video.id));
-    return matchesSearch;
-  });
-
-  const getStatusBadgeVariant = (status: string) => {
-    switch (status) {
-      case 'analyzed': return 'success';
-      case 'processing': return 'warning';
-      case 'pending': return 'secondary';
-      default: return 'primary';
-    }
-  };
 
   return (
     <PageLayout
@@ -393,4 +239,17 @@ export default function VideosPage() {
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
             <div onClick={() => fileInputRef.current?.click()} style={{ cursor: uploading ? 'not-allowed' : 'pointer', opacity: uploading ? 0.6 : 1 }}>
-              <Button variant="primary" size="md" fullWidth
+              <Button variant="primary" size="md" fullWidth disabled={uploading}>
+                🎥 {uploading ? 'Uploading...' : 'Upload Video'}
+              </Button>
+            </div>
+            <input ref={fileInputRef} type="file" accept="video/*" onChange={handleUploadVideo} style={{ display: 'none' }} disabled={uploading} />
+            <Button variant="secondary" size="md" fullWidth>
+              📁 Manage Library
+            </Button>
+          </div>
+        </div>
+      )}
+    </PageLayout>
+  );
+}
