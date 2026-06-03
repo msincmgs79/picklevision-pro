@@ -32,6 +32,19 @@ export async function POST(request: Request) {
       return Response.json({ success: false, error: 'No frame provided' }, { status: 400 });
     }
 
+        // Initialize Gemini client at runtime to read environment variable from current server instance
+        const apiKey = process.env.GEMINI_API_KEY;
+        if (!apiKey) {
+                console.error('❌ GEMINI_API_KEY environment variable is not set');
+                return Response.json({
+                          success: false,
+                          error: 'Gemini API key not configured',
+                          details: 'GEMINI_API_KEY environment variable is missing'
+                }, { status: 500 });
+        }
+
+        const genAI = new GoogleGenerativeAI(apiKey);
+
     const model = genAI.getGenerativeModel({ model: 'gemini-1.5-pro' });
 
     const analysisPrompt = `You are a professional pickleball coach analyzing a match frame. Extract detailed court state and shot analysis.
