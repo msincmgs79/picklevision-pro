@@ -17,40 +17,15 @@ export async function POST(request: Request) {
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({ model: 'gemini-3.5-flash' });
 
-    const prompt = `Analyze this pickleball match video and track these specific metrics. Return ONLY valid JSON:
-{
-  "kitchenTransition": {
-    "thirdShotSuccessRate": <0-100 percent>,
-    "returnContactDepth": <feet behind baseline>
-  },
-  "softGame": {
-    "deadDinksCount": <number of unattackable dinks>,
-    "unforcedErrorsCount": <number of UFE>
-  },
-  "shotPlacement": {
-    "targetingAccuracy": <0-100 percent>
-  },
-  "hardGame": {
-    "speedUpEfficiency": <0-100 percent>,
-    "forcedErrorsCaused": <number>
-  },
-  "netDefense": {
-    "resetSuccessPercent": <0-100 percent>,
-    "popUpFrequency": <0-100 percent>
-  },
-  "playerInsights": [<insight string>, <insight string>]
-}
-Analyze the video carefully and provide realistic estimates. Return ONLY the JSON object, no other text.`;
+    const prompt = 'Analyze this pickleball video. Return ONLY JSON with no markdown: {kitchenTransition:{thirdShotSuccessRate:65,returnContactDepth:8.5},softGame:{deadDinksCount:12,unforcedErrorsCount:5},shotPlacement:{targetingAccuracy:72},hardGame:{speedUpEfficiency:58,forcedErrorsCaused:7},netDefense:{resetSuccessPercent:81,popUpFrequency:35},playerInsights:[]}. Fill in realistic values.';
 
     let content: any[];
 
     if (videoUrl) {
-      // Download video from Firebase URL
       const videoResponse = await fetch(videoUrl);
       const arrayBuffer = await videoResponse.arrayBuffer();
       const base64Video = Buffer.from(arrayBuffer).toString('base64');
 
-      // Send as inline data (supports up to 100MB)
       content = [
         {
           inlineData: {
