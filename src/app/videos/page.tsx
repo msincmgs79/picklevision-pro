@@ -3,7 +3,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
-import { uploadMatchVideo } from '@/lib/db';
+import { uploadMatchVideo, saveStandaloneVideo } from '@/lib/db';
 import Header from '@/components/Header';
 import Navigation from '@/components/Navigation';
 import PageLayout from '@/components/PageLayout';
@@ -141,10 +141,14 @@ export default function VideosPage() {
       // Upload directly to Firebase Cloud Storage
       const downloadURL = await uploadMatchVideo(user.uid, matchId, videoBlob);
 
+      // Save video metadata to Firestore for persistence
+      const videoTitle = file.name.replace(/\.[^/.]+$/, '');
+      await saveStandaloneVideo(user.uid, downloadURL, videoTitle);
+
       // Add new video to list with Firebase URL
       const newVideo: Video = {
         id: matchId,
-        title: file.name.replace(/\.[^/.]+$/, ''),
+        title: videoTitle,
         date: new Date(),
         duration: 0,
         status: 'pending',
