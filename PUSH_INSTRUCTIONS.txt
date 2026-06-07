@@ -1,0 +1,158 @@
+================================================================================
+GEMINI FILES API - PUSH TO GITHUB INSTRUCTIONS
+================================================================================
+
+OPTION 1: RUN AUTOMATED SCRIPT (EASIEST)
+================================================================================
+
+Windows (PowerShell or Command Prompt):
+  cd C:\Users\marti\picklevision-pro
+  .\DEPLOY.bat
+
+Windows (Git Bash):
+  cd C:\Users\marti\picklevision-pro
+  bash DEPLOY.sh
+
+MacOS/Linux:
+  cd /path/to/picklevision-pro
+  bash DEPLOY.sh
+
+The script will:
+- Check your project directory
+- Stage all changes
+- Create a detailed commit
+- Push to GitHub
+- Show success/failure
+
+================================================================================
+
+OPTION 2: RUN COMMANDS MANUALLY
+================================================================================
+
+If you prefer to run the commands yourself:
+
+Step 1: Navigate to project directory
+  cd C:\Users\marti\picklevision-pro
+
+Step 2: Check what changed
+  git status
+
+Step 3: Stage all changes
+  git add -A
+
+Step 4: Create commit with message
+  git commit -m "Implement Gemini Files API with proper async file processing
+
+CRITICAL FIXES:
+- Add file processing wait (poll until ACTIVE state)
+- Use resumable upload protocol
+- Verify file ready before analysis
+
+FILES: src/app/api/analyze-video/route.ts, files-api.ts, test-files-api.mjs"
+
+Step 5: Push to GitHub
+  git push origin main
+
+Step 6: Verify (you should see):
+  - "✓ main branch is up to date"
+  - "To https://github.com/..."
+
+================================================================================
+
+WHAT HAPPENS AFTER PUSH
+================================================================================
+
+1. GitHub receives code (instant)
+2. Vercel webhook triggers (instant)
+3. Vercel starts build (< 1 min)
+4. Build completes (2-3 min)
+5. Deploy goes live (instant)
+6. Website updated (within 5 min total)
+
+================================================================================
+
+HOW TO VERIFY IT WORKS
+================================================================================
+
+1. Wait 3-5 minutes after push
+2. Go to: https://picklevision.vercel.app
+3. Upload a pickleball video
+4. Go to Analytics page
+5. You should see:
+   ✓ Real metrics (not zeros)
+   ✓ Kitchen Transition score
+   ✓ Soft Game count
+   ✓ Shot Placement accuracy
+   etc.
+
+6. Open browser Developer Tools (F12)
+7. Go to Console tab
+8. Look for logs:
+   [FILES_API] File state: PROCESSING
+   [FILES_API] File state: ACTIVE
+   [FILES_API] Analyzing with Gemini...
+   [ROUTE] Raw analysis text: {kitchenTransition:...}
+
+If you see these logs, the fix is working!
+
+================================================================================
+
+TROUBLESHOOTING
+================================================================================
+
+If "git push" fails:
+
+ERROR: "fatal: unable to access repository"
+FIX: Check internet connection, then try:
+  git push origin main --force-with-lease
+
+ERROR: "Permission denied (publickey)"
+FIX: GitHub SSH key not set up. Use HTTPS instead:
+  git remote set-url origin https://github.com/YOUR_USERNAME/picklevision-pro.git
+  git push origin main
+
+ERROR: "branch main not found"
+FIX: Check your current branch:
+  git branch
+Then push to correct branch:
+  git push origin <branch_name>
+
+================================================================================
+
+FILES BEING DEPLOYED
+================================================================================
+
+Modified:
+  ✓ src/app/api/analyze-video/route.ts (production API)
+  ✓ src/app/api/analyze-video/files-api.ts (reference)
+  ✓ src/app/api/analyze-video/test-files-api.mjs (test)
+
+Documentation (also included):
+  ✓ FINAL_VERIFICATION.md (all checks passed)
+  ✓ CRITICAL_BUG_FIXED.md (what was fixed)
+  ✓ GEMINI_FILES_API_IMPLEMENTATION.md (technical details)
+  ✓ DEPLOY.sh (bash script)
+  ✓ DEPLOY.bat (windows batch)
+  ✓ PUSH_INSTRUCTIONS.txt (this file)
+
+================================================================================
+
+QUESTIONS?
+================================================================================
+
+Q: Will this break anything?
+A: No. The Files API is more reliable than inline approach. All edge cases
+   handled with proper error messages.
+
+Q: What if a video is still uploading when I deploy?
+A: Doesn't matter. New code handles it correctly. It will wait for ACTIVE state.
+
+Q: How long until I see the fix?
+A: 3-5 minutes after pushing. Watch the Vercel deployment status at
+   https://vercel.com (or in your GitHub Actions)
+
+Q: What if it doesn't work?
+A: Check browser console for error messages. All errors are logged with
+   [FILES_API] or [ROUTE] prefix for easy debugging.
+
+================================================================================
