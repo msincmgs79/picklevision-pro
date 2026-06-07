@@ -3,7 +3,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
-import { uploadMatchVideo, saveStandaloneVideo } from '@/lib/db';
+import { uploadMatchVideo, saveStandaloneVideo, getUserVideos } from '@/lib/db';
 import Header from '@/components/Header';
 import Navigation from '@/components/Navigation';
 import PageLayout from '@/components/PageLayout';
@@ -74,6 +74,22 @@ export default function VideosPage() {
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
+
+  // Fetch uploaded videos from Firestore
+  useEffect(() => {
+    if (!user?.uid) return;
+    getUserVideos(user.uid).then((firestoreVids) => {
+      const converted = firestoreVids.map((v: any) => ({
+        id: v.id,
+        title: v.title,
+        date: v.uploadedAt?.toDate?.() || new Date(),
+        duration: 0,
+        status: 'pending' as const,
+        thumbnail: v.videoUrl,
+      }));
+      setVideos((prev) => [...converted, ...prev.filter((p) => !p.id.startsWith('video_'))]);
+    }).catch((err) => console.error('Firestore error:', err));
+  }, [user?.uid]);
 
   // Filter videos
   const filteredVideos = videos.filter((video) => {
