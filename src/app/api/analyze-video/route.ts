@@ -20,9 +20,21 @@ export async function POST(request: Request) {
     const prompt = `Analyze this pickleball video and return JSON: {"shotAccuracy":85,"totalShots":86,"serve":{"averageSpeed":61,"topSpeed":69,"percentile":95},"drive":{"averageSpeed":44,"topSpeed":77,"percentile":66},"shotQuality":60,"skillRating":4.33,"skillBreakdown":{"serve":4.19,"return":4.56,"offense":4.49,"defense":4.29,"agility":4.28,"consistency":4.15},"shotTypes":{"dinks":35,"drives":20,"drops":10,"serves":15,"volleys":6},"courtCoverage":{"distanceCovered":608,"courtAreas":{"left":40,"center":35,"right":25}},"gameInsights":["insight1"]}`;
 
     let content: any[];
+
     if (videoUrl) {
+      // Download video from Firebase URL
+      const videoResponse = await fetch(videoUrl);
+      const arrayBuffer = await videoResponse.arrayBuffer();
+      const base64Video = Buffer.from(arrayBuffer).toString('base64');
+
+      // Send as inline data (supports up to 100MB)
       content = [
-        { fileData: { mimeType: 'video/mp4', fileUri: videoUrl } },
+        {
+          inlineData: {
+            mimeType: 'video/mp4',
+            data: base64Video
+          }
+        },
         { text: prompt }
       ];
     } else {
