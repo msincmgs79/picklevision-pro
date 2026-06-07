@@ -19,11 +19,17 @@ export async function POST(request: Request) {
 
     const prompt = `Analyze this pickleball video and return JSON: {"shotAccuracy":85,"totalShots":86,"serve":{"averageSpeed":61,"topSpeed":69,"percentile":95},"drive":{"averageSpeed":44,"topSpeed":77,"percentile":66},"shotQuality":60,"skillRating":4.33,"skillBreakdown":{"serve":4.19,"return":4.56,"offense":4.49,"defense":4.29,"agility":4.28,"consistency":4.15},"shotTypes":{"dinks":35,"drives":20,"drops":10,"serves":15,"volleys":6},"courtCoverage":{"distanceCovered":608,"courtAreas":{"left":40,"center":35,"right":25}},"gameInsights":["insight1"]}`;
 
-    const content: any[] = [{ text: prompt }];
+    let content: any[];
     if (videoUrl) {
-      content.unshift({ fileData: { mimeType: 'video/mp4', fileUri: videoUrl } });
+      content = [
+        { fileData: { mimeType: 'video/mp4', fileUri: videoUrl } },
+        { text: prompt }
+      ];
     } else {
-      content.unshift({ inlineData: { data: frameBase64, mimeType: 'image/jpeg' } });
+      content = [
+        { inlineData: { data: frameBase64, mimeType: 'image/jpeg' } },
+        { text: prompt }
+      ];
     }
 
     const response = await model.generateContent(content);
