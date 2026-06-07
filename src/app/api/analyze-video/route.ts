@@ -17,7 +17,30 @@ export async function POST(request: Request) {
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({ model: 'gemini-3.5-flash' });
 
-    const prompt = `Analyze this pickleball video and return JSON: {"shotAccuracy":85,"totalShots":86,"serve":{"averageSpeed":61,"topSpeed":69,"percentile":95},"drive":{"averageSpeed":44,"topSpeed":77,"percentile":66},"shotQuality":60,"skillRating":4.33,"skillBreakdown":{"serve":4.19,"return":4.56,"offense":4.49,"defense":4.29,"agility":4.28,"consistency":4.15},"shotTypes":{"dinks":35,"drives":20,"drops":10,"serves":15,"volleys":6},"courtCoverage":{"distanceCovered":608,"courtAreas":{"left":40,"center":35,"right":25}},"gameInsights":["insight1"]}`;
+    const prompt = `Analyze this pickleball match video and track these specific metrics. Return ONLY valid JSON:
+{
+  "kitchenTransition": {
+    "thirdShotSuccessRate": <0-100 percent>,
+    "returnContactDepth": <feet behind baseline>
+  },
+  "softGame": {
+    "deadDinksCount": <number of unattackable dinks>,
+    "unforcedErrorsCount": <number of UFE>
+  },
+  "shotPlacement": {
+    "targetingAccuracy": <0-100 percent>
+  },
+  "hardGame": {
+    "speedUpEfficiency": <0-100 percent>,
+    "forcedErrorsCaused": <number>
+  },
+  "netDefense": {
+    "resetSuccessPercent": <0-100 percent>,
+    "popUpFrequency": <0-100 percent>
+  },
+  "playerInsights": [<insight string>, <insight string>]
+}
+Analyze the video carefully and provide realistic estimates. Return ONLY the JSON object, no other text.`;
 
     let content: any[];
 
@@ -51,16 +74,12 @@ export async function POST(request: Request) {
 
     const result = {
       success: true,
-      shotAccuracy: analysis.shotAccuracy || 0,
-      totalShots: analysis.totalShots || 0,
-      serve: analysis.serve || { averageSpeed: 0, topSpeed: 0, percentile: 0 },
-      drive: analysis.drive || { averageSpeed: 0, topSpeed: 0, percentile: 0 },
-      shotQuality: analysis.shotQuality || 0,
-      skillRating: analysis.skillRating || 0,
-      skillBreakdown: analysis.skillBreakdown || { serve: 0, return: 0, offense: 0, defense: 0, agility: 0, consistency: 0 },
-      shotTypes: analysis.shotTypes || { dinks: 0, drives: 0, drops: 0, serves: 0, volleys: 0 },
-      courtCoverage: analysis.courtCoverage || { distanceCovered: 0, courtAreas: { left: 0, center: 0, right: 0 } },
-      gameInsights: analysis.gameInsights || [],
+      kitchenTransition: analysis.kitchenTransition || { thirdShotSuccessRate: 0, returnContactDepth: 0 },
+      softGame: analysis.softGame || { deadDinksCount: 0, unforcedErrorsCount: 0 },
+      shotPlacement: analysis.shotPlacement || { targetingAccuracy: 0 },
+      hardGame: analysis.hardGame || { speedUpEfficiency: 0, forcedErrorsCaused: 0 },
+      netDefense: analysis.netDefense || { resetSuccessPercent: 0, popUpFrequency: 0 },
+      playerInsights: analysis.playerInsights || [],
     };
 
     if (userId && videoId) {
