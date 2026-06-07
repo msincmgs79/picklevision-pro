@@ -21,12 +21,43 @@ export async function POST(request: Request) {
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({ model: 'gemini-3-1-flash-lite' });
 
-    const analysisPrompt = `You are a professional pickleball coach analyzing a match frame.
-Return ONLY valid JSON with this structure:
+    const analysisPrompt = `You are a professional pickleball coach analyzing a picklebal video match.
+Analyze the entire video and return ONLY valid JSON with this structure:
 {
-  "detectedShot": {"type": "dink|drive|drop|lob|volley|smash|serve|unknown"},
-  "shotQuality": 1-5,
-  "gameInsights": ["insight1"]
+  "shotAccuracy": 85,
+  "totalShots": 86,
+  "serve": {
+    "averageSpeed": 61,
+    "topSpeed": 69,
+    "percentile": 95
+  },
+  "drive": {
+    "averageSpeed": 44,
+    "topSpeed": 77,
+    "percentile": 66
+  },
+  "shotQuality": 60,
+  "skillRating": 4.33,
+  "skillBreakdown": {
+    "serve": 4.19,
+    "return": 4.56,
+    "offense": 4.49,
+    "defense": 4.29,
+    "agility": 4.28,
+    "consistency": 4.15
+  },
+  "shotTypes": {
+    "dinks": 35,
+    "drives": 20,
+    "drops": 10,
+    "serves": 15,
+    "volleys": 6
+  },
+  "courtCoverage": {
+    "distanceCovered": 608,
+    "courtAreas": {"left": 40, "center": 35, "right": 25}
+  },
+  "gameInsights": ["insight1", "insight2"]
 }`;
 
     const response = await model.generateContent([
@@ -43,56 +74,44 @@ Return ONLY valid JSON with this structure:
     const jsonText = jsonMatch ? jsonMatch[0] : '{}';
     const analysis = JSON.parse(jsonText);
 
-    const shotBreakdown = {
-      totalShots: 1,
-      shotCounts: {
-        dinks: analysis.detectedShot?.type === 'dink' ? 1 : 0,
-        drives: analysis.detectedShot?.type === 'drive' ? 1 : 0,
-        drops: analysis.detectedShot?.type === 'drop' ? 1 : 0,
-        lobs: analysis.detectedShot?.type === 'lob' ? 1 : 0,
-        volleys: analysis.detectedShot?.type === 'volley' ? 1 : 0,
-        smashes: analysis.detectedShot?.type === 'smash' ? 1 : 0,
-        serves: analysis.detectedShot?.type === 'serve' ? 1 : 0,
-      },
-      effectivenessScore: analysis.shotQuality ? analysis.shotQuality * 20 : 60,
-    };
-
-    const rallySummary = {
-      totalRallies: 1,
-      avgRallyLength: 3,
-    };
-
-    const techniqueAnalysis = {
-      footwork: { rating: analysis.shotQuality || 3 },
-      positioning: { rating: analysis.shotQuality ? analysis.shotQuality - 0.5 : 2.5 },
-      racketTechnique: { rating: analysis.shotQuality || 3 },
-      balance: { rating: analysis.shotQuality ? analysis.shotQuality - 1 : 2 },
-    };
-
-    const coachingTips = analysis.gameInsights && Array.isArray(analysis.gameInsights) ? analysis.gameInsights : [];
-
     const finalResponse = {
       success: true,
-      shotBreakdown,
-      rallySummary,
-      techniqueAnalysis,
-      coachingTips,
-      analysis: {
-        shotSummary: shotBreakdown.shotCounts,
-        playerTechnique: {
-          footwork: analysis.shotQuality ? analysis.shotQuality * 20 : 60,
-          positioning: analysis.shotQuality ? analysis.shotQuality * 12 : 50,
-          consistency: analysis.shotQuality ? analysis.shotQuality * 15 : 50,
-        },
-        gameStyle: 'aggressive',
-        gameInsights: analysis.gameInsights || [],
-        totalShots: 1,
-        playerColors: [],
-        courtData: {
-          detectedShot: analysis.detectedShot,
-        },
+      shotAccuracy: analysis.shotAccuracy || 0,
+      totalShots: analysis.totalShots || 0,
+      serve: {
+        averageSpeed: analysis.serve?.averageSpeed || 0,
+        topSpeed: analysis.serve?.topSpeed || 0,
+        percentile: analysis.serve?.percentile || 0,
       },
+      drive: {
+        averageSpeed: analysis.drive?.averageSpeed || 0,
+        topSpeed: analysis.drive?.topSpeed || 0,
+        percentile: analysis.drive?.percentile || 0,
+      },
+      shotQuality: analysis.shotQuality || 0,
+      skillRating: analysis.skillRating || 0,
+      skillBreakdown: analysis.skillBreakdown || {
+        serve: 0,
+        return: 0,
+        offense: 0,
+        defense: 0,
+        agility: 0,
+        consistency: 0,
+      },
+      shotTypes: analysis.shotTypes || {
+        dinks: 0,
+        drives: 0,
+        drops: 0,
+        serves: 0,
+        volleys: 0,
+      },
+      courtCoverage: analysis.courtCoverage || {
+        distanceCovered: 0,
+        courtAreas: { left: 0, center: 0, right: 0 },
+      },
+      gameInsights: analysis.gameInsights || [],
     };
+
 
     if (userId && videoId) {
       try {
