@@ -30,34 +30,7 @@ export default function VideosPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // State
-  const [videos, setVideos] = useState<Video[]>([
-    {
-      id: '1',
-      title: 'Match vs Sarah Chen',
-      date: new Date('2026-05-28'),
-      duration: 42,
-      opponent: 'Sarah Chen',
-      score: '11-9, 11-7',
-      status: 'analyzed',
-    },
-    {
-      id: '2',
-      title: 'Practice Rally #3',
-      date: new Date('2026-05-25'),
-      duration: 15,
-      opponent: 'Practice',
-      status: 'analyzed',
-    },
-    {
-      id: '3',
-      title: 'Tournament Round 2',
-      date: new Date('2026-05-20'),
-      duration: 38,
-      opponent: 'Mike Johnson',
-      score: '11-8, 8-11, 11-5',
-      status: 'analyzed',
-    },
-  ]);
+  const [videos, setVideos] = useState<Video[]>([]);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState('all');
