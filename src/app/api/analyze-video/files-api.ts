@@ -103,7 +103,7 @@ async function uploadFileBytes(
       'X-Goog-Upload-Offset': '0',
       'X-Goog-Upload-Command': 'upload, finalize',
     },
-    body: fileBytes,
+    body: new Uint8Array(fileBytes),
   });
 
   if (!response.ok) {
