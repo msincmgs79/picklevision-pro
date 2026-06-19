@@ -194,7 +194,7 @@ async function waitForFileProcessing(fileName: string, maxWaitMs: number = 60000
   const pollIntervalMs = 1000;
 
   while (Date.now() - startTime < maxWaitMs) {
-    const fullUrl = `${BASE_URL}/v1beta/files/${fileName}`;
+    const fullUrl = `${BASE_URL}/v1beta/${fileName}`;
     console.log(`[FILES_API] Polling file status - URL: ${fullUrl}`);
     console.log(`[FILES_API] fileName param: "${fileName}" (length: ${fileName.length})`);
 
@@ -238,7 +238,7 @@ async function deleteFile(fileName: string): Promise<void> {
   console.log(`[FILES_API] Cleaning up: Deleting ${fileName}`);
 
   const response = await fetch(
-    `${BASE_URL}/v1beta/files/${encodeURIComponent(fileName)}`,
+    `${BASE_URL}/v1beta/${fileName}`,
     {
       method: 'DELETE',
       headers: {

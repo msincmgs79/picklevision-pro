@@ -153,7 +153,7 @@ async function waitForFileProcessing(fileName: string, maxWaitMs: number = 60000
   const pollIntervalMs = 1000; // Check every 1 second
 
   while (Date.now() - startTime < maxWaitMs) {
-    const response = await fetch(`${BASE_URL}/v1beta/files/${fileName}`, {
+    const response = await fetch(`${BASE_URL}/v1beta/${fileName}`, {
       method: 'GET',
       headers: {
         'x-goog-api-key': GEMINI_API_KEY,
@@ -193,7 +193,7 @@ async function waitForFileProcessing(fileName: string, maxWaitMs: number = 60000
 async function deleteFile(fileName: string): Promise<void> {
   console.log('[FILES_API] Deleting file:', fileName);
 
-  const response = await fetch(`${BASE_URL}/v1beta/files/${encodeURIComponent(fileName)}`, {
+  const response = await fetch(`${BASE_URL}/v1beta/${fileName}`, {
     method: 'DELETE',
     headers: {
       'x-goog-api-key': GEMINI_API_KEY,
