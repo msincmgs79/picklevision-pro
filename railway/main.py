@@ -150,15 +150,19 @@ def detect_balls_in_frames(frames: List[np.ndarray]) -> List[dict]:
                     )
                 else:
                     # Fallback: Use public Roboflow model without API key
-                    # This uses a free community model
-                    import base64
-                    jpg_base64 = base64.b64encode(jpg_bytes).decode('utf-8')
-
-                    response = requests.post(
-                        f"https://detect.roboflow.com/pickleball-detection/4?api_key=rf_free&image={jpg_base64}",
-                        timeout=10
-                    )
-                    result = response.json() if response.status_code == 200 else {"predictions": []}
+                    try:
+                        response = requests.post(
+                            "https://detect.roboflow.com/pickleball-detection/4?api_key=rf_free",
+                            data=jpg_bytes,
+                            headers={"Content-Type": "application/octet-stream"},
+                            timeout=15
+                        )
+                        result = response.json() if response.status_code == 200 else {"predictions": []}
+                        if response.status_code != 200:
+                            logger.warning(f"[INFERENCE] Roboflow API returned {response.status_code}: {response.text[:200]}")
+                    except Exception as e:
+                        logger.warning(f"[INFERENCE] Roboflow API call failed: {e}")
+                        result = {"predictions": []}
 
                 # Extract ball detections
                 predictions = result.get("predictions", [])
