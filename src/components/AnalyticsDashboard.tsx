@@ -223,4 +223,56 @@ export default function AnalyticsDashboard({
                   <div className="mb-4">
                     <div className={`inline-block bg-gradient-to-r ${metricData.color} rounded-lg px-4 py-2`}>
                       <div className="text-white text-center">
-                        <div className="text-2xl font-bold
+                        <div className="text-2xl font-bold">{metricData.value}</div>
+                        <div className="text-xs opacity-90">{metricData.unit}</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Description */}
+                  <p className="text-xs text-gray-600 leading-relaxed">
+                    {metricData.description}
+                  </p>
+
+                  {/* Status Indicator */}
+                  <div className="mt-3 pt-3 border-t border-gray-200">
+                    <div className="text-xs text-gray-500">
+                      Status: <span className="text-gray-400">No data</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Quick Stats Summary */}
+      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-200 p-4">
+        <h4 className="text-sm font-bold text-blue-900 mb-3">ANALYTICS SUMMARY</h4>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+          <div className="bg-white rounded p-2">
+            <div className="text-xs text-gray-500">Kitchen Efficiency</div>
+            <div className="text-lg font-bold text-blue-600">{isLoading ? '...' : `${kitchenEfficiency}%`}</div>
+          </div>
+          <div className="bg-white rounded p-2">
+            <div className="text-xs text-gray-500">Soft Game Quality</div>
+            <div className="text-lg font-bold text-green-600">{isLoading ? '...' : deadDinks}</div>
+          </div>
+          <div className="bg-white rounded p-2">
+            <div className="text-xs text-gray-500">Hard Game Efficiency</div>
+            <div className="text-lg font-bold text-yellow-600">{isLoading ? '...' : `${speedUpEfficiency}%`}</div>
+          </div>
+          <div className="bg-white rounded p-2">
+            <div className="text-xs text-gray-500">Defense Rating</div>
+            <div className="text-lg font-bold text-cyan-600">{isLoading ? '...' : `${resetSuccess}%`}</div>
+          </div>
+          <div className="bg-white rounded p-2">
+            <div className="text-xs text-gray-500">Overall Score</div>
+            <div className="text-lg font-bold text-indigo-600">{isLoading ? '...' : Math.round((kitchenEfficiency + speedUpEfficiency + resetSuccess) / 3)}%</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
