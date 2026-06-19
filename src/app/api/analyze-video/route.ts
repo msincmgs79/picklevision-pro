@@ -165,7 +165,9 @@ async function waitForFileProcessing(fileName: string, maxWaitMs: number = 60000
     }
 
     const fileMetadata = await response.json();
-    const state = fileMetadata.file.state;
+    console.log('[FILES_API] File metadata response:', JSON.stringify(fileMetadata).substring(0, 200));
+
+    const state = fileMetadata.file?.state;
 
     console.log(`[FILES_API] File state: ${state}`);
 
