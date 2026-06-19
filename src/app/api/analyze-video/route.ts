@@ -35,6 +35,8 @@ export async function POST(request: Request) {
     // STEP 1: Call Railway Roboflow Inference Server
     console.log('[ANALYZE] Calling Railway Roboflow Inference Server');
     const railwayUrl = process.env.RAILWAY_INFERENCE_URL || 'http://localhost:8000';
+    console.log('[ANALYZE] Railway URL configured:', railwayUrl);
+    console.log('[ANALYZE] ENV var RAILWAY_INFERENCE_URL exists:', !!process.env.RAILWAY_INFERENCE_URL);
     
     const detectResponse = await fetch(`${railwayUrl}/infer`, {
       method: 'POST',
