@@ -23,12 +23,12 @@ interface BallTrajectory {
 
 interface GeminiAnalysis {
   success: boolean;
-  kitchenTransition: { thirdShotSuccessRate: number; returnContactDepth: number };
-  softGame: { deadDinksCount: number; unforcedErrorsCount: number };
-  shotPlacement: { targetingAccuracy: number };
-  hardGame: { speedUpEfficiency: number; forcedErrorsCaused: number };
-  netDefense: { resetSuccessPercent: number; popUpFrequency: number };
-  playerInsights: string[];
+  kitchenTransition?: { thirdShotSuccessRate: number; returnContactDepth: number };
+  softGame?: { deadDinksCount: number; unforcedErrorsCount: number };
+  shotPlacement?: { targetingAccuracy: number };
+  hardGame?: { speedUpEfficiency: number; forcedErrorsCaused: number };
+  netDefense?: { resetSuccessPercent: number; popUpFrequency: number };
+  playerInsights?: string[];
   ballTrajectories?: BallTrajectory[];
 }
 
@@ -74,7 +74,9 @@ export default function AnalyticsPage() {
         const analyses = await getUserVideoAnalyses(user.uid, 1);
         
         if (analyses.length > 0) {
-          setAnalysis(analyses[0] as GeminiAnalysis);
+          const latestAnalysis = analyses[0];
+          console.log('✅ Fetched analysis:', latestAnalysis);
+          setAnalysis(latestAnalysis as GeminiAnalysis);
           setError(null);
         } else {
           setError('No video analysis found. Go to Videos to upload a game.');
@@ -91,6 +93,11 @@ export default function AnalyticsPage() {
 
     fetchLatestAnalysis();
   }, [user?.uid]);
+
+  // Safe getters with defaults
+  const thirdShotSuccess = analysis?.kitchenTransition?.thirdShotSuccessRate ?? 0;
+  const targetingAccuracy = analysis?.shotPlacement?.targetingAccuracy ?? 0;
+  const trajectories = analysis?.ballTrajectories ?? [];
 
   return (
     <PageLayout
@@ -142,26 +149,26 @@ export default function AnalyticsPage() {
                 <div>
                   <p style={{ margin: 0, color: 'rgba(255,255,255,0.6)', fontSize: '12px' }}>3rd Shot Success</p>
                   <p style={{ margin: '8px 0 0 0', color: '#00ff88', fontSize: '24px', fontWeight: '700' }}>
-                    {analysis.kitchenTransition.thirdShotSuccessRate}%
+                    {thirdShotSuccess}%
                   </p>
                 </div>
                 <div>
                   <p style={{ margin: 0, color: 'rgba(255,255,255,0.6)', fontSize: '12px' }}>Targeting Accuracy</p>
                   <p style={{ margin: '8px 0 0 0', color: '#00ff88', fontSize: '24px', fontWeight: '700' }}>
-                    {analysis.shotPlacement.targetingAccuracy}%
+                    {targetingAccuracy}%
                   </p>
                 </div>
               </div>
             </Card>
 
-            {analysis.ballTrajectories && analysis.ballTrajectories.length > 0 && (
+            {trajectories.length > 0 && (
               <Card variant="default" shadow="md" padding="lg">
                 <h3 style={{ margin: '0 0 16px 0', color: 'white' }}>
-                  3D Ball Trajectory Visualization ({analysis.ballTrajectories.length} shots detected)
+                  3D Ball Trajectory Visualization ({trajectories.length} shots detected)
                 </h3>
                 <div style={{ height: '600px', borderRadius: '6px', overflow: 'hidden', background: 'rgba(0,0,0,0.3)' }}>
                   <TrajectoryVisualization
-                    trajectories={analysis.ballTrajectories}
+                    trajectories={trajectories}
                     viewMode="isometric"
                   />
                 </div>
