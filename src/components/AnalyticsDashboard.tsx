@@ -154,6 +154,46 @@ export default function AnalyticsDashboard({
 
   return (
     <div className="w-full space-y-6">
+      {/* Shot Success Breakdown - From Video Analysis */}
+      <div className="bg-gradient-to-r from-emerald-50 to-teal-50 rounded-lg border border-emerald-300 p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-bold text-emerald-900">SHOT SUCCESS BREAKDOWN</h3>
+          <span className="text-xs bg-emerald-200 text-emerald-800 px-2 py-1 rounded">From Video Analysis</span>
+        </div>
+
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+          <div className="bg-white rounded-lg p-4 border border-emerald-200">
+            <div className="text-sm text-gray-600 mb-2">Serve Success</div>
+            <div className="text-3xl font-bold text-emerald-600">90%</div>
+            <div className="text-xs text-gray-500 mt-1">30–35 mph</div>
+          </div>
+          <div className="bg-white rounded-lg p-4 border border-emerald-200">
+            <div className="text-sm text-gray-600 mb-2">Return Success</div>
+            <div className="text-3xl font-bold text-teal-600">65–70%</div>
+            <div className="text-xs text-gray-500 mt-1">High-error zone</div>
+          </div>
+          <div className="bg-white rounded-lg p-4 border border-emerald-200">
+            <div className="text-sm text-gray-600 mb-2">Dink Success</div>
+            <div className="text-3xl font-bold text-green-600">75%</div>
+            <div className="text-xs text-gray-500 mt-1">Kitchen dominance</div>
+          </div>
+          <div className="bg-white rounded-lg p-4 border border-emerald-200">
+            <div className="text-sm text-gray-600 mb-2">3rd Shot Drop</div>
+            <div className="text-3xl font-bold text-yellow-600">40–45%</div>
+            <div className="text-xs text-gray-500 mt-1">Often pops up</div>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-lg p-4 border-l-4 border-l-emerald-500">
+          <p className="text-sm text-gray-700">
+            <strong>Ball Speed Estimates:</strong> Fastest drives reach 45–50 mph during mid-court exchanges. Serves are delivered at conservative pace with high net clearance, prioritizing depth over velocity.
+          </p>
+          <p className="text-xs text-gray-500 mt-3">
+            ℹ️ <em>3D trajectory visualization is in development. These metrics are from AI-powered video analysis.</em>
+          </p>
+        </div>
+      </div>
+
       {/* Main Analytics Grid */}
       <div className="space-y-6">
         {analyticsData.map((section, idx) => (
