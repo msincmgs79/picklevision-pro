@@ -32,10 +32,11 @@ export async function POST(request: Request) {
 
     console.log('[ANALYZE] Starting hybrid YOLOv8 + Gemini analysis');
 
-    // STEP 1: Call YOLOv8 ball detection
-    console.log('[ANALYZE] Calling YOLOv8 detect-ball endpoint');
-    const baseUrl = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000';
-    const detectResponse = await fetch(`${baseUrl}/api/detect-ball`, {
+    // STEP 1: Call Railway Roboflow Inference Server
+    console.log('[ANALYZE] Calling Railway Roboflow Inference Server');
+    const railwayUrl = process.env.RAILWAY_INFERENCE_URL || 'http://localhost:8000';
+    
+    const detectResponse = await fetch(`${railwayUrl}/infer`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ videoUrl }),
@@ -43,24 +44,25 @@ export async function POST(request: Request) {
 
     if (!detectResponse.ok) {
       const errorText = await detectResponse.text();
-      console.error('[ANALYZE] YOLOv8 detection FAILED:', {
+      console.error('[ANALYZE] Ball detection FAILED:', {
         status: detectResponse.status,
         statusText: detectResponse.statusText,
-        baseUrl: baseUrl,
+        railwayUrl: railwayUrl,
         errorBody: errorText
       });
-      throw new Error(`YOLOv8 detection failed [${detectResponse.status}]: ${errorText}`);
+      throw new Error(`Ball detection failed [${detectResponse.status}]: ${errorText}`);
     }
 
     const detectData = await detectResponse.json();
-    console.log('[ANALYZE] YOLOv8 detection complete:', {
+    console.log('[ANALYZE] Ball detection complete:', {
       detectionsFound: detectData.detectionsFound,
       trajectories: detectData.trajectories,
     });
 
-    // STEP 2: Convert YOLOv8 detections to trajectory format
+    // STEP 2: Convert detections to trajectory format
     let trajectories: BallTrajectory[] = [];
     if (detectData.detections && Array.isArray(detectData.detections)) {
+      // Group detections into trajectories by temporal proximity
       trajectories = detectData.detections
         .slice(0, Math.min(detectData.detections.length, 500))
         .map((det: any, idx: number) => ({

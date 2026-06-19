@@ -1,0 +1,23 @@
+{
+  "$schema": "https://railway.app/railway.schema.json",
+  "build": {
+    "builder": "dockerfile",
+    "dockerfile": "Dockerfile"
+  },
+  "deploy": {
+    "startCommand": "uvicorn main:app --host 0.0.0.0 --port $PORT",
+    "numReplicas": 1,
+    "restartPolicyMaxRetries": 3,
+    "restartPolicyWindowSeconds": 60
+  },
+  "variables": {
+    "PORT": {
+      "description": "Port for FastAPI server",
+      "value": "8000"
+    },
+    "ROBOFLOW_API_KEY": {
+      "description": "Optional: Roboflow API key for private models",
+      "value": ""
+    }
+  }
+}
