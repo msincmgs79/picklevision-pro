@@ -64,24 +64,26 @@ export default function AnalyticsPage() {
 
   useEffect(() => {
     const fetchLatestAnalysis = async () => {
-      if (!user?.uid) {
-        setLoading(false);
-        return;
-      }
-
       try {
-        setLoading(true);
+        if (!user?.uid) {
+          setLoading(false);
+          setError('Please log in to view analytics');
+          return;
+        }
+
         const analyses = await getUserVideoAnalyses(user.uid, 1);
         
         if (analyses.length > 0) {
-          const latestAnalysis = analyses[0];
-          setAnalysis(latestAnalysis as GeminiAnalysis);
+          setAnalysis(analyses[0] as GeminiAnalysis);
+          setError(null);
         } else {
-          setError('No video analysis available. Upload a video to get started.');
+          setError('No video analysis found. Go to Videos to upload a game.');
+          setAnalysis(null);
         }
       } catch (err) {
         console.error('Error fetching analysis:', err);
         setError('Failed to load analysis data');
+        setAnalysis(null);
       } finally {
         setLoading(false);
       }
@@ -89,39 +91,6 @@ export default function AnalyticsPage() {
 
     fetchLatestAnalysis();
   }, [user?.uid]);
-
-  if (!user) {
-    return (
-      <PageLayout
-        header={
-          <Header
-            logoText="PickleVision Pro"
-            onSearchChange={() => {}}
-            notificationCount={0}
-            onNotificationClick={() => {}}
-            onProfileClick={() => router.push('/profile')}
-            searchPlaceholder="Search..."
-          />
-        }
-        sidebar={
-          <Navigation
-            items={navItems}
-            activeItemId={activeNav}
-            onItemClick={handleNavClick}
-            collapsed={sidebarCollapsed}
-            onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
-          />
-        }
-        footer={
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'rgba(255, 255, 255, 0.6)' }}>
-            <span>© 2026 PickleVision Pro</span>
-          </div>
-        }
-      >
-        <div style={{ color: 'rgba(255,255,255,0.6)', padding: '20px' }}>Loading...</div>
-      </PageLayout>
-    );
-  }
 
   return (
     <PageLayout
@@ -155,17 +124,17 @@ export default function AnalyticsPage() {
 
         {loading && (
           <Card variant="default" shadow="md" padding="lg">
-            <p style={{ color: 'rgba(255,255,255,0.6)' }}>Loading analysis data...</p>
+            <p style={{ color: 'rgba(255,255,255,0.6)', margin: 0 }}>Loading your analysis...</p>
           </Card>
         )}
 
-        {error && (
+        {error && !loading && (
           <Card variant="default" shadow="md" padding="lg">
-            <p style={{ color: '#ff6b6b' }}>{error}</p>
+            <p style={{ color: '#ff6b6b', margin: 0 }}>{error}</p>
           </Card>
         )}
 
-        {analysis && analysis.success && (
+        {analysis && !loading && (
           <>
             <Card variant="default" shadow="md" padding="lg">
               <h3 style={{ margin: '0 0 16px 0', color: 'white' }}>Performance Metrics</h3>
