@@ -16,7 +16,7 @@ interface BallTrajectory {
   shotType: string;
   zoneStart: string;
   zoneEnd: string;
-  inOrOut: string;
+  inOrOut: 'in' | 'out';
 }
 
 interface GeminiAnalysis {
@@ -56,6 +56,49 @@ export default function AnalyticsPage() {
     if (routes[itemId]) router.push(routes[itemId]);
   };
 
+  const sampleTrajectories: BallTrajectory[] = [
+    {
+      player: 1,
+      playerName: 'Player 1',
+      startPosition: { x: 3, y: 42 },
+      endPosition: { x: 10, y: 25 },
+      shotType: 'serve',
+      zoneStart: 'baseline',
+      zoneEnd: 'midcourt',
+      inOrOut: 'in',
+    },
+    {
+      player: 2,
+      playerName: 'Player 2',
+      startPosition: { x: 10, y: 25 },
+      endPosition: { x: 10, y: 7 },
+      shotType: 'third_shot',
+      zoneStart: 'midcourt',
+      zoneEnd: 'kitchen',
+      inOrOut: 'in',
+    },
+    {
+      player: 1,
+      playerName: 'Player 1',
+      startPosition: { x: 15, y: 10 },
+      endPosition: { x: 5, y: 20 },
+      shotType: 'dink',
+      zoneStart: 'kitchen',
+      zoneEnd: 'kitchen',
+      inOrOut: 'in',
+    },
+    {
+      player: 2,
+      playerName: 'Player 2',
+      startPosition: { x: 5, y: 20 },
+      endPosition: { x: 18, y: 15 },
+      shotType: 'attack',
+      zoneStart: 'kitchen',
+      zoneEnd: 'midcourt',
+      inOrOut: 'out',
+    },
+  ];
+
   const sampleAnalysis: GeminiAnalysis = {
     success: true,
     kitchenTransition: { thirdShotSuccessRate: 72, returnContactDepth: 8.5 },
@@ -64,7 +107,7 @@ export default function AnalyticsPage() {
     hardGame: { speedUpEfficiency: 63, forcedErrorsCaused: 6 },
     netDefense: { resetSuccessPercent: 78, popUpFrequency: 45 },
     playerInsights: ['Strong kitchen game', 'Good court positioning'],
-    ballTrajectories: [],
+    ballTrajectories: sampleTrajectories,
   };
 
   return (
@@ -112,6 +155,16 @@ export default function AnalyticsPage() {
                 {sampleAnalysis.shotPlacement.targetingAccuracy}%
               </p>
             </div>
+          </div>
+        </Card>
+
+        <Card variant="default" shadow="md" padding="lg">
+          <h3 style={{ margin: '0 0 16px 0', color: 'white' }}>3D Ball Trajectory Visualization</h3>
+          <div style={{ height: '600px', borderRadius: '6px', overflow: 'hidden', background: 'rgba(0,0,0,0.3)' }}>
+            <TrajectoryVisualization
+              trajectories={sampleAnalysis.ballTrajectories || sampleTrajectories}
+              viewMode="isometric"
+            />
           </div>
         </Card>
       </div>
