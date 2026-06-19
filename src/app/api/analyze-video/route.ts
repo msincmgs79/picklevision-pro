@@ -17,6 +17,20 @@ import { saveVideoAnalysis } from '@/lib/db';
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY!;
 const BASE_URL = 'https://generativelanguage.googleapis.com';
 
+interface TrajectoryPoint {
+  x: number; // 0-27 feet (width)
+  y: number; // 0-44 feet (length)
+}
+
+interface BallTrajectory {
+  player: 1 | 2;
+  startPosition: TrajectoryPoint;
+  endPosition: TrajectoryPoint;
+  shotType: 'dink' | 'drive' | 'lob' | 'serve' | 'third_shot' | 'reset' | 'unknown';
+  zoneStart: string; // e.g., "kitchen", "baseline", "sideline"
+  zoneEnd: string;
+}
+
 interface AnalysisResult {
   success: boolean;
   kitchenTransition: { thirdShotSuccessRate: number; returnContactDepth: number };
@@ -25,6 +39,7 @@ interface AnalysisResult {
   hardGame: { speedUpEfficiency: number; forcedErrorsCaused: number };
   netDefense: { resetSuccessPercent: number; popUpFrequency: number };
   playerInsights: string[];
+  ballTrajectories?: BallTrajectory[];
 }
 
 /**
@@ -103,7 +118,16 @@ async function analyzeVideoWithFileUri(fileUri: string, mimeType: string): Promi
   console.log('[FILES_API] Analyzing with Gemini, file URI:', fileUri.substring(0, 60), '...');
 
   const prompt =
-    'Analyze this pickleball video and return ONLY a JSON object with: {kitchenTransition:{thirdShotSuccessRate:0-100,returnContactDepth:0-20},softGame:{deadDinksCount:0+,unforcedErrorsCount:0+},shotPlacement:{targetingAccuracy:0-100},hardGame:{speedUpEfficiency:0-100,forcedErrorsCaused:0+},netDefense:{resetSuccessPercent:0-100,popUpFrequency:0-100},playerInsights:["insight1","insight2"]}';
+    'Analyze this pickleball video. Return ONLY valid JSON: ' +
+    '{kitchenTransition:{thirdShotSuccessRate:0-100,returnContactDepth:0-20},' +
+    'softGame:{deadDinksCount:0+,unforcedErrorsCount:0+},' +
+    'shotPlacement:{targetingAccuracy:0-100},' +
+    'hardGame:{speedUpEfficiency:0-100,forcedErrorsCaused:0+},' +
+    'netDefense:{resetSuccessPercent:0-100,popUpFrequency:0-100},' +
+    'playerInsights:["insight1","insight2"],' +
+    'ballTrajectories:[{player:1,startPosition:{x:10,y:20},endPosition:{x:15,y:25},' +
+    'shotType:"dink",zoneStart:"kitchen",zoneEnd:"midcourt"}]}. ' +
+    'Add 5-10 real trajectories. Court: 20ft wide (x=0-20), 44ft long (y=0-44), kitchen y=0-7.';
 
   const response = await fetch(`${BASE_URL}/v1beta/models/gemini-3.5-flash:generateContent`, {
     method: 'POST',
@@ -261,7 +285,14 @@ async function analyzeImageFrame(frameBase64: string): Promise<string> {
   console.log('[ROUTE] Analyzing image frame (fallback)');
 
   const prompt =
-    'Analyze this pickleball image and return ONLY a JSON object with: {kitchenTransition:{thirdShotSuccessRate:0-100,returnContactDepth:0-20},softGame:{deadDinksCount:0+,unforcedErrorsCount:0+},shotPlacement:{targetingAccuracy:0-100},hardGame:{speedUpEfficiency:0-100,forcedErrorsCaused:0+},netDefense:{resetSuccessPercent:0-100,popUpFrequency:0-100},playerInsights:["insight1","insight2"]}';
+    'Analyze this pickleball image. Return ONLY valid JSON: ' +
+    '{kitchenTransition:{thirdShotSuccessRate:0-100,returnContactDepth:0-20},' +
+    'softGame:{deadDinksCount:0+,unforcedErrorsCount:0+},' +
+    'shotPlacement:{targetingAccuracy:0-100},' +
+    'hardGame:{speedUpEfficiency:0-100,forcedErrorsCaused:0+},' +
+    'netDefense:{resetSuccessPercent:0-100,popUpFrequency:0-100},' +
+    'playerInsights:["insight1","insight2"],' +
+    'ballTrajectories:[]}. For images, return empty trajectories array.';
 
   const response = await fetch(`${BASE_URL}/v1beta/models/gemini-3.5-flash:generateContent`, {
     method: 'POST',
@@ -329,6 +360,7 @@ export async function POST(request: Request) {
       hardGame: analysis.hardGame || { speedUpEfficiency: 0, forcedErrorsCaused: 0 },
       netDefense: analysis.netDefense || { resetSuccessPercent: 0, popUpFrequency: 0 },
       playerInsights: analysis.playerInsights || [],
+      ballTrajectories: Array.isArray(analysis.ballTrajectories) ? analysis.ballTrajectories : [],
     };
 
     console.log('[ROUTE] Parsed metrics:', result);

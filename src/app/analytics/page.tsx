@@ -8,6 +8,16 @@ import Header from '@/components/Header';
 import Navigation from '@/components/Navigation';
 import PageLayout from '@/components/PageLayout';
 import Card from '@/components/Card';
+import TrajectoryVisualization from '@/components/TrajectoryVisualization';
+
+interface BallTrajectory {
+  player: 1 | 2;
+  startPosition: { x: number; y: number };
+  endPosition: { x: number; y: number };
+  shotType: string;
+  zoneStart: string;
+  zoneEnd: string;
+}
 
 interface GeminiAnalysis {
   success: boolean;
@@ -17,6 +27,7 @@ interface GeminiAnalysis {
   hardGame: { speedUpEfficiency: number; forcedErrorsCaused: number };
   netDefense: { resetSuccessPercent: number; popUpFrequency: number };
   playerInsights: string[];
+  ballTrajectories?: BallTrajectory[];
 }
 
 export default function AnalyticsPage() {
@@ -266,6 +277,30 @@ export default function AnalyticsPage() {
                   {analysis.playerInsights.map((insight, i) => (
                     <p key={i} style={{ margin: 0, padding: '12px', background: 'rgba(0, 255, 136, 0.08)', border: '1px solid rgba(0, 255, 136, 0.15)', borderRadius: '6px', color: 'rgba(255, 255, 255, 0.8)', fontSize: '13px' }}>• {insight}</p>
                   ))}
+                </div>
+              </Card>
+            )}
+
+            {analysis.ballTrajectories && analysis.ballTrajectories.length > 0 && (
+              <Card variant="default" shadow="md" padding="lg">
+                <div style={{ marginBottom: '16px' }}>
+                  <h3 style={{ margin: '0 0 12px 0', color: 'white', fontSize: '16px', fontWeight: '600' }}>Ball Trajectories</h3>
+                  <div style={{ height: '450px' }}>
+                    <TrajectoryVisualization trajectories={analysis.ballTrajectories} viewMode="isometric" />
+                  </div>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginTop: '16px' }}>
+                  <div>
+                    <p style={{ margin: '0 0 8px 0', fontWeight: '600', color: '#00ff88' }}>Trajectory Summary</p>
+                    <p style={{ margin: '0', fontSize: '13px', color: 'rgba(255,255,255,0.7)' }}>Total Shots: {analysis.ballTrajectories.length}</p>
+                    <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: 'rgba(255,255,255,0.7)' }}>Player 1: {analysis.ballTrajectories.filter((t: BallTrajectory) => t.player === 1).length}</p>
+                    <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: 'rgba(255,255,255,0.7)' }}>Player 2: {analysis.ballTrajectories.filter((t: BallTrajectory) => t.player === 2).length}</p>
+                  </div>
+                  <div>
+                    <p style={{ margin: '0 0 8px 0', fontWeight: '600', color: '#00ff88' }}>View Controls</p>
+                    <p style={{ margin: '0', fontSize: '13px', color: 'rgba(255,255,255,0.7)' }}>Use buttons above to</p>
+                    <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: 'rgba(255,255,255,0.7)' }}>switch view angles</p>
+                  </div>
                 </div>
               </Card>
             )}
