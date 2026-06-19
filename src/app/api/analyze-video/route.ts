@@ -120,18 +120,26 @@ async function analyzeVideoWithFileUri(fileUri: string, mimeType: string): Promi
   console.log('[FILES_API] Analyzing with Gemini, file URI:', fileUri.substring(0, 60), '...');
 
   const prompt =
-    'Analyze this pickleball video. Return ONLY valid JSON: ' +
+    'WATCH AND ANALYZE THIS ENTIRE PICKLEBALL VIDEO CAREFULLY. ' +
+    'Extract ACTUAL REAL ball trajectory data from the video frames - do NOT make up placeholder data. ' +
+    'Identify EVERY shot visible in the video and track the ball movement from hit point to landing point. ' +
+    'Return ONLY valid JSON with real extracted data: ' +
     '{kitchenTransition:{thirdShotSuccessRate:0-100,returnContactDepth:0-20},' +
     'softGame:{deadDinksCount:0+,unforcedErrorsCount:0+},' +
     'shotPlacement:{targetingAccuracy:0-100},' +
     'hardGame:{speedUpEfficiency:0-100,forcedErrorsCaused:0+},' +
     'netDefense:{resetSuccessPercent:0-100,popUpFrequency:0-100},' +
     'playerInsights:["insight1","insight2"],' +
-    'ballTrajectories:[{player:1,playerName:"Player1",startPosition:{x:10,y:20},' +
-    'endPosition:{x:15,y:25},shotType:"dink",zoneStart:"kitchen",zoneEnd:"midcourt",inOrOut:"in"}]}. ' +
-    'For each shot: player (1 or 2), playerName (from video metadata or "Player 1"/"Player 2"), ' +
-    'startPosition, endPosition, shotType, zones, inOrOut (in=landed in, out=missed/out). ' +
-    'Court: 20ft wide (x=0-20), 44ft long (y=0-44), kitchen y=0-7. Add 5-10 real trajectories.';
+    'ballTrajectories:[{player:1,playerName:"Player1",startPosition:{x:3,y:44},endPosition:{x:10,y:20},' +
+    'shotType:"serve",zoneStart:"baseline",zoneEnd:"midcourt",inOrOut:"in"}]}. ' +
+    'MANDATORY: For EVERY shot in the video, analyze from video frames and extract: ' +
+    'player (1 or 2), playerName ("Player 1" or "Player 2"), ' +
+    'startPosition (actual hit location from video), endPosition (actual landing location from video), ' +
+    'shotType (serve/dink/drive/lob/third_shot/reset/unknown based on speed and arc), ' +
+    'zoneStart/zoneEnd (kitchen:y0-7, midcourt:y7-37, baseline:y37-44), ' +
+    'inOrOut (in if landed in court bounds, out if out of bounds). ' +
+    'Court: x=0-20 (width, 0=left, 20=right), y=0-44 (length, 0=near net, 44=far baseline). ' +
+    'Return 15-50 real trajectories based on actual video content and match length. NO PLACEHOLDER DATA.';
 
   const response = await fetch(`${BASE_URL}/v1beta/models/gemini-3.5-flash:generateContent`, {
     method: 'POST',
