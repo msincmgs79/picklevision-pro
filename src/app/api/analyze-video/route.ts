@@ -348,22 +348,4 @@ export async function POST(request: Request) {
     if (userId && videoId) {
       try {
         await saveVideoAnalysis(userId, videoId, result);
-        console.log('[ROUTE] Analysis saved to database');
-      } catch (e) {
-        console.error('[ROUTE] DB save failed:', e);
-      }
-    }
-
-    return Response.json(result);
-  } catch (error) {
-    console.error('[ROUTE] Error:', error);
-    return Response.json(
-      {
-        success: false,
-        error: error instanceof Error ? error.message : 'Analysis failed',
-      },
-      { status: 500 }
-    );
-  }
-}
-
+        c

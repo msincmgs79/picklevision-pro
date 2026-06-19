@@ -305,22 +305,4 @@ export async function analyzeVideoWithFilesAPI(videoUrl: string): Promise<string
     await waitForFileProcessing(fileName);
 
     // Step 3: Analyze with Gemini
-    const analysisText = await analyzeVideoWithFileUri(
-      fileMetadata.file.uri,
-      mimeType
-    );
-
-    console.log('[FILES_API] Analysis complete');
-    return analysisText;
-  } finally {
-    // Cleanup
-    if (fileName) {
-      try {
-        await deleteFile(fileName);
-      } catch (deleteError) {
-        console.error('[FILES_API] Error during cleanup:', deleteError);
-        // Continue anyway - file will auto-delete
-      }
-    }
-  }
-}
+    const analysisText = await analyzeVi

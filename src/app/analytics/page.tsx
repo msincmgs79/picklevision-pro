@@ -53,6 +53,10 @@ export default function AnalyticsPage() {
       setLoading(true);
       setError(null);
       try {
+        // Create abort controller for 2-minute timeout
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 120000); // 2 minutes
+
         const response = await fetch('/api/analyze-video', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -61,16 +65,41 @@ export default function AnalyticsPage() {
             userId: user?.uid,
             videoId: selectedVideo.id,
           }),
+          signal: controller.signal,
         });
+
+        clearTimeout(timeoutId);
+
+        // Check for HTTP errors
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error(`[ANALYTICS] HTTP Error ${response.status}:`, errorText);
+          setError(`Server error: ${response.status}. ${errorText.substring(0, 100)}`);
+          setLoading(false);
+          return;
+        }
+
         const data = await response.json();
+        console.log('[ANALYTICS] Analysis response:', data);
+
         if (data.success) {
           setAnalysis(data);
         } else {
           setError(data.error || 'Analysis failed');
         }
       } catch (err) {
-        setError('Error analyzing video');
-        console.error(err);
+        if (err instanceof Error) {
+          if (err.name === 'AbortError') {
+            setError('Request timeout - server took too long to respond (2+ minutes)');
+            console.error('[ANALYTICS] Request timeout');
+          } else {
+            setError(`Error analyzing video: ${err.message}`);
+            console.error('[ANALYTICS] Error:', err);
+          }
+        } else {
+          setError('Error analyzing video');
+          console.error('[ANALYTICS] Unknown error:', err);
+        }
       } finally {
         setLoading(false);
       }
@@ -250,26 +279,4 @@ export default function AnalyticsPage() {
             {/* Player Insights */}
             {analysis.playerInsights && analysis.playerInsights.length > 0 && (
               <Card variant="default" shadow="md" padding="lg">
-                <h3 style={{ margin: '0 0 16px 0', color: 'white', fontSize: '16px', fontWeight: '600' }}>Insights</h3>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                  {analysis.playerInsights.map((insight, i) => (
-                    <p key={i} style={{ margin: 0, padding: '12px', background: 'rgba(0, 255, 136, 0.08)', border: '1px solid rgba(0, 255, 136, 0.15)', borderRadius: '6px', color: 'rgba(255, 255, 255, 0.8)', fontSize: '13px' }}>• {insight}</p>
-                  ))}
-                </div>
-              </Card>
-            )}
-          </>
-        )}
-
-        {!selectedVideo && videos.length === 0 && (
-          <Card variant="default" shadow="md" padding="lg">
-            <div style={{ textAlign: 'center', padding: '48px 0' }}>
-              <p style={{ color: 'rgba(255, 255, 255, 0.7)', marginBottom: '16px' }}>No videos available</p>
-              <p style={{ color: 'rgba(255, 255, 255, 0.5)', fontSize: '14px' }}>Upload a video to see analytics</p>
-            </div>
-          </Card>
-        )}
-      </div>
-    </PageLayout>
-  );
-}
+                <h3 

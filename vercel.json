@@ -1,0 +1,7 @@
+{
+  "functions": {
+    "src/app/api/analyze-video/route.ts": {
+      "maxDuration": 120
+    }
+  }
+}
