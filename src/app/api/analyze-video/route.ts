@@ -32,10 +32,10 @@ export async function POST(request: Request) {
 
     console.log('[ANALYZE] Starting hybrid YOLOv8 + Gemini analysis');
 
-    // STEP 1: Call YOLOv8 ball detection - use request origin
+    // STEP 1: Call YOLOv8 ball detection
     console.log('[ANALYZE] Calling YOLOv8 detect-ball endpoint');
-    const origin = request.headers.get('origin') || `${request.headers.get('x-forwarded-proto')}://${request.headers.get('host')}`;
-    const detectResponse = await fetch(`${origin}/api/detect-ball`, {
+    const baseUrl = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000';
+    const detectResponse = await fetch(`${baseUrl}/api/detect-ball`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ videoUrl }),
