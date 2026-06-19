@@ -3,7 +3,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
-import { uploadMatchVideo, saveStandaloneVideo, getUserVideos } from '@/lib/db';
+import { uploadMatchVideo, saveStandaloneVideo, getUserVideos, saveVideoAnalysis } from '@/lib/db';
 import Header from '@/components/Header';
 import Navigation from '@/components/Navigation';
 import PageLayout from '@/components/PageLayout';
@@ -22,6 +22,7 @@ interface Video {
   status: 'pending' | 'processing' | 'analyzed';
   thumbnail?: string;
   fileSize?: number;
+  videoUrl?: string;
 }
 
 export default function VideosPage() {
@@ -59,6 +60,7 @@ export default function VideosPage() {
         duration: 0,
         status: 'pending' as const,
         thumbnail: v.videoUrl,
+        videoUrl: v.videoUrl,
       }));
       setVideos((prev) => [...converted, ...prev.filter((p) => !p.id.startsWith('video_'))]);
     }).catch((err) => console.error('Firestore error:', err));
@@ -82,24 +84,59 @@ export default function VideosPage() {
     return 'primary';
   };
 
-  // Handle video analysis
+  // Handle video analysis - REAL API CALL
   const handleAnalyze = async (videoId: string) => {
     const video = videos.find((v) => v.id === videoId);
-    if (!video) return;
+    if (!video || !video.videoUrl || !user?.uid) return;
 
-    const updatedVideos = videos.map((v) =>
-      v.id === videoId ? { ...v, status: 'processing' as const } : v
-    );
-    setVideos(updatedVideos);
+    try {
+      // Mark as processing
+      setVideos((prev) =>
+        prev.map((v) =>
+          v.id === videoId ? { ...v, status: 'processing' as const } : v
+        )
+      );
 
-    // Simulate analysis
-    setTimeout(() => {
+      // Call analyze-video API with real video URL
+      const response = await fetch('/api/analyze-video', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          videoUrl: video.videoUrl,
+          userId: user.uid,
+          videoId: videoId,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Analysis failed: ${response.statusText}`);
+      }
+
+      const analysisResult = await response.json();
+
+      // Save analysis to Firestore
+      if (analysisResult.success) {
+        await saveVideoAnalysis(user.uid, videoId, analysisResult);
+        console.log('✅ Analysis saved to Firestore:', videoId);
+      }
+
+      // Mark as analyzed
       setVideos((prev) =>
         prev.map((v) =>
           v.id === videoId ? { ...v, status: 'analyzed' as const } : v
         )
       );
-    }, 3000);
+    } catch (error) {
+      console.error('Analysis error:', error);
+      alert(`Analysis failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      
+      // Revert to pending on error
+      setVideos((prev) =>
+        prev.map((v) =>
+          v.id === videoId ? { ...v, status: 'pending' as const } : v
+        )
+      );
+    }
   };
 
   // Handle video deletion
@@ -143,6 +180,7 @@ export default function VideosPage() {
         status: 'pending',
         fileSize: file.size,
         thumbnail: downloadURL,
+        videoUrl: downloadURL,
       };
 
       setVideos((prev) => [newVideo, ...prev]);
@@ -213,7 +251,7 @@ export default function VideosPage() {
                 <div style={{ marginBottom: '12px' }}><Badge variant={getStatusBadgeVariant(video.status)} size="sm">{video.status === 'analyzed' ? '✓ Analyzed' : video.status === 'processing' ? '⟳ Processing' : '⏳ Pending'}</Badge></div>
                 <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: isMobile ? '4px' : '8px' }}>
                   <button style={{ flex: 1, padding: isMobile ? '6px 8px' : '8px 12px', background: 'rgba(0, 255, 136, 0.1)', border: '1px solid rgba(0, 255, 136, 0.3)', color: '#00ff88', borderRadius: '4px', cursor: 'pointer', fontSize: isMobile ? '11px' : '12px', fontWeight: '600', transition: 'all 0.2s', lineHeight: '1.2', minHeight: 'auto' }} onMouseEnter={(e) => { (e.target as HTMLButtonElement).style.background = 'rgba(0, 255, 136, 0.2)'; }} onMouseLeave={(e) => { (e.target as HTMLButtonElement).style.background = 'rgba(0, 255, 136, 0.1)'; }}>▶ Play</button>
-                  <button onClick={() => handleAnalyze(video.id)} style={{ flex: 1, padding: isMobile ? '6px 8px' : '8px 12px', background: 'rgba(0, 212, 255, 0.1)', border: '1px solid rgba(0, 212, 255, 0.3)', color: '#00d4ff', borderRadius: '4px', cursor: 'pointer', fontSize: isMobile ? '11px' : '12px', fontWeight: '600', transition: 'all 0.2s', lineHeight: '1.2', minHeight: 'auto' }} onMouseEnter={(e) => { (e.target as HTMLButtonElement).style.background = 'rgba(0, 212, 255, 0.2)'; }} onMouseLeave={(e) => { (e.target as HTMLButtonElement).style.background = 'rgba(0, 212, 255, 0.1)'; }}>{video.status === 'processing' ? '⏳ Processing...' : '📊 Analyze'}</button>
+                  <button onClick={() => handleAnalyze(video.id)} disabled={video.status === 'processing'} style={{ flex: 1, padding: isMobile ? '6px 8px' : '8px 12px', background: 'rgba(0, 212, 255, 0.1)', border: '1px solid rgba(0, 212, 255, 0.3)', color: '#00d4ff', borderRadius: '4px', cursor: video.status === 'processing' ? 'not-allowed' : 'pointer', fontSize: isMobile ? '11px' : '12px', fontWeight: '600', transition: 'all 0.2s', lineHeight: '1.2', minHeight: 'auto', opacity: video.status === 'processing' ? 0.6 : 1 }} onMouseEnter={(e) => { if (video.status !== 'processing') (e.target as HTMLButtonElement).style.background = 'rgba(0, 212, 255, 0.2)'; }} onMouseLeave={(e) => { (e.target as HTMLButtonElement).style.background = 'rgba(0, 212, 255, 0.1)'; }}>{video.status === 'processing' ? '⏳ Analyzing...' : '📊 Analyze'}</button>
                   <button onClick={() => handleDeleteVideo(video.id)} style={{ flex: 1, padding: isMobile ? '6px 8px' : '8px 12px', background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)', color: '#ef4444', borderRadius: '4px', cursor: 'pointer', fontSize: isMobile ? '11px' : '12px', fontWeight: '600', transition: 'all 0.2s', lineHeight: '1.2', minHeight: 'auto' }} onMouseEnter={(e) => { (e.target as HTMLButtonElement).style.background = 'rgba(239, 68, 68, 0.2)'; }} onMouseLeave={(e) => { (e.target as HTMLButtonElement).style.background = 'rgba(239, 68, 68, 0.1)'; }}>🗑️ Delete</button>
                 </div>
               </Card>
