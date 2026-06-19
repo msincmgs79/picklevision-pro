@@ -10,11 +10,13 @@ interface TrajectoryPoint {
 
 interface BallTrajectory {
   player: 1 | 2;
+  playerName: string;
   startPosition: TrajectoryPoint;
   endPosition: TrajectoryPoint;
   shotType: string;
   zoneStart: string;
   zoneEnd: string;
+  inOrOut: 'in' | 'out';
 }
 
 interface TrajectoryVisualizationProps {
@@ -168,10 +170,17 @@ export default function TrajectoryVisualization({
 
     // Draw trajectories
     trajectories.forEach((traj, idx) => {
+      // Determine colors based on player and in/out status
+      let playerColor: number;
+      if (traj.player === 1) {
+        playerColor = traj.inOrOut === 'in' ? 0x00ff88 : 0xffaa00; // Green for in, orange for out
+      } else {
+        playerColor = traj.inOrOut === 'in' ? 0xff1744 : 0xff6b00; // Red for in, darker orange for out
+      }
+
       // Start point
       const startGeometry = new THREE.SphereGeometry(0.15, 8, 8);
-      const startColor = traj.player === 1 ? 0x00ff88 : 0xff1744;
-      const startMaterial = new THREE.MeshStandardMaterial({ color: startColor, emissive: startColor });
+      const startMaterial = new THREE.MeshStandardMaterial({ color: playerColor, emissive: playerColor });
       const startSphere = new THREE.Mesh(startGeometry, startMaterial);
       startSphere.position.set(
         traj.startPosition.x - COURT_WIDTH / 2,
@@ -180,10 +189,9 @@ export default function TrajectoryVisualization({
       );
       scene.add(startSphere);
 
-      // End point
-      const endGeometry = new THREE.SphereGeometry(0.15, 8, 8);
-      const endColor = traj.player === 1 ? 0x00ff88 : 0xff1744;
-      const endMaterial = new THREE.MeshStandardMaterial({ color: endColor, emissive: endColor });
+      // End point (different size for out shots)
+      const endGeometry = new THREE.SphereGeometry(traj.inOrOut === 'in' ? 0.15 : 0.12, 8, 8);
+      const endMaterial = new THREE.MeshStandardMaterial({ color: playerColor, emissive: playerColor });
       const endSphere = new THREE.Mesh(endGeometry, endMaterial);
       endSphere.position.set(
         traj.endPosition.x - COURT_WIDTH / 2,
@@ -192,7 +200,7 @@ export default function TrajectoryVisualization({
       );
       scene.add(endSphere);
 
-      // Trajectory line with arc
+      // Trajectory line with arc - dashed for out shots
       const arcCurve = new THREE.QuadraticBezierCurve3(
         new THREE.Vector3(
           traj.startPosition.x - COURT_WIDTH / 2,
@@ -213,12 +221,11 @@ export default function TrajectoryVisualization({
 
       const points = arcCurve.getPoints(20);
       const lineGeometry = new THREE.BufferGeometry().setFromPoints(points);
-      const lineColor = traj.player === 1 ? 0x00ff88 : 0xff1744;
       const lineMaterial = new THREE.LineBasicMaterial({
-        color: lineColor,
-        linewidth: 3,
+        color: playerColor,
+        linewidth: traj.inOrOut === 'in' ? 3 : 2,
         transparent: true,
-        opacity: 0.8,
+        opacity: traj.inOrOut === 'in' ? 0.8 : 0.5,
       });
       const line = new THREE.Line(lineGeometry, lineMaterial);
       scene.add(line);
@@ -304,32 +311,68 @@ export default function TrajectoryVisualization({
         }}
       />
 
-      {/* Legend */}
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(2, 1fr)',
-          gap: '12px',
-          marginTop: '12px',
-          fontSize: '12px',
-          color: 'rgba(255, 255, 255, 0.7)',
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <div style={{ width: '12px', height: '12px', background: '#00ff88', borderRadius: '50%' }} />
-          <span>Player 1 Shots</span>
+      {/* Legend & Shot List */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginTop: '12px' }}>
+        {/* Legend */}
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(2, 1fr)',
+            gap: '8px',
+            fontSize: '12px',
+            color: 'rgba(255, 255, 255, 0.7)',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <div style={{ width: '12px', height: '12px', background: '#00ff88', borderRadius: '50%' }} />
+            <span>P1 Shot In</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <div style={{ width: '12px', height: '12px', background: '#ffaa00', borderRadius: '50%' }} />
+            <span>P1 Shot Out</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <div style={{ width: '12px', height: '12px', background: '#ff1744', borderRadius: '50%' }} />
+            <span>P2 Shot In</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <div style={{ width: '12px', height: '12px', background: '#ff6b00', borderRadius: '50%' }} />
+            <span>P2 Shot Out</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <div style={{ width: '12px', height: '12px', background: '#ffff00', borderRadius: '50%' }} />
+            <span>Kitchen Line</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <div style={{ width: '12px', height: '12px', background: '#888888', borderRadius: '50%' }} />
+            <span>Center Line</span>
+          </div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <div style={{ width: '12px', height: '12px', background: '#ff1744', borderRadius: '50%' }} />
-          <span>Player 2 Shots</span>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <div style={{ width: '12px', height: '12px', background: '#ffff00', borderRadius: '50%' }} />
-          <span>Kitchen Line</span>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <div style={{ width: '12px', height: '12px', background: '#888888', borderRadius: '50%' }} />
-          <span>Center Line</span>
+
+        {/* Shot List */}
+        <div style={{ maxHeight: '200px', overflowY: 'auto', paddingRight: '8px' }}>
+          <p style={{ margin: '0 0 8px 0', fontWeight: '600', color: '#00ff88', fontSize: '12px' }}>Shots by Player</p>
+          {trajectories.map((traj, idx) => (
+            <div
+              key={idx}
+              style={{
+                padding: '6px',
+                marginBottom: '4px',
+                background: 'rgba(0, 255, 136, 0.08)',
+                border: `1px solid ${traj.inOrOut === 'in' ? 'rgba(0, 255, 136, 0.2)' : 'rgba(255, 107, 0, 0.2)'}`,
+                borderRadius: '4px',
+                fontSize: '11px',
+                color: 'rgba(255, 255, 255, 0.8)',
+              }}
+            >
+              <div style={{ fontWeight: '600', color: traj.player === 1 ? '#00ff88' : '#ff1744' }}>
+                {traj.playerName} - {traj.shotType}
+              </div>
+              <div style={{ fontSize: '10px', color: traj.inOrOut === 'in' ? '#00ff88' : '#ff6b00' }}>
+                {traj.inOrOut === 'in' ? '✓ In Bounds' : '✗ Out of Bounds'}
+              </div>
+            </div>
+          ))}
         </div>
       </div>
     </div>

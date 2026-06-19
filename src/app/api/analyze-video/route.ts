@@ -24,11 +24,13 @@ interface TrajectoryPoint {
 
 interface BallTrajectory {
   player: 1 | 2;
+  playerName: string; // e.g., "Player 1", "Alice"
   startPosition: TrajectoryPoint;
   endPosition: TrajectoryPoint;
   shotType: 'dink' | 'drive' | 'lob' | 'serve' | 'third_shot' | 'reset' | 'unknown';
-  zoneStart: string; // e.g., "kitchen", "baseline", "sideline"
+  zoneStart: string;
   zoneEnd: string;
+  inOrOut: 'in' | 'out'; // Whether shot landed in bounds
 }
 
 interface AnalysisResult {
@@ -125,9 +127,11 @@ async function analyzeVideoWithFileUri(fileUri: string, mimeType: string): Promi
     'hardGame:{speedUpEfficiency:0-100,forcedErrorsCaused:0+},' +
     'netDefense:{resetSuccessPercent:0-100,popUpFrequency:0-100},' +
     'playerInsights:["insight1","insight2"],' +
-    'ballTrajectories:[{player:1,startPosition:{x:10,y:20},endPosition:{x:15,y:25},' +
-    'shotType:"dink",zoneStart:"kitchen",zoneEnd:"midcourt"}]}. ' +
-    'Add 5-10 real trajectories. Court: 20ft wide (x=0-20), 44ft long (y=0-44), kitchen y=0-7.';
+    'ballTrajectories:[{player:1,playerName:"Player1",startPosition:{x:10,y:20},' +
+    'endPosition:{x:15,y:25},shotType:"dink",zoneStart:"kitchen",zoneEnd:"midcourt",inOrOut:"in"}]}. ' +
+    'For each shot: player (1 or 2), playerName (from video metadata or "Player 1"/"Player 2"), ' +
+    'startPosition, endPosition, shotType, zones, inOrOut (in=landed in, out=missed/out). ' +
+    'Court: 20ft wide (x=0-20), 44ft long (y=0-44), kitchen y=0-7. Add 5-10 real trajectories.';
 
   const response = await fetch(`${BASE_URL}/v1beta/models/gemini-3.5-flash:generateContent`, {
     method: 'POST',

@@ -12,11 +12,13 @@ import TrajectoryVisualization from '@/components/TrajectoryVisualization';
 
 interface BallTrajectory {
   player: 1 | 2;
+  playerName: string;
   startPosition: { x: number; y: number };
   endPosition: { x: number; y: number };
   shotType: string;
   zoneStart: string;
   zoneEnd: string;
+  inOrOut: 'in' | 'out';
 }
 
 interface GeminiAnalysis {
