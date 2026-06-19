@@ -134,6 +134,9 @@ def detect_balls_in_frames(frames: List[np.ndarray]) -> List[dict]:
 
         for frame_idx, frame in enumerate(frames):
             try:
+                if frame_idx == 0:
+                    logger.info(f"[INFERENCE] Processing frame {frame_idx}, shape: {frame.shape}")
+
                 # Convert BGR to HSV color space
                 hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
 
@@ -246,16 +249,27 @@ async def infer(request: InferenceRequest):
 
         try:
             # Step 2: Extract frames
+            logger.info("[INFERENCE] Extracting frames from video...")
             frames, total_frames, video_fps, duration = extract_frames(video_path, fps=1)
 
             if not frames:
                 raise ValueError("No frames extracted from video")
 
+            logger.info(f"[INFERENCE] Extracted {len(frames)} frames")
+
+            # Limit frames to prevent memory issues
+            if len(frames) > 100:
+                logger.info(f"[INFERENCE] Limiting frames from {len(frames)} to 100 to save memory")
+                frames = frames[:100]
+
             video_width = frames[0].shape[1]
             video_height = frames[0].shape[0]
+            logger.info(f"[INFERENCE] Video resolution: {video_width}x{video_height}")
 
             # Step 3: Detect balls
+            logger.info("[INFERENCE] Starting ball detection...")
             raw_detections = detect_balls_in_frames(frames)
+            logger.info(f"[INFERENCE] Ball detection complete. Found {len(raw_detections)} detections")
 
             # Step 4: Convert to output format
             detections = []
@@ -297,9 +311,11 @@ async def infer(request: InferenceRequest):
             except:
                 pass
 
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"[INFERENCE] Error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"[INFERENCE] FATAL ERROR: {type(e).__name__}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Inference failed: {str(e)}")
 
 
 if __name__ == "__main__":
