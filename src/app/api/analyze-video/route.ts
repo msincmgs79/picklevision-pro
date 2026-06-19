@@ -1,8 +1,5 @@
 import { saveVideoAnalysis } from '@/lib/db';
 
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY!;
-const BASE_URL = 'https://generativelanguage.googleapis.com';
-
 interface BallTrajectory {
   player: 1 | 2;
   playerName: string;
@@ -35,9 +32,10 @@ export async function POST(request: Request) {
 
     console.log('[ANALYZE] Starting hybrid YOLOv8 + Gemini analysis');
 
-    // STEP 1: Call YOLOv8 ball detection
+    // STEP 1: Call YOLOv8 ball detection - use request origin
     console.log('[ANALYZE] Calling YOLOv8 detect-ball endpoint');
-    const detectResponse = await fetch(`${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/detect-ball`, {
+    const origin = request.headers.get('origin') || `${request.headers.get('x-forwarded-proto')}://${request.headers.get('host')}`;
+    const detectResponse = await fetch(`${origin}/api/detect-ball`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ videoUrl }),
@@ -57,9 +55,8 @@ export async function POST(request: Request) {
     // STEP 2: Convert YOLOv8 detections to trajectory format
     let trajectories: BallTrajectory[] = [];
     if (detectData.detections && Array.isArray(detectData.detections)) {
-      // Group detections into trajectories and format them
       trajectories = detectData.detections
-        .slice(0, Math.min(detectData.detections.length, 500)) // Limit to prevent huge arrays
+        .slice(0, Math.min(detectData.detections.length, 500))
         .map((det: any, idx: number) => ({
           player: idx % 2 === 0 ? (1 as const) : (2 as const),
           playerName: idx % 2 === 0 ? 'Player 1' : 'Player 2',
