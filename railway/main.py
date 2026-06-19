@@ -125,7 +125,8 @@ def extract_frames(video_path: str, fps: int = 5) -> tuple[List[np.ndarray], int
 
 def detect_balls_in_frames(frames: List[np.ndarray]) -> List[dict]:
     """
-    Detect pickleballs in video frames using OpenCV Hough Circle detection
+    Detect pickleballs in video frames using color-based detection
+    Pickleballs are bright yellow/green - detect by HSV color range
     Returns list of detections with frame number and coordinates
     """
     try:
@@ -133,41 +134,62 @@ def detect_balls_in_frames(frames: List[np.ndarray]) -> List[dict]:
 
         for frame_idx, frame in enumerate(frames):
             try:
-                # Convert to grayscale
-                gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                # Convert BGR to HSV color space
+                hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
 
-                # Blur to reduce noise
-                blurred = cv2.GaussianBlur(gray, (9, 9), 2)
+                # Define range for yellow/green pickleball color
+                # Pickleballs are typically bright yellow or lime green
+                # Lower bound: H=15-25 (yellow), S=100-255, V=100-255
+                # Upper bound: H=35-45 (yellow-green), S=255, V=255
+                lower_yellow1 = np.array([15, 100, 100])
+                upper_yellow1 = np.array([45, 255, 255])
 
-                # Detect circles using Hough Circle Transform
-                # Pickleballs are roughly 40-80 pixels in diameter depending on distance
-                circles = cv2.HoughCircles(
-                    blurred,
-                    cv2.HOUGH_GRADIENT,
-                    dp=1,
-                    minDist=20,
-                    param1=50,
-                    param2=30,
-                    minRadius=10,
-                    maxRadius=100
-                )
+                # Create mask for yellow/green colors
+                mask = cv2.inRange(hsv, lower_yellow1, upper_yellow1)
 
-                if circles is not None:
-                    circles = np.uint16(np.around(circles))
+                # Apply morphological operations to clean up mask
+                kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+                mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
+                mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
 
-                    for circle in circles[0, :]:
-                        x, y, radius = circle
-                        # Estimate confidence based on circle properties
-                        confidence = min(0.9, 0.5 + (radius / 100.0) * 0.4)
+                # Find contours in the mask
+                contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
-                        detections.append({
-                            "frame": frame_idx,
-                            "x": float(x),
-                            "y": float(y),
-                            "confidence": float(confidence),
-                            "width": float(radius * 2),
-                            "height": float(radius * 2)
-                        })
+                # Process each contour
+                for contour in contours:
+                    # Filter by area (pickleballs have minimum size)
+                    area = cv2.contourArea(contour)
+                    if area < 20:  # Too small
+                        continue
+                    if area > 10000:  # Too large
+                        continue
+
+                    # Get bounding circle
+                    (x, y), radius = cv2.minEnclosingCircle(contour)
+
+                    # Check if contour is roughly circular (circularity check)
+                    if radius < 5:
+                        continue
+
+                    # Calculate circularity: 4*pi*area / perimeter^2
+                    perimeter = cv2.arcLength(contour, True)
+                    if perimeter > 0:
+                        circularity = (4 * np.pi * area) / (perimeter ** 2)
+                        # Circular objects have circularity close to 1
+                        if circularity < 0.6:  # Not circular enough
+                            continue
+
+                    # Confidence based on circularity and size
+                    confidence = min(0.95, 0.7 + (circularity - 0.6) * 0.5)
+
+                    detections.append({
+                        "frame": frame_idx,
+                        "x": float(x),
+                        "y": float(y),
+                        "confidence": float(confidence),
+                        "width": float(radius * 2),
+                        "height": float(radius * 2)
+                    })
 
                 if (frame_idx + 1) % max(1, len(frames) // 10) == 0:
                     logger.info(f"[INFERENCE] Processed {frame_idx + 1}/{len(frames)} frames, {len(detections)} detections so far")
