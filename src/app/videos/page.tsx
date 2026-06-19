@@ -3,7 +3,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
-import { uploadMatchVideo, saveStandaloneVideo, getUserVideos, saveVideoAnalysis } from '@/lib/db';
+import { uploadMatchVideo, saveStandaloneVideo, getUserVideos, saveVideoAnalysis, deleteVideo } from '@/lib/db';
 import Header from '@/components/Header';
 import Navigation from '@/components/Navigation';
 import PageLayout from '@/components/PageLayout';
@@ -141,8 +141,18 @@ export default function VideosPage() {
 
   // Handle video deletion
   const handleDeleteVideo = async (videoId: string) => {
+    const video = videos.find((v) => v.id === videoId);
+    if (!video || !user?.uid) return;
+
     if (confirm('Are you sure you want to delete this video?')) {
-      setVideos((prev) => prev.filter((v) => v.id !== videoId));
+      try {
+        await deleteVideo(videoId, video.videoUrl || '', user.uid);
+        setVideos((prev) => prev.filter((v) => v.id !== videoId));
+        console.log('✅ Video deleted:', videoId);
+      } catch (error) {
+        console.error('❌ Delete failed:', error);
+        alert('Failed to delete video. Please try again.');
+      }
     }
   };
 
