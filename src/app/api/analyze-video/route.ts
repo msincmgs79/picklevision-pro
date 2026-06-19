@@ -120,11 +120,11 @@ async function analyzeVideoWithFileUri(fileUri: string, mimeType: string): Promi
   console.log('[FILES_API] Analyzing with Gemini, file URI:', fileUri.substring(0, 60), '...');
 
   const prompt =
-    'YOU MUST ANALYZE THE ENTIRE VIDEO FROM START TO FINISH WITHOUT STOPPING. ' +
-    'EXTRACT EVERY SINGLE SHOT FROM THE VIDEO. Do not stop early. Do not skip rallies. ' +
-    'Watch every frame and identify every time the ball is hit by a player. ' +
-    'For EVERY shot: track where the ball starts (hit position), where it ends (landing position), which player hit it, shot type, and if it was in or out. ' +
-    'Return ONLY valid JSON - NO placeholder data, ONLY real data from the video: ' +
+    'ABSOLUTE REQUIREMENT: Analyze the COMPLETE video from START to FINISH. This is a FULL PICKLEBALL GAME (7-15 minutes). ' +
+    'DO NOT ANALYZE ONLY PART OF THE VIDEO. DO NOT STOP EARLY. ' +
+    'TASK: Extract EVERY SINGLE SHOT from the entire game. A shot = any time either player hits the ball. ' +
+    'EXPECTED: 7-15 minute game = 300-900+ TOTAL SHOTS. You MUST find them all. ' +
+    'Return ONLY valid JSON with REAL data from EVERY shot in the entire video: ' +
     '{kitchenTransition:{thirdShotSuccessRate:0-100,returnContactDepth:0-20},' +
     'softGame:{deadDinksCount:0+,unforcedErrorsCount:0+},' +
     'shotPlacement:{targetingAccuracy:0-100},' +
@@ -132,17 +132,18 @@ async function analyzeVideoWithFileUri(fileUri: string, mimeType: string): Promi
     'netDefense:{resetSuccessPercent:0-100,popUpFrequency:0-100},' +
     'playerInsights:["insight1","insight2"],' +
     'ballTrajectories:[{player:1,playerName:"Player 1",startPosition:{x:3,y:44},endPosition:{x:10,y:20},' +
-    'shotType:"serve",zoneStart:"baseline",zoneEnd:"midcourt",inOrOut:"in"}]}. ' +
-    'CRITICAL RULES: ' +
-    '1. ONLY two players exist: player must be 1 or 2, playerName must be "Player 1" or "Player 2" (NEVER Player 3, Player 4, etc) ' +
-    '2. Extract EVERY rally and EVERY shot exchange - be exhaustive, not selective ' +
-    '3. startPosition = where player hit the ball from (actual court location from video) ' +
-    '4. endPosition = where ball landed or went out (actual court location from video) ' +
-    '5. shotType = serve/dink/drive/lob/third_shot/reset/unknown (based on speed/arc from video) ' +
-    '6. zoneStart/zoneEnd = kitchen (y:0-7) / midcourt (y:7-37) / baseline (y:37-44) ' +
-    '7. inOrOut = "in" if ball landed in bounds, "out" if missed court ' +
-    '8. Court coordinates: x = 0-20 (width, 0=left baseline, 20=right baseline), y = 0-44 (length, 0=net, 44=far baseline) ' +
-    'RETURN 50-200 TRAJECTORIES FOR A FULL MATCH VIDEO. Exhaustive analysis, every single shot.';
+    'shotType:"serve",zoneStart:"baseline",zoneEnd:"midcourt",inOrOut:"in"},{player:2,playerName:"Player 2",startPosition:{x:10,y:20},' +
+    'endPosition:{x:15,y:30},shotType:"drive",zoneStart:"midcourt",zoneEnd:"baseline",inOrOut:"out"},...200+ more trajectories]}. ' +
+    'MANDATORY RULES: ' +
+    '1. Analyze EVERY SECOND of the video. Track EVERY shot without exception. ' +
+    '2. Player: 1 or 2 only. playerName: "Player 1" or "Player 2" ONLY. ' +
+    '3. startPosition: exact court location where ball was hit (x=0-20, y=0-44) ' +
+    '4. endPosition: exact court location where ball landed or went out ' +
+    '5. shotType: serve/dink/drive/lob/third_shot/reset/unknown ' +
+    '6. zoneStart/zoneEnd: kitchen(y:0-7) / midcourt(y:7-37) / baseline(y:37-44) ' +
+    '7. inOrOut: "in" or "out" ' +
+    '8. Court: x=0-20 (width), y=0-44 (length) ' +
+    'CRITICAL: If you return fewer than 200 trajectories, you are not analyzing the full video. Keep going until you find 300-900 shots.';
 
   const response = await fetch(`${BASE_URL}/v1beta/models/gemini-3.5-flash:generateContent`, {
     method: 'POST',
