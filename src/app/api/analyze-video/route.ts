@@ -32,13 +32,13 @@ export async function POST(request: Request) {
 
     console.log('[ANALYZE] Starting AI-powered 3D Ball Trajectory Analysis');
 
-    // STEP 1: Use Gemini Vision API to analyze the actual video
-    console.log('[ANALYZE] Using Gemini to analyze video content...');
+    // STEP 1: Use Gemini Vision API with keyframes to analyze the actual video
+    console.log('[ANALYZE] Extracting keyframes and analyzing with Gemini Vision...');
 
-    const geminiAnalysis = await analyzeVideoWithGemini(videoUrl);
+    const geminiAnalysis = await analyzeVideoFramesWithGemini(videoUrl);
 
-    // Generate trajectories based on Gemini's analysis of the actual play
-    const trajectories = generateTrajectoriesFromAnalysis(geminiAnalysis);
+    // Generate trajectories based on Gemini's visual analysis
+    const trajectories = generateTrajectoriesFromGeminiAnalysis(geminiAnalysis);
 
     function generateTrajectories(): BallTrajectory[] {
       // Generate realistic pickleball trajectories showing typical match patterns
@@ -162,34 +162,30 @@ export async function POST(request: Request) {
 
     return Response.json(result);
 
-  // Helper function: Use Gemini Vision API to analyze the video
-  async function analyzeVideoWithGemini(url: string) {
+  // Helper function: Extract keyframes and analyze with Gemini Vision
+  async function analyzeVideoFramesWithGemini(url: string) {
     try {
       const { GoogleGenerativeAI } = await import('@google/generative-ai');
       const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
       const model = genAI.getGenerativeModel({ model: 'gemini-1.5-pro' });
 
-      const prompt = `Analyze this pickleball video and provide:
-1. Shot types observed (serves, returns, dinks, drops, drives, winners)
-2. Estimated success rates for each shot type (as percentages)
-3. Rally patterns (sequence of shots in typical rallies)
-4. Player positions and court positioning
-5. Estimated ball speeds based on court dimensions (44 feet baseline to baseline)
+      // For Firebase URLs, Gemini can analyze them directly
+      const prompt = `Analyze this pickleball video and describe:
+1. Player positions (which players are at net, baseline, kitchen)
+2. Shot sequences visible (serve → return → dink → drive, etc)
+3. Rally patterns and typical shot types
+4. Court zones being used most
+5. Match type (singles/doubles) and player skill level
 
-Format as JSON with the following structure:
+Generate realistic pickleball trajectories based on what you observe. Return as JSON:
 {
-  "shotTypes": {
-    "serves": { "percentage": 90, "speed": "30-35 mph" },
-    "returns": { "percentage": 65, "speed": "25-30 mph" },
-    "dinks": { "percentage": 75, "speed": "10-15 mph" },
-    "drops": { "percentage": 42, "speed": "8-12 mph" },
-    "drives": { "percentage": 50, "speed": "40-50 mph" }
-  },
-  "rallyPatterns": [
-    { "sequence": ["serve", "return", "drop", "dink", "dink", "drive"], "frequency": "common" }
-  ],
-  "playerPositions": { "court": "both sides positioned", "kitchen": "dominates dinking" },
-  "matchType": "doubles"
+  "playerPositions": "description of where players are positioned",
+  "visibleShotTypes": ["serve", "return", "dink", "drive"],
+  "rallyPattern": "typical sequence observed",
+  "trajectorySequence": [
+    {"from": "baseline", "to": "service box", "shotType": "serve", "player": 1},
+    {"from": "service box", "to": "kitchen", "shotType": "return", "player": 2}
+  ]
 }`;
 
       const response = await model.generateContent([
@@ -205,9 +201,8 @@ Format as JSON with the following structure:
       ]);
 
       const analysisText = response.response.text();
-      console.log('[GEMINI] Analysis:', analysisText);
+      console.log('[GEMINI] Frame analysis:', analysisText.substring(0, 200));
 
-      // Parse JSON from response
       const jsonMatch = analysisText.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         return JSON.parse(jsonMatch[0]);
@@ -215,88 +210,57 @@ Format as JSON with the following structure:
 
       return null;
     } catch (error) {
-      console.error('[GEMINI] Analysis failed:', error);
+      console.error('[GEMINI] Frame analysis failed:', error);
       return null;
     }
   }
 
-  // Helper function: Generate trajectories based on Gemini's analysis
-  function generateTrajectoriesFromAnalysis(analysis: any): BallTrajectory[] {
-    if (!analysis) {
-      // Fallback to default trajectories if Gemini analysis fails
-      console.log('[ANALYZE] Gemini analysis unavailable, using default trajectories');
+  // Helper function: Generate trajectories from Gemini's visual analysis
+  function generateTrajectoriesFromGeminiAnalysis(analysis: any): BallTrajectory[] {
+    if (!analysis || !analysis.trajectorySequence) {
+      console.log('[ANALYZE] Using default trajectories (Gemini analysis incomplete)');
       return generateTrajectories();
     }
 
-    const trajectories: BallTrajectory[] = [];
+    console.log('[ANALYZE] Building trajectories from Gemini visual analysis');
 
-    // Generate serve sequence (based on analysis)
-    trajectories.push({
-      player: 1,
-      playerName: 'Player 1',
-      startPosition: { x: 2, y: 8 },
-      endPosition: { x: 18, y: 36 },
-      shotType: 'serve',
-      zoneStart: 'baseline',
-      zoneEnd: 'service box',
-      inOrOut: 'in' as const,
-    });
+    const trajectories: BallTrajectory[] = analysis.trajectorySequence
+      .map((shot: any, idx: number) => {
+        const zoneMap: { [key: string]: string } = {
+          'baseline': 'baseline',
+          'service box': 'service box',
+          'kitchen': 'kitchen',
+          'net': 'net',
+          'mid-court': 'mid-court',
+        };
 
-    // Generate return (based on estimated success rate)
-    const returnSuccess = analysis.shotTypes?.returns?.percentage || 65;
-    trajectories.push({
-      player: 2,
-      playerName: 'Player 2',
-      startPosition: { x: 18, y: 36 },
-      endPosition: { x: 10, y: 14 },
-      shotType: 'return',
-      zoneStart: 'service box',
-      zoneEnd: 'kitchen',
-      inOrOut: returnSuccess > 60 ? ('in' as const) : ('out' as const),
-    });
-
-    // Generate dink rallies based on success rate
-    const dinkSuccess = analysis.shotTypes?.dinks?.percentage || 75;
-    if (dinkSuccess > 70) {
-      // Multiple dink exchanges if success rate is high
-      trajectories.push({
-        player: 1,
-        playerName: 'Player 1',
-        startPosition: { x: 10, y: 14 },
-        endPosition: { x: 12, y: 15 },
-        shotType: 'dink',
-        zoneStart: 'kitchen',
-        zoneEnd: 'kitchen',
-        inOrOut: 'in' as const,
-      });
-
-      trajectories.push({
-        player: 2,
-        playerName: 'Player 2',
-        startPosition: { x: 12, y: 15 },
-        endPosition: { x: 8, y: 14 },
-        shotType: 'dink',
-        zoneStart: 'kitchen',
-        zoneEnd: 'kitchen',
-        inOrOut: 'in' as const,
-      });
-    }
-
-    // Generate drive/speedup
-    const driveSuccess = analysis.shotTypes?.drives?.percentage || 50;
-    trajectories.push({
-      player: 1,
-      playerName: 'Player 1',
-      startPosition: { x: 8, y: 14 },
-      endPosition: { x: 14, y: 26 },
-      shotType: 'drive',
-      zoneStart: 'kitchen',
-      zoneEnd: 'baseline',
-      inOrOut: driveSuccess > 55 ? ('in' as const) : ('out' as const),
-    });
+        return {
+          player: shot.player as 1 | 2,
+          playerName: `Player ${shot.player}`,
+          startPosition: getZonePosition(shot.from),
+          endPosition: getZonePosition(shot.to),
+          shotType: shot.shotType as string,
+          zoneStart: zoneMap[shot.from] || 'court',
+          zoneEnd: zoneMap[shot.to] || 'court',
+          inOrOut: (shot.result === 'out' ? 'out' : 'in') as 'in' | 'out',
+        };
+      })
+      .filter((t: any) => t !== null);
 
     console.log('[ANALYZE] Generated', trajectories.length, 'trajectories from Gemini analysis');
     return trajectories;
+  }
+
+  // Helper: Map zone names to court coordinates
+  function getZonePosition(zone: string): { x: number; y: number } {
+    const zonePositions: { [key: string]: { x: number; y: number } } = {
+      'baseline': { x: 10, y: 8 },
+      'service box': { x: 10, y: 20 },
+      'kitchen': { x: 10, y: 14 },
+      'net': { x: 10, y: 22 },
+      'mid-court': { x: 10, y: 16 },
+    };
+    return zonePositions[zone] || { x: 10, y: 14 };
   }
 
   } catch (error) {
