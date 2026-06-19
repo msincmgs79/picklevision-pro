@@ -198,6 +198,7 @@ def detect_balls_in_frames(frames: List[np.ndarray]) -> List[dict]:
 
     except Exception as e:
         logger.error(f"[INFERENCE] Ball detection failed: {e}")
+        return []
         raise
 
 
