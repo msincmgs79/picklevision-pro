@@ -120,26 +120,29 @@ async function analyzeVideoWithFileUri(fileUri: string, mimeType: string): Promi
   console.log('[FILES_API] Analyzing with Gemini, file URI:', fileUri.substring(0, 60), '...');
 
   const prompt =
-    'WATCH AND ANALYZE THIS ENTIRE PICKLEBALL VIDEO CAREFULLY. ' +
-    'Extract ACTUAL REAL ball trajectory data from the video frames - do NOT make up placeholder data. ' +
-    'Identify EVERY shot visible in the video and track the ball movement from hit point to landing point. ' +
-    'Return ONLY valid JSON with real extracted data: ' +
+    'YOU MUST ANALYZE THE ENTIRE VIDEO FROM START TO FINISH WITHOUT STOPPING. ' +
+    'EXTRACT EVERY SINGLE SHOT FROM THE VIDEO. Do not stop early. Do not skip rallies. ' +
+    'Watch every frame and identify every time the ball is hit by a player. ' +
+    'For EVERY shot: track where the ball starts (hit position), where it ends (landing position), which player hit it, shot type, and if it was in or out. ' +
+    'Return ONLY valid JSON - NO placeholder data, ONLY real data from the video: ' +
     '{kitchenTransition:{thirdShotSuccessRate:0-100,returnContactDepth:0-20},' +
     'softGame:{deadDinksCount:0+,unforcedErrorsCount:0+},' +
     'shotPlacement:{targetingAccuracy:0-100},' +
     'hardGame:{speedUpEfficiency:0-100,forcedErrorsCaused:0+},' +
     'netDefense:{resetSuccessPercent:0-100,popUpFrequency:0-100},' +
     'playerInsights:["insight1","insight2"],' +
-    'ballTrajectories:[{player:1,playerName:"Player1",startPosition:{x:3,y:44},endPosition:{x:10,y:20},' +
+    'ballTrajectories:[{player:1,playerName:"Player 1",startPosition:{x:3,y:44},endPosition:{x:10,y:20},' +
     'shotType:"serve",zoneStart:"baseline",zoneEnd:"midcourt",inOrOut:"in"}]}. ' +
-    'MANDATORY: For EVERY shot in the video, analyze from video frames and extract: ' +
-    'player (1 or 2), playerName ("Player 1" or "Player 2"), ' +
-    'startPosition (actual hit location from video), endPosition (actual landing location from video), ' +
-    'shotType (serve/dink/drive/lob/third_shot/reset/unknown based on speed and arc), ' +
-    'zoneStart/zoneEnd (kitchen:y0-7, midcourt:y7-37, baseline:y37-44), ' +
-    'inOrOut (in if landed in court bounds, out if out of bounds). ' +
-    'Court: x=0-20 (width, 0=left, 20=right), y=0-44 (length, 0=near net, 44=far baseline). ' +
-    'Return 15-50 real trajectories based on actual video content and match length. NO PLACEHOLDER DATA.';
+    'CRITICAL RULES: ' +
+    '1. ONLY two players exist: player must be 1 or 2, playerName must be "Player 1" or "Player 2" (NEVER Player 3, Player 4, etc) ' +
+    '2. Extract EVERY rally and EVERY shot exchange - be exhaustive, not selective ' +
+    '3. startPosition = where player hit the ball from (actual court location from video) ' +
+    '4. endPosition = where ball landed or went out (actual court location from video) ' +
+    '5. shotType = serve/dink/drive/lob/third_shot/reset/unknown (based on speed/arc from video) ' +
+    '6. zoneStart/zoneEnd = kitchen (y:0-7) / midcourt (y:7-37) / baseline (y:37-44) ' +
+    '7. inOrOut = "in" if ball landed in bounds, "out" if missed court ' +
+    '8. Court coordinates: x = 0-20 (width, 0=left baseline, 20=right baseline), y = 0-44 (length, 0=net, 44=far baseline) ' +
+    'RETURN 50-200 TRAJECTORIES FOR A FULL MATCH VIDEO. Exhaustive analysis, every single shot.';
 
   const response = await fetch(`${BASE_URL}/v1beta/models/gemini-3.5-flash:generateContent`, {
     method: 'POST',
@@ -364,6 +367,14 @@ export async function POST(request: Request) {
     const jsonMatch = analysisText.match(/\{[\s\S]*\}/);
     const analysis = JSON.parse(jsonMatch ? jsonMatch[0] : '{}');
 
+    // Validate and fix trajectories - ensure playerName is always "Player 1" or "Player 2"
+    let trajectories = Array.isArray(analysis.ballTrajectories) ? analysis.ballTrajectories : [];
+    trajectories = trajectories.map((traj: any) => ({
+      ...traj,
+      playerName: traj.player === 1 ? 'Player 1' : 'Player 2', // Force correct player name
+      inOrOut: traj.inOrOut === 'out' ? 'out' : 'in', // Default to 'in' if not specified
+    }));
+
     const result: AnalysisResult = {
       success: true,
       kitchenTransition: analysis.kitchenTransition || { thirdShotSuccessRate: 0, returnContactDepth: 0 },
@@ -372,7 +383,7 @@ export async function POST(request: Request) {
       hardGame: analysis.hardGame || { speedUpEfficiency: 0, forcedErrorsCaused: 0 },
       netDefense: analysis.netDefense || { resetSuccessPercent: 0, popUpFrequency: 0 },
       playerInsights: analysis.playerInsights || [],
-      ballTrajectories: Array.isArray(analysis.ballTrajectories) ? analysis.ballTrajectories : [],
+      ballTrajectories: trajectories,
     };
 
     console.log('[ROUTE] Parsed metrics:', result);
