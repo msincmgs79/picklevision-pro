@@ -125,7 +125,7 @@ def extract_frames(video_path: str, fps: int = 5) -> tuple[List[np.ndarray], int
 
 def detect_balls_in_frames(frames: List[np.ndarray]) -> List[dict]:
     """
-    Run ball detection on each frame using Roboflow
+    Detect pickleballs in video frames using OpenCV Hough Circle detection
     Returns list of detections with frame number and coordinates
     """
     try:
@@ -133,58 +133,41 @@ def detect_balls_in_frames(frames: List[np.ndarray]) -> List[dict]:
 
         for frame_idx, frame in enumerate(frames):
             try:
-                # Encode frame to JPG bytes
-                ret, jpg = cv2.imencode('.jpg', frame)
-                if not ret:
-                    logger.warning(f"[INFERENCE] Failed to encode frame {frame_idx}")
-                    continue
+                # Convert to grayscale
+                gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
-                jpg_bytes = jpg.tobytes()
+                # Blur to reduce noise
+                blurred = cv2.GaussianBlur(gray, (9, 9), 2)
 
-                # Infer using Roboflow (or use public model if no API key)
-                if client and ROBOFLOW_API_KEY:
-                    result = client.infer_on_image(
-                        image=jpg_bytes,
-                        model_id=PICKLEBALL_MODEL_ID,
-                        confidence=CONFIDENCE_THRESHOLD
-                    )
-                else:
-                    # Fallback: Use public Roboflow model without API key
-                    try:
-                        response = requests.post(
-                            "https://detect.roboflow.com/pickleball-detection/4?api_key=rf_free",
-                            data=jpg_bytes,
-                            headers={"Content-Type": "application/octet-stream"},
-                            timeout=15
-                        )
-                        result = response.json() if response.status_code == 200 else {"predictions": []}
-                        if response.status_code != 200:
-                            logger.warning(f"[INFERENCE] Roboflow API returned {response.status_code}: {response.text[:200]}")
-                    except Exception as e:
-                        logger.warning(f"[INFERENCE] Roboflow API call failed: {e}")
-                        result = {"predictions": []}
+                # Detect circles using Hough Circle Transform
+                # Pickleballs are roughly 40-80 pixels in diameter depending on distance
+                circles = cv2.HoughCircles(
+                    blurred,
+                    cv2.HOUGH_GRADIENT,
+                    dp=1,
+                    minDist=20,
+                    param1=50,
+                    param2=30,
+                    minRadius=10,
+                    maxRadius=100
+                )
 
-                # Extract ball detections
-                predictions = result.get("predictions", [])
+                if circles is not None:
+                    circles = np.uint16(np.around(circles))
 
-                for pred in predictions:
-                    # Filter by confidence and size (pickleballs are small objects)
-                    if pred.get("confidence", 0) >= CONFIDENCE_THRESHOLD:
-                        x = pred.get("x", 0)
-                        y = pred.get("y", 0)
-                        width = pred.get("width", 0)
-                        height = pred.get("height", 0)
+                    for circle in circles[0, :]:
+                        x, y, radius = circle
+                        # Estimate confidence based on circle properties
+                        confidence = min(0.9, 0.5 + (radius / 100.0) * 0.4)
 
-                        # Pickleball constraints: small, roughly circular
-                        if 5 < width < 200 and 5 < height < 200:
-                            detections.append({
-                                "frame": frame_idx,
-                                "x": x,
-                                "y": y,
-                                "confidence": pred.get("confidence", 0.0),
-                                "width": width,
-                                "height": height
-                            })
+                        detections.append({
+                            "frame": frame_idx,
+                            "x": float(x),
+                            "y": float(y),
+                            "confidence": float(confidence),
+                            "width": float(radius * 2),
+                            "height": float(radius * 2)
+                        })
 
                 if (frame_idx + 1) % max(1, len(frames) // 10) == 0:
                     logger.info(f"[INFERENCE] Processed {frame_idx + 1}/{len(frames)} frames, {len(detections)} detections so far")
