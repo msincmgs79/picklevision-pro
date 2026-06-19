@@ -136,7 +136,6 @@ async function analyzeVideoWithFileUri(
   const prompt =
     'Analyze this pickleball video and return ONLY a JSON object with: {kitchenTransition:{thirdShotSuccessRate:0-100,returnContactDepth:0-20},softGame:{deadDinksCount:0+,unforcedErrorsCount:0+},shotPlacement:{targetingAccuracy:0-100},hardGame:{speedUpEfficiency:0-100,forcedErrorsCaused:0+},netDefense:{resetSuccessPercent:0-100,popUpFrequency:0-100},playerInsights:["insight1","insight2"]}';
 
-  // REST API request body using file URI
   const requestBody = {
     contents: [
       {
@@ -213,7 +212,6 @@ async function waitForFileProcessing(fileName: string, maxWaitMs: number = 60000
     console.log('[FILES_API] Full file metadata response:');
     console.log(JSON.stringify(fileMetadata, null, 2));
 
-    // Check what properties actually exist in the response
     console.log('[FILES_API] Available keys:', Object.keys(fileMetadata));
     console.log('[FILES_API] Has file.state?', fileMetadata.file?.state);
     console.log('[FILES_API] Has state?', fileMetadata.state);
@@ -257,7 +255,6 @@ async function deleteFile(fileName: string): Promise<void> {
 
   if (!response.ok) {
     console.warn(`File deletion warning: ${response.status}`);
-    // Don't throw - file will auto-delete in 48h anyway
   } else {
     console.log('[FILES_API] File deleted successfully');
   }
@@ -305,4 +302,21 @@ export async function analyzeVideoWithFilesAPI(videoUrl: string): Promise<string
     await waitForFileProcessing(fileName);
 
     // Step 3: Analyze with Gemini
-    const analysisText = await analyzeVi
+    const analysisText = await analyzeVideoWithFileUri(
+      fileMetadata.file.uri,
+      mimeType
+    );
+
+    console.log('[FILES_API] Analysis complete');
+    return analysisText;
+  } finally {
+    // Cleanup
+    if (fileName) {
+      try {
+        await deleteFile(fileName);
+      } catch (deleteError) {
+        console.error('[FILES_API] Error during cleanup:', deleteError);
+      }
+    }
+  }
+}

@@ -150,7 +150,7 @@ async function waitForFileProcessing(fileName: string, maxWaitMs: number = 60000
   console.log('[FILES_API] Waiting for file to finish processing...');
 
   const startTime = Date.now();
-  const pollIntervalMs = 1000; // Check every 1 second
+  const pollIntervalMs = 1000;
 
   while (Date.now() - startTime < maxWaitMs) {
     const response = await fetch(`${BASE_URL}/v1beta/${fileName}`, {
@@ -168,7 +168,6 @@ async function waitForFileProcessing(fileName: string, maxWaitMs: number = 60000
     console.log('[FILES_API] Full file metadata response:');
     console.log(JSON.stringify(fileMetadata, null, 2));
 
-    // Check what properties actually exist in the response
     console.log('[FILES_API] Available keys:', Object.keys(fileMetadata));
     console.log('[FILES_API] Has file.state?', fileMetadata.file?.state);
     console.log('[FILES_API] Has state?', fileMetadata.state);
@@ -188,7 +187,6 @@ async function waitForFileProcessing(fileName: string, maxWaitMs: number = 60000
       continue;
     }
 
-    // Unexpected state - don't proceed
     throw new Error(`Unexpected file state: ${state}. Expected PROCESSING or ACTIVE.`);
   }
 
@@ -219,7 +217,6 @@ async function deleteFile(fileName: string): Promise<void> {
 async function analyzeVideoFile(videoUrl: string): Promise<string> {
   console.log('[ROUTE] Starting video analysis with Files API');
 
-  // Download video
   console.log('[ROUTE] Downloading video from:', videoUrl.substring(0, 60), '...');
   const videoResponse = await fetch(videoUrl);
   if (!videoResponse.ok) {
@@ -236,23 +233,17 @@ async function analyzeVideoFile(videoUrl: string): Promise<string> {
   let fileName: string | null = null;
 
   try {
-    // Step 1: Initiate upload
     const uploadUrl = await initiateUpload(displayName, mimeType, videoBytes.length);
-
-    // Step 2: Upload file bytes
     const fileMetadata = await uploadFileBytes(uploadUrl, videoBytes, mimeType);
     fileName = fileMetadata.name;
 
-    // Step 3.5: Wait for file to be processed
     await waitForFileProcessing(fileName);
 
-    // Step 3: Analyze with Gemini
     const analysisText = await analyzeVideoWithFileUri(fileMetadata.uri, mimeType);
 
     console.log('[ROUTE] Analysis complete');
     return analysisText;
   } finally {
-    // Step 4: Cleanup
     if (fileName) {
       try {
         await deleteFile(fileName);
@@ -318,7 +309,6 @@ export async function POST(request: Request) {
       return Response.json({ success: false, error: 'API key missing' }, { status: 500 });
     }
 
-    // Choose analysis method
     let analysisText: string;
     if (videoUrl) {
       analysisText = await analyzeVideoFile(videoUrl);
@@ -328,7 +318,6 @@ export async function POST(request: Request) {
 
     console.log('[ROUTE] Raw analysis text:', analysisText.substring(0, 200));
 
-    // Parse JSON response
     const jsonMatch = analysisText.match(/\{[\s\S]*\}/);
     const analysis = JSON.parse(jsonMatch ? jsonMatch[0] : '{}');
 
@@ -344,8 +333,24 @@ export async function POST(request: Request) {
 
     console.log('[ROUTE] Parsed metrics:', result);
 
-    // Save to database
     if (userId && videoId) {
       try {
         await saveVideoAnalysis(userId, videoId, result);
-        c
+        console.log('[ROUTE] Analysis saved to database');
+      } catch (e) {
+        console.error('[ROUTE] DB save failed:', e);
+      }
+    }
+
+    return Response.json(result);
+  } catch (error) {
+    console.error('[ROUTE] Error:', error);
+    return Response.json(
+      {
+        success: false,
+        error: error instanceof Error ? error.message : 'Analysis failed',
+      },
+      { status: 500 }
+    );
+  }
+}
