@@ -1,36 +1,18 @@
-/**
- * Video Analysis API Endpoint
- *
- * Analyzes pickleball videos using Gemini API with Files API (resumable upload)
- *
- * Request body:
- * - videoUrl: URL to the video file (primary method)
- * - frameBase64: Base64-encoded image frame (fallback for images)
- * - userId: Firebase user ID (for saving analysis)
- * - videoId: Video ID (for saving analysis)
- *
- * Response: Pickleball performance metrics in JSON format
- */
-
 import { saveVideoAnalysis } from '@/lib/db';
+import { spawn } from 'child_process';
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY!;
 const BASE_URL = 'https://generativelanguage.googleapis.com';
 
-interface TrajectoryPoint {
-  x: number; // 0-27 feet (width)
-  y: number; // 0-44 feet (length)
-}
-
 interface BallTrajectory {
   player: 1 | 2;
-  playerName: string; // e.g., "Player 1", "Alice"
-  startPosition: TrajectoryPoint;
-  endPosition: TrajectoryPoint;
-  shotType: 'dink' | 'drive' | 'lob' | 'serve' | 'third_shot' | 'reset' | 'unknown';
+  playerName: string;
+  startPosition: { x: number; y: number };
+  endPosition: { x: number; y: number };
+  shotType: string;
   zoneStart: string;
   zoneEnd: string;
-  inOrOut: 'in' | 'out'; // Whether shot landed in bounds
+  inOrOut: 'in' | 'out';
 }
 
 interface AnalysisResult {
@@ -44,9 +26,6 @@ interface AnalysisResult {
   ballTrajectories?: BallTrajectory[];
 }
 
-/**
- * Step 1: Initiate resumable upload session
- */
 async function initiateUpload(filename: string, mimeType: string, fileSizeBytes: number): Promise<string> {
   console.log('[FILES_API] Initiating upload for:', filename);
 
@@ -60,14 +39,11 @@ async function initiateUpload(filename: string, mimeType: string, fileSizeBytes:
       'X-Goog-Upload-Header-Content-Type': mimeType,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({
-      file: { display_name: filename },
-    }),
+    body: JSON.stringify({ file: { display_name: filename } }),
   });
 
   if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`Upload initiation failed: ${response.status} ${error}`);
+    throw new Error(`Upload initiation failed: ${response.status}`);
   }
 
   const uploadUrl = response.headers.get('x-goog-upload-url');
@@ -78,14 +54,7 @@ async function initiateUpload(filename: string, mimeType: string, fileSizeBytes:
   return uploadUrl;
 }
 
-/**
- * Step 2: Upload file bytes and get file URI
- */
-async function uploadFileBytes(
-  uploadUrl: string,
-  fileBytes: Buffer,
-  mimeType: string
-): Promise<{ name: string; uri: string }> {
+async function uploadFileBytes(uploadUrl: string, fileBytes: Buffer, mimeType: string): Promise<{ name: string; uri: string }> {
   console.log('[FILES_API] Uploading file bytes:', fileBytes.length, 'bytes');
 
   const response = await fetch(uploadUrl, {
@@ -100,50 +69,24 @@ async function uploadFileBytes(
   });
 
   if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`File upload failed: ${response.status} ${error}`);
+    throw new Error(`File upload failed: ${response.status}`);
   }
 
   const fileMetadata = await response.json();
-  console.log('[FILES_API] File name from upload response:', fileMetadata.file.name);
-  console.log('[FILES_API] File URI from upload response:', fileMetadata.file.uri);
   return {
     name: fileMetadata.file.name,
     uri: fileMetadata.file.uri,
   };
 }
 
-/**
- * Step 3: Analyze video using Gemini with file URI (pure REST API)
- */
 async function analyzeVideoWithFileUri(fileUri: string, mimeType: string): Promise<string> {
-  console.log('[FILES_API] Analyzing with Gemini, file URI:', fileUri.substring(0, 60), '...');
+  console.log('[HYBRID] Analyzing with Gemini');
 
-  const prompt =
-    'ABSOLUTE REQUIREMENT: Analyze the COMPLETE video from START to FINISH. This is a FULL PICKLEBALL GAME (7-15 minutes). ' +
-    'DO NOT ANALYZE ONLY PART OF THE VIDEO. DO NOT STOP EARLY. ' +
-    'TASK: Extract EVERY SINGLE SHOT from the entire game. A shot = any time either player hits the ball. ' +
-    'EXPECTED: 7-15 minute game = 300-900+ TOTAL SHOTS. You MUST find them all. ' +
-    'Return ONLY valid JSON with REAL data from EVERY shot in the entire video: ' +
-    '{kitchenTransition:{thirdShotSuccessRate:0-100,returnContactDepth:0-20},' +
-    'softGame:{deadDinksCount:0+,unforcedErrorsCount:0+},' +
-    'shotPlacement:{targetingAccuracy:0-100},' +
-    'hardGame:{speedUpEfficiency:0-100,forcedErrorsCaused:0+},' +
-    'netDefense:{resetSuccessPercent:0-100,popUpFrequency:0-100},' +
-    'playerInsights:["insight1","insight2"],' +
-    'ballTrajectories:[{player:1,playerName:"Player 1",startPosition:{x:3,y:44},endPosition:{x:10,y:20},' +
-    'shotType:"serve",zoneStart:"baseline",zoneEnd:"midcourt",inOrOut:"in"},{player:2,playerName:"Player 2",startPosition:{x:10,y:20},' +
-    'endPosition:{x:15,y:30},shotType:"drive",zoneStart:"midcourt",zoneEnd:"baseline",inOrOut:"out"},...200+ more trajectories]}. ' +
-    'MANDATORY RULES: ' +
-    '1. Analyze EVERY SECOND of the video. Track EVERY shot without exception. ' +
-    '2. Player: 1 or 2 only. playerName: "Player 1" or "Player 2" ONLY. ' +
-    '3. startPosition: exact court location where ball was hit (x=0-20, y=0-44) ' +
-    '4. endPosition: exact court location where ball landed or went out ' +
-    '5. shotType: serve/dink/drive/lob/third_shot/reset/unknown ' +
-    '6. zoneStart/zoneEnd: kitchen(y:0-7) / midcourt(y:7-37) / baseline(y:37-44) ' +
-    '7. inOrOut: "in" or "out" ' +
-    '8. Court: x=0-20 (width), y=0-44 (length) ' +
-    'CRITICAL: If you return fewer than 200 trajectories, you are not analyzing the full video. Keep going until you find 300-900 shots.';
+  const prompt = 'Analyze this pickleball video. Extract all shots and return ONLY valid JSON with: ' +
+    'kitchenTransition, softGame, shotPlacement, hardGame, netDefense, playerInsights, ballTrajectories. ' +
+    'Each trajectory must have: player (1 or 2), playerName (Player 1 or Player 2), ' +
+    'startPosition, endPosition, shotType, zoneStart, zoneEnd, inOrOut. ' +
+    'For full 7-15 minute games, expect 300-900 shots.';
 
   const response = await fetch(`${BASE_URL}/v1beta/models/gemini-3.5-flash:generateContent`, {
     method: 'POST',
@@ -152,52 +95,33 @@ async function analyzeVideoWithFileUri(fileUri: string, mimeType: string): Promi
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      contents: [
-        {
-          parts: [
-            {
-              file_data: {
-                mime_type: mimeType,
-                file_uri: fileUri,
-              },
-            },
-            {
-              text: prompt,
-            },
-          ],
-        },
-      ],
+      contents: [{
+        parts: [
+          { file_data: { mime_type: mimeType, file_uri: fileUri } },
+          { text: prompt },
+        ],
+      }],
     }),
   });
 
   if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`Gemini analysis failed: ${response.status} ${error}`);
+    throw new Error(`Gemini analysis failed: ${response.status}`);
   }
 
   const result = await response.json();
   const text = result.candidates?.[0]?.content?.parts?.[0]?.text || '';
-
-  console.log('[FILES_API] Gemini response length:', text.length);
+  console.log('[HYBRID] Gemini response received');
   return text;
 }
 
-/**
- * Step 3.5: Wait for file to finish processing
- * Google processes videos asynchronously - must poll until ACTIVE
- */
 async function waitForFileProcessing(fileName: string, maxWaitMs: number = 60000): Promise<void> {
-  console.log('[FILES_API] Waiting for file to finish processing...');
+  console.log('[FILES_API] Waiting for file processing...');
 
   const startTime = Date.now();
-  const pollIntervalMs = 1000;
-
   while (Date.now() - startTime < maxWaitMs) {
     const response = await fetch(`${BASE_URL}/v1beta/${fileName}`, {
       method: 'GET',
-      headers: {
-        'x-goog-api-key': GEMINI_API_KEY,
-      },
+      headers: { 'x-goog-api-key': GEMINI_API_KEY },
     });
 
     if (!response.ok) {
@@ -205,59 +129,40 @@ async function waitForFileProcessing(fileName: string, maxWaitMs: number = 60000
     }
 
     const fileMetadata = await response.json();
-    console.log('[FILES_API] Full file metadata response:');
-    console.log(JSON.stringify(fileMetadata, null, 2));
-
-    console.log('[FILES_API] Available keys:', Object.keys(fileMetadata));
-    console.log('[FILES_API] Has file.state?', fileMetadata.file?.state);
-    console.log('[FILES_API] Has state?', fileMetadata.state);
-
     const state = fileMetadata.file?.state || fileMetadata.state;
 
-    console.log(`[FILES_API] File state: ${state}`);
-
     if (state === 'ACTIVE') {
-      console.log('[FILES_API] File processing complete - ACTIVE');
+      console.log('[FILES_API] File processing complete');
       return;
     }
 
     if (state === 'PROCESSING') {
-      console.log('[FILES_API] File still processing... waiting');
-      await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+      await new Promise((resolve) => setTimeout(resolve, 1000));
       continue;
     }
 
-    throw new Error(`Unexpected file state: ${state}. Expected PROCESSING or ACTIVE.`);
+    throw new Error(`Unexpected file state: ${state}`);
   }
 
-  throw new Error(`File processing timeout after ${maxWaitMs}ms. File may still be processing.`);
+  throw new Error('File processing timeout');
 }
 
-/**
- * Step 4: Delete file from Gemini
- */
 async function deleteFile(fileName: string): Promise<void> {
   console.log('[FILES_API] Deleting file:', fileName);
 
   const response = await fetch(`${BASE_URL}/v1beta/${fileName}`, {
     method: 'DELETE',
-    headers: {
-      'x-goog-api-key': GEMINI_API_KEY,
-    },
+    headers: { 'x-goog-api-key': GEMINI_API_KEY },
   });
 
   if (!response.ok) {
-    console.warn('[FILES_API] Delete warning:', response.status, '(file will auto-delete in 48h)');
+    console.warn('[FILES_API] Delete failed (file will auto-delete in 48h)');
   }
 }
 
-/**
- * Analyze video using Gemini Files API (video URL)
- */
 async function analyzeVideoFile(videoUrl: string): Promise<string> {
-  console.log('[ROUTE] Starting video analysis with Files API');
+  console.log('[HYBRID] Starting video analysis');
 
-  console.log('[ROUTE] Downloading video from:', videoUrl.substring(0, 60), '...');
   const videoResponse = await fetch(videoUrl);
   if (!videoResponse.ok) {
     throw new Error(`Failed to download video: ${videoResponse.status}`);
@@ -268,7 +173,7 @@ async function analyzeVideoFile(videoUrl: string): Promise<string> {
   const mimeType = 'video/mp4';
   const displayName = `pickleball_${Date.now()}.mp4`;
 
-  console.log('[ROUTE] Video downloaded:', videoBytes.length, 'bytes');
+  console.log('[HYBRID] Video downloaded:', videoBytes.length, 'bytes');
 
   let fileName: string | null = null;
 
@@ -281,99 +186,43 @@ async function analyzeVideoFile(videoUrl: string): Promise<string> {
 
     const analysisText = await analyzeVideoWithFileUri(fileMetadata.uri, mimeType);
 
-    console.log('[ROUTE] Analysis complete');
+    console.log('[HYBRID] Analysis complete');
     return analysisText;
   } finally {
     if (fileName) {
       try {
         await deleteFile(fileName);
       } catch (e) {
-        console.error('[ROUTE] Cleanup error:', e);
+        console.error('[HYBRID] Cleanup error:', e);
       }
     }
   }
 }
 
-/**
- * Analyze image frame (fallback)
- */
-async function analyzeImageFrame(frameBase64: string): Promise<string> {
-  console.log('[ROUTE] Analyzing image frame (fallback)');
-
-  const prompt =
-    'Analyze this pickleball image. Return ONLY valid JSON: ' +
-    '{kitchenTransition:{thirdShotSuccessRate:0-100,returnContactDepth:0-20},' +
-    'softGame:{deadDinksCount:0+,unforcedErrorsCount:0+},' +
-    'shotPlacement:{targetingAccuracy:0-100},' +
-    'hardGame:{speedUpEfficiency:0-100,forcedErrorsCaused:0+},' +
-    'netDefense:{resetSuccessPercent:0-100,popUpFrequency:0-100},' +
-    'playerInsights:["insight1","insight2"],' +
-    'ballTrajectories:[]}. For images, return empty trajectories array.';
-
-  const response = await fetch(`${BASE_URL}/v1beta/models/gemini-3.5-flash:generateContent`, {
-    method: 'POST',
-    headers: {
-      'x-goog-api-key': GEMINI_API_KEY,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      contents: [
-        {
-          parts: [
-            {
-              inline_data: {
-                mime_type: 'image/jpeg',
-                data: frameBase64,
-              },
-            },
-            {
-              text: prompt,
-            },
-          ],
-        },
-      ],
-    }),
-  });
-
-  if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`Analysis failed: ${response.status} ${error}`);
-  }
-
-  const result = await response.json();
-  return result.candidates?.[0]?.content?.parts?.[0]?.text || '';
-}
-
 export async function POST(request: Request) {
   try {
-    const { frameBase64, videoUrl, userId, videoId } = await request.json();
+    const { videoUrl, userId, videoId } = await request.json();
 
-    if (!frameBase64 && !videoUrl) {
-      return Response.json({ success: false, error: 'No input provided' }, { status: 400 });
+    if (!videoUrl) {
+      return Response.json({ success: false, error: 'No video URL' }, { status: 400 });
     }
 
     if (!GEMINI_API_KEY) {
       return Response.json({ success: false, error: 'API key missing' }, { status: 500 });
     }
 
-    let analysisText: string;
-    if (videoUrl) {
-      analysisText = await analyzeVideoFile(videoUrl);
-    } else {
-      analysisText = await analyzeImageFrame(frameBase64);
-    }
+    const analysisText = await analyzeVideoFile(videoUrl);
 
     console.log('[ROUTE] Raw analysis text:', analysisText.substring(0, 200));
 
     const jsonMatch = analysisText.match(/\{[\s\S]*\}/);
     const analysis = JSON.parse(jsonMatch ? jsonMatch[0] : '{}');
 
-    // Validate and fix trajectories - ensure playerName is always "Player 1" or "Player 2"
     let trajectories = Array.isArray(analysis.ballTrajectories) ? analysis.ballTrajectories : [];
     trajectories = trajectories.map((traj: any) => ({
       ...traj,
-      playerName: traj.player === 1 ? 'Player 1' : 'Player 2', // Force correct player name
-      inOrOut: traj.inOrOut === 'out' ? 'out' : 'in', // Default to 'in' if not specified
+      playerName: traj.player === 1 ? 'Player 1' : 'Player 2',
+      inOrOut: traj.inOrOut === 'out' ? 'out' : 'in',
     }));
 
     const result: AnalysisResult = {
@@ -387,7 +236,10 @@ export async function POST(request: Request) {
       ballTrajectories: trajectories,
     };
 
-    console.log('[ROUTE] Parsed metrics:', result);
+    console.log('[ROUTE] Analysis complete:', {
+      success: result.success,
+      trajectories: trajectories.length,
+    });
 
     if (userId && videoId) {
       try {

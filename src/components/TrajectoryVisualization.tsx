@@ -24,15 +24,9 @@ interface TrajectoryVisualizationProps {
   viewMode?: 'isometric' | 'top' | 'side' | 'expanded';
 }
 
-const COURT_WIDTH = 20; // feet
-const COURT_LENGTH = 44; // feet
-const KITCHEN_DEPTH = 7; // feet
-const ZONE_COLORS = {
-  kitchen: 0x00ff88,
-  midcourt: 0x00d4ff,
-  baseline: 0xff6b6b,
-  sideline: 0xffd700,
-};
+const COURT_WIDTH = 20;
+const COURT_LENGTH = 44;
+const KITCHEN_DEPTH = 7;
 
 export default function TrajectoryVisualization({
   trajectories,
@@ -47,12 +41,10 @@ export default function TrajectoryVisualization({
   useEffect(() => {
     if (!mountRef.current || !trajectories.length) return;
 
-    // Scene setup
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x0a0e27);
     sceneRef.current = scene;
 
-    // Camera setup based on view mode
     const width = mountRef.current.clientWidth;
     const height = mountRef.current.clientHeight;
     let camera: THREE.Camera;
@@ -82,23 +74,13 @@ export default function TrajectoryVisualization({
         camera.lookAt(0, 0, 0);
         break;
       case 'expanded':
-        camera = new THREE.PerspectiveCamera(
-          75,
-          width / height,
-          0.1,
-          1000
-        );
+        camera = new THREE.PerspectiveCamera(75, width / height, 0.1, 1000);
         camera.position.set(20, 25, 20);
         camera.lookAt(0, 0, 0);
         break;
       case 'isometric':
       default:
-        camera = new THREE.PerspectiveCamera(
-          75,
-          width / height,
-          0.1,
-          1000
-        );
+        camera = new THREE.PerspectiveCamera(75, width / height, 0.1, 1000);
         camera.position.set(15, 12, 15);
         camera.lookAt(0, 0, 0);
         break;
@@ -106,165 +88,120 @@ export default function TrajectoryVisualization({
 
     cameraRef.current = camera;
 
-    // Renderer setup
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(width, height);
     renderer.setPixelRatio(window.devicePixelRatio);
     mountRef.current.appendChild(renderer.domElement);
     rendererRef.current = renderer;
 
-    // Lighting
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
     scene.add(ambientLight);
+
     const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
     directionalLight.position.set(10, 15, 10);
     scene.add(directionalLight);
 
-    // Court floor
-    const courtGeometry = new THREE.PlaneGeometry(COURT_WIDTH, COURT_LENGTH);
-    const courtMaterial = new THREE.MeshStandardMaterial({
-      color: 0x1a1f3a,
-      roughness: 0.8,
-    });
-    const court = new THREE.Mesh(courtGeometry, courtMaterial);
-    court.rotation.x = -Math.PI / 2;
-    scene.add(court);
+    const floorGeometry = new THREE.PlaneGeometry(COURT_WIDTH, COURT_LENGTH);
+    const floorMaterial = new THREE.MeshPhongMaterial({ color: 0x1a4d2e });
+    const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+    floor.rotation.x = -Math.PI / 2;
+    scene.add(floor);
 
-    // Court edges
-    const edgesGeometry = new THREE.EdgesGeometry(courtGeometry);
-    const edgesMaterial = new THREE.LineBasicMaterial({ color: 0x00ff88, linewidth: 2 });
-    const edges = new THREE.LineSegments(edgesGeometry, edgesMaterial);
-    edges.rotation.x = -Math.PI / 2;
-    edges.position.z = 0.01;
-    scene.add(edges);
+    const boundaryGeometry = new THREE.EdgesGeometry(floorGeometry);
+    const boundaryMaterial = new THREE.LineBasicMaterial({ color: 0x00ff88, linewidth: 2 });
+    const boundaryLines = new THREE.LineSegments(boundaryGeometry, boundaryMaterial);
+    boundaryLines.rotation.x = -Math.PI / 2;
+    boundaryLines.position.z = 0.01;
+    scene.add(boundaryLines);
 
-    // Kitchen line
-    const kitchenLineGeometry = new THREE.BufferGeometry();
-    const kitchenLinePositions = new Float32Array([
-      -COURT_WIDTH / 2,
-      0,
-      KITCHEN_DEPTH,
-      COURT_WIDTH / 2,
-      0,
-      KITCHEN_DEPTH,
-    ]);
-    kitchenLineGeometry.setAttribute('position', new THREE.BufferAttribute(kitchenLinePositions, 3));
-    const kitchenLineMaterial = new THREE.LineBasicMaterial({ color: 0xffff00 });
-    const kitchenLine = new THREE.Line(kitchenLineGeometry, kitchenLineMaterial);
+    const kitchenGeometry = new THREE.BufferGeometry();
+    kitchenGeometry.setAttribute(
+      'position',
+      new THREE.BufferAttribute(
+        new Float32Array([
+          -COURT_WIDTH / 2,
+          0,
+          -COURT_LENGTH / 2 + KITCHEN_DEPTH,
+          COURT_WIDTH / 2,
+          0,
+          -COURT_LENGTH / 2 + KITCHEN_DEPTH,
+        ]),
+        3
+      )
+    );
+    const kitchenMaterial = new THREE.LineBasicMaterial({ color: 0xffff00 });
+    const kitchenLine = new THREE.Line(kitchenGeometry, kitchenMaterial);
     scene.add(kitchenLine);
 
-    // Center line
-    const centerLineGeometry = new THREE.BufferGeometry();
-    const centerLinePositions = new Float32Array([
-      0,
-      0,
-      -COURT_LENGTH / 2,
-      0,
-      0,
-      COURT_LENGTH / 2,
-    ]);
-    centerLineGeometry.setAttribute('position', new THREE.BufferAttribute(centerLinePositions, 3));
-    const centerLineMaterial = new THREE.LineBasicMaterial({ color: 0x888888 });
-    const centerLine = new THREE.Line(centerLineGeometry, centerLineMaterial);
+    const centerGeometry = new THREE.BufferGeometry();
+    centerGeometry.setAttribute(
+      'position',
+      new THREE.BufferAttribute(
+        new Float32Array([
+          0,
+          0,
+          -COURT_LENGTH / 2,
+          0,
+          0,
+          COURT_LENGTH / 2,
+        ]),
+        3
+      )
+    );
+    const centerMaterial = new THREE.LineBasicMaterial({ color: 0x888888 });
+    const centerLine = new THREE.Line(centerGeometry, centerMaterial);
     scene.add(centerLine);
 
-    // Draw trajectories
-    trajectories.forEach((traj, idx) => {
-      // Determine colors based on player and in/out status
-      let playerColor: number;
+    trajectories.forEach((traj) => {
+      const startX = (traj.startPosition.x / COURT_WIDTH - 0.5) * COURT_WIDTH;
+      const startY = (-traj.startPosition.y / COURT_LENGTH + 0.5) * COURT_LENGTH;
+      const endX = (traj.endPosition.x / COURT_WIDTH - 0.5) * COURT_WIDTH;
+      const endY = (-traj.endPosition.y / COURT_LENGTH + 0.5) * COURT_LENGTH;
+
+      let color: number;
+      let endSphereSize: number;
+
       if (traj.player === 1) {
-        playerColor = traj.inOrOut === 'in' ? 0x00ff88 : 0xffaa00; // Green for in, orange for out
+        color = traj.inOrOut === 'in' ? 0x00ff88 : 0xffaa00;
       } else {
-        playerColor = traj.inOrOut === 'in' ? 0xff1744 : 0xff6b00; // Red for in, darker orange for out
+        color = traj.inOrOut === 'in' ? 0xff1744 : 0xff6b00;
       }
 
-      // Start point
-      const startGeometry = new THREE.SphereGeometry(0.15, 8, 8);
-      const startMaterial = new THREE.MeshStandardMaterial({ color: playerColor, emissive: playerColor });
-      const startSphere = new THREE.Mesh(startGeometry, startMaterial);
-      startSphere.position.set(
-        traj.startPosition.x - COURT_WIDTH / 2,
-        0.2,
-        traj.startPosition.y - COURT_LENGTH / 2
-      );
-      scene.add(startSphere);
+      endSphereSize = traj.inOrOut === 'in' ? 0.15 : 0.12;
 
-      // End point (different size for out shots)
-      const endGeometry = new THREE.SphereGeometry(traj.inOrOut === 'in' ? 0.15 : 0.12, 8, 8);
-      const endMaterial = new THREE.MeshStandardMaterial({ color: playerColor, emissive: playerColor });
-      const endSphere = new THREE.Mesh(endGeometry, endMaterial);
-      endSphere.position.set(
-        traj.endPosition.x - COURT_WIDTH / 2,
-        0.2,
-        traj.endPosition.y - COURT_LENGTH / 2
-      );
-      scene.add(endSphere);
-
-      // Trajectory line with arc - dashed for out shots
-      const arcCurve = new THREE.QuadraticBezierCurve3(
-        new THREE.Vector3(
-          traj.startPosition.x - COURT_WIDTH / 2,
-          0.2,
-          traj.startPosition.y - COURT_LENGTH / 2
-        ),
-        new THREE.Vector3(
-          (traj.startPosition.x + traj.endPosition.x) / 2 - COURT_WIDTH / 2,
-          2,
-          (traj.startPosition.y + traj.endPosition.y) / 2 - COURT_LENGTH / 2
-        ),
-        new THREE.Vector3(
-          traj.endPosition.x - COURT_WIDTH / 2,
-          0.2,
-          traj.endPosition.y - COURT_LENGTH / 2
-        )
+      const curve = new THREE.QuadraticBezierCurve3(
+        new THREE.Vector3(startX, 0.5, startY),
+        new THREE.Vector3((startX + endX) / 2, 3, (startY + endY) / 2),
+        new THREE.Vector3(endX, 0.5, endY)
       );
 
-      const points = arcCurve.getPoints(20);
+      const points = curve.getPoints(20);
       const lineGeometry = new THREE.BufferGeometry().setFromPoints(points);
-      const lineMaterial = new THREE.LineBasicMaterial({
-        color: playerColor,
-        linewidth: traj.inOrOut === 'in' ? 3 : 2,
-        transparent: true,
-        opacity: traj.inOrOut === 'in' ? 0.8 : 0.5,
-      });
-      const line = new THREE.Line(lineGeometry, lineMaterial);
-      scene.add(line);
+      const lineMaterial = new THREE.LineBasicMaterial({ color, linewidth: 2 });
+      const trajectoryLine = new THREE.Line(lineGeometry, lineMaterial);
+      scene.add(trajectoryLine);
+
+      const sphereGeometry = new THREE.SphereGeometry(endSphereSize, 16, 16);
+      const sphereMaterial = new THREE.MeshPhongMaterial({ color });
+      const endSphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
+      endSphere.position.set(endX, 0.5, endY);
+      scene.add(endSphere);
     });
 
-    // Animation loop
     const animate = () => {
       requestAnimationFrame(animate);
       renderer.render(scene, camera);
     };
+
     animate();
 
-    // Handle window resize
-    const handleResize = () => {
-      if (!mountRef.current) return;
-      const newWidth = mountRef.current.clientWidth;
-      const newHeight = mountRef.current.clientHeight;
-
-      if (camera instanceof THREE.PerspectiveCamera) {
-        camera.aspect = newWidth / newHeight;
-        camera.updateProjectionMatrix();
-      }
-      renderer.setSize(newWidth, newHeight);
-    };
-
-    window.addEventListener('resize', handleResize);
-
     return () => {
-      window.removeEventListener('resize', handleResize);
-      if (mountRef.current && renderer.domElement.parentNode === mountRef.current) {
-        mountRef.current.removeChild(renderer.domElement);
-      }
       renderer.dispose();
     };
   }, [trajectories, currentViewMode]);
 
   return (
     <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}>
-      {/* View Controls */}
       <div
         style={{
           display: 'flex',
@@ -288,7 +225,6 @@ export default function TrajectoryVisualization({
               cursor: 'pointer',
               fontSize: '12px',
               fontWeight: '600',
-              transition: 'all 0.2s',
             }}
           >
             {mode === 'isometric' && '📊 3D'}
@@ -299,7 +235,6 @@ export default function TrajectoryVisualization({
         ))}
       </div>
 
-      {/* Canvas Container */}
       <div
         ref={mountRef}
         style={{
@@ -311,66 +246,31 @@ export default function TrajectoryVisualization({
         }}
       />
 
-      {/* Legend & Shot List */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginTop: '12px' }}>
-        {/* Legend */}
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(2, 1fr)',
-            gap: '8px',
-            fontSize: '12px',
-            color: 'rgba(255, 255, 255, 0.7)',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+        <div style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.7)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
             <div style={{ width: '12px', height: '12px', background: '#00ff88', borderRadius: '50%' }} />
-            <span>P1 Shot In</span>
+            <span>P1 In</span>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
             <div style={{ width: '12px', height: '12px', background: '#ffaa00', borderRadius: '50%' }} />
-            <span>P1 Shot Out</span>
+            <span>P1 Out</span>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
             <div style={{ width: '12px', height: '12px', background: '#ff1744', borderRadius: '50%' }} />
-            <span>P2 Shot In</span>
+            <span>P2 In</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             <div style={{ width: '12px', height: '12px', background: '#ff6b00', borderRadius: '50%' }} />
-            <span>P2 Shot Out</span>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <div style={{ width: '12px', height: '12px', background: '#ffff00', borderRadius: '50%' }} />
-            <span>Kitchen Line</span>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <div style={{ width: '12px', height: '12px', background: '#888888', borderRadius: '50%' }} />
-            <span>Center Line</span>
+            <span>P2 Out</span>
           </div>
         </div>
 
-        {/* Shot List */}
-        <div style={{ maxHeight: '200px', overflowY: 'auto', paddingRight: '8px' }}>
-          <p style={{ margin: '0 0 8px 0', fontWeight: '600', color: '#00ff88', fontSize: '12px' }}>Shots by Player</p>
+        <div style={{ maxHeight: '150px', overflowY: 'auto', fontSize: '11px', color: 'rgba(255, 255, 255, 0.7)' }}>
           {trajectories.map((traj, idx) => (
-            <div
-              key={idx}
-              style={{
-                padding: '6px',
-                marginBottom: '4px',
-                background: 'rgba(0, 255, 136, 0.08)',
-                border: `1px solid ${traj.inOrOut === 'in' ? 'rgba(0, 255, 136, 0.2)' : 'rgba(255, 107, 0, 0.2)'}`,
-                borderRadius: '4px',
-                fontSize: '11px',
-                color: 'rgba(255, 255, 255, 0.8)',
-              }}
-            >
-              <div style={{ fontWeight: '600', color: traj.player === 1 ? '#00ff88' : '#ff1744' }}>
-                {traj.playerName} - {traj.shotType}
-              </div>
-              <div style={{ fontSize: '10px', color: traj.inOrOut === 'in' ? '#00ff88' : '#ff6b00' }}>
-                {traj.inOrOut === 'in' ? '✓ In Bounds' : '✗ Out of Bounds'}
-              </div>
+            <div key={idx} style={{ marginBottom: '4px', paddingBottom: '4px', borderBottom: '1px solid rgba(0,255,136,0.1)' }}>
+              <div style={{ color: traj.player === 1 ? '#00ff88' : '#ff1744' }}>{traj.playerName}</div>
+              <div>{traj.shotType}</div>
             </div>
           ))}
         </div>
