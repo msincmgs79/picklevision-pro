@@ -240,7 +240,7 @@ async def infer(request: InferenceRequest):
 
         try:
             # Step 2: Extract frames
-            frames, total_frames, video_fps, duration = extract_frames(video_path, fps=2)
+            frames, total_frames, video_fps, duration = extract_frames(video_path, fps=1)
 
             if not frames:
                 raise ValueError("No frames extracted from video")
