@@ -71,19 +71,25 @@ export default function AnalyticsPage() {
           return;
         }
 
+        console.log('📊 Fetching analysis for user:', user.uid);
         const analyses = await getUserVideoAnalyses(user.uid, 1);
+        console.log('📊 Raw data from Firestore:', analyses);
         
         if (analyses.length > 0) {
           const latestAnalysis = analyses[0];
-          console.log('✅ Fetched analysis:', latestAnalysis);
+          console.log('📊 Latest analysis structure:', Object.keys(latestAnalysis));
+          console.log('📊 Has ballTrajectories?', !!latestAnalysis.ballTrajectories);
+          console.log('📊 Has kitchenTransition?', !!latestAnalysis.kitchenTransition);
+          
           setAnalysis(latestAnalysis as GeminiAnalysis);
           setError(null);
         } else {
+          console.log('⚠️ No analyses found in Firestore');
           setError('No video analysis found. Go to Videos to upload a game.');
           setAnalysis(null);
         }
       } catch (err) {
-        console.error('Error fetching analysis:', err);
+        console.error('❌ Error fetching analysis:', err);
         setError('Failed to load analysis data');
         setAnalysis(null);
       } finally {
