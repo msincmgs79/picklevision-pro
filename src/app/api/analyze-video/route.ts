@@ -42,8 +42,14 @@ export async function POST(request: Request) {
     });
 
     if (!detectResponse.ok) {
-      console.error('[ANALYZE] YOLOv8 detection failed:', detectResponse.status);
-      throw new Error(`YOLOv8 detection failed: ${detectResponse.statusText}`);
+      const errorText = await detectResponse.text();
+      console.error('[ANALYZE] YOLOv8 detection FAILED:', {
+        status: detectResponse.status,
+        statusText: detectResponse.statusText,
+        baseUrl: baseUrl,
+        errorBody: errorText
+      });
+      throw new Error(`YOLOv8 detection failed [${detectResponse.status}]: ${errorText}`);
     }
 
     const detectData = await detectResponse.json();
