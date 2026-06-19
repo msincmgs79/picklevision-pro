@@ -1,12 +1,14 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { useAuth } from '@/lib/auth';
 import Header from '@/components/Header';
 import Navigation from '@/components/Navigation';
 import PageLayout from '@/components/PageLayout';
 import Card from '@/components/Card';
 import TrajectoryVisualization from '@/components/TrajectoryVisualization';
+import { getUserVideoAnalyses } from '@/lib/db';
 
 interface BallTrajectory {
   player: 1 | 2;
@@ -32,8 +34,12 @@ interface GeminiAnalysis {
 
 export default function AnalyticsPage() {
   const router = useRouter();
+  const { user } = useAuth();
   const [activeNav, setActiveNav] = useState('analytics');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [analysis, setAnalysis] = useState<GeminiAnalysis | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: '📊' },
@@ -56,59 +62,66 @@ export default function AnalyticsPage() {
     if (routes[itemId]) router.push(routes[itemId]);
   };
 
-  const sampleTrajectories: BallTrajectory[] = [
-    {
-      player: 1,
-      playerName: 'Player 1',
-      startPosition: { x: 3, y: 42 },
-      endPosition: { x: 10, y: 25 },
-      shotType: 'serve',
-      zoneStart: 'baseline',
-      zoneEnd: 'midcourt',
-      inOrOut: 'in',
-    },
-    {
-      player: 2,
-      playerName: 'Player 2',
-      startPosition: { x: 10, y: 25 },
-      endPosition: { x: 10, y: 7 },
-      shotType: 'third_shot',
-      zoneStart: 'midcourt',
-      zoneEnd: 'kitchen',
-      inOrOut: 'in',
-    },
-    {
-      player: 1,
-      playerName: 'Player 1',
-      startPosition: { x: 15, y: 10 },
-      endPosition: { x: 5, y: 20 },
-      shotType: 'dink',
-      zoneStart: 'kitchen',
-      zoneEnd: 'kitchen',
-      inOrOut: 'in',
-    },
-    {
-      player: 2,
-      playerName: 'Player 2',
-      startPosition: { x: 5, y: 20 },
-      endPosition: { x: 18, y: 15 },
-      shotType: 'attack',
-      zoneStart: 'kitchen',
-      zoneEnd: 'midcourt',
-      inOrOut: 'out',
-    },
-  ];
+  useEffect(() => {
+    const fetchLatestAnalysis = async () => {
+      if (!user?.uid) {
+        setLoading(false);
+        return;
+      }
 
-  const sampleAnalysis: GeminiAnalysis = {
-    success: true,
-    kitchenTransition: { thirdShotSuccessRate: 72, returnContactDepth: 8.5 },
-    softGame: { deadDinksCount: 24, unforcedErrorsCount: 8 },
-    shotPlacement: { targetingAccuracy: 81 },
-    hardGame: { speedUpEfficiency: 63, forcedErrorsCaused: 6 },
-    netDefense: { resetSuccessPercent: 78, popUpFrequency: 45 },
-    playerInsights: ['Strong kitchen game', 'Good court positioning'],
-    ballTrajectories: sampleTrajectories,
-  };
+      try {
+        setLoading(true);
+        const analyses = await getUserVideoAnalyses(user.uid, 1);
+        
+        if (analyses.length > 0) {
+          const latestAnalysis = analyses[0];
+          setAnalysis(latestAnalysis as GeminiAnalysis);
+        } else {
+          setError('No video analysis available. Upload a video to get started.');
+        }
+      } catch (err) {
+        console.error('Error fetching analysis:', err);
+        setError('Failed to load analysis data');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchLatestAnalysis();
+  }, [user?.uid]);
+
+  if (!user) {
+    return (
+      <PageLayout
+        header={
+          <Header
+            logoText="PickleVision Pro"
+            onSearchChange={() => {}}
+            notificationCount={0}
+            onNotificationClick={() => {}}
+            onProfileClick={() => router.push('/profile')}
+            searchPlaceholder="Search..."
+          />
+        }
+        sidebar={
+          <Navigation
+            items={navItems}
+            activeItemId={activeNav}
+            onItemClick={handleNavClick}
+            collapsed={sidebarCollapsed}
+            onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
+          />
+        }
+        footer={
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'rgba(255, 255, 255, 0.6)' }}>
+            <span>© 2026 PickleVision Pro</span>
+          </div>
+        }
+      >
+        <div style={{ color: 'rgba(255,255,255,0.6)', padding: '20px' }}>Loading...</div>
+      </PageLayout>
+    );
+  }
 
   return (
     <PageLayout
@@ -140,33 +153,53 @@ export default function AnalyticsPage() {
       <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
         <h1 style={{ margin: 0, fontSize: '28px', fontWeight: '600', color: 'white' }}>Analytics</h1>
 
-        <Card variant="default" shadow="md" padding="lg">
-          <h3 style={{ margin: '0 0 16px 0', color: 'white' }}>Performance Metrics</h3>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px' }}>
-            <div>
-              <p style={{ margin: 0, color: 'rgba(255,255,255,0.6)', fontSize: '12px' }}>3rd Shot Success</p>
-              <p style={{ margin: '8px 0 0 0', color: '#00ff88', fontSize: '24px', fontWeight: '700' }}>
-                {sampleAnalysis.kitchenTransition.thirdShotSuccessRate}%
-              </p>
-            </div>
-            <div>
-              <p style={{ margin: 0, color: 'rgba(255,255,255,0.6)', fontSize: '12px' }}>Targeting Accuracy</p>
-              <p style={{ margin: '8px 0 0 0', color: '#00ff88', fontSize: '24px', fontWeight: '700' }}>
-                {sampleAnalysis.shotPlacement.targetingAccuracy}%
-              </p>
-            </div>
-          </div>
-        </Card>
+        {loading && (
+          <Card variant="default" shadow="md" padding="lg">
+            <p style={{ color: 'rgba(255,255,255,0.6)' }}>Loading analysis data...</p>
+          </Card>
+        )}
 
-        <Card variant="default" shadow="md" padding="lg">
-          <h3 style={{ margin: '0 0 16px 0', color: 'white' }}>3D Ball Trajectory Visualization</h3>
-          <div style={{ height: '600px', borderRadius: '6px', overflow: 'hidden', background: 'rgba(0,0,0,0.3)' }}>
-            <TrajectoryVisualization
-              trajectories={sampleAnalysis.ballTrajectories || sampleTrajectories}
-              viewMode="isometric"
-            />
-          </div>
-        </Card>
+        {error && (
+          <Card variant="default" shadow="md" padding="lg">
+            <p style={{ color: '#ff6b6b' }}>{error}</p>
+          </Card>
+        )}
+
+        {analysis && analysis.success && (
+          <>
+            <Card variant="default" shadow="md" padding="lg">
+              <h3 style={{ margin: '0 0 16px 0', color: 'white' }}>Performance Metrics</h3>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px' }}>
+                <div>
+                  <p style={{ margin: 0, color: 'rgba(255,255,255,0.6)', fontSize: '12px' }}>3rd Shot Success</p>
+                  <p style={{ margin: '8px 0 0 0', color: '#00ff88', fontSize: '24px', fontWeight: '700' }}>
+                    {analysis.kitchenTransition.thirdShotSuccessRate}%
+                  </p>
+                </div>
+                <div>
+                  <p style={{ margin: 0, color: 'rgba(255,255,255,0.6)', fontSize: '12px' }}>Targeting Accuracy</p>
+                  <p style={{ margin: '8px 0 0 0', color: '#00ff88', fontSize: '24px', fontWeight: '700' }}>
+                    {analysis.shotPlacement.targetingAccuracy}%
+                  </p>
+                </div>
+              </div>
+            </Card>
+
+            {analysis.ballTrajectories && analysis.ballTrajectories.length > 0 && (
+              <Card variant="default" shadow="md" padding="lg">
+                <h3 style={{ margin: '0 0 16px 0', color: 'white' }}>
+                  3D Ball Trajectory Visualization ({analysis.ballTrajectories.length} shots detected)
+                </h3>
+                <div style={{ height: '600px', borderRadius: '6px', overflow: 'hidden', background: 'rgba(0,0,0,0.3)' }}>
+                  <TrajectoryVisualization
+                    trajectories={analysis.ballTrajectories}
+                    viewMode="isometric"
+                  />
+                </div>
+              </Card>
+            )}
+          </>
+        )}
       </div>
     </PageLayout>
   );
