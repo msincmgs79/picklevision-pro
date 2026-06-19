@@ -88,6 +88,8 @@ async function uploadFileBytes(
   }
 
   const fileMetadata = await response.json();
+  console.log('[FILES_API] File name from upload response:', fileMetadata.file.name);
+  console.log('[FILES_API] File URI from upload response:', fileMetadata.file.uri);
   return {
     name: fileMetadata.file.name,
     uri: fileMetadata.file.uri,
@@ -151,7 +153,7 @@ async function waitForFileProcessing(fileName: string, maxWaitMs: number = 60000
   const pollIntervalMs = 1000; // Check every 1 second
 
   while (Date.now() - startTime < maxWaitMs) {
-    const response = await fetch(`${BASE_URL}/v1beta/files/${encodeURIComponent(fileName)}`, {
+    const response = await fetch(`${BASE_URL}/v1beta/files/${fileName}`, {
       method: 'GET',
       headers: {
         'x-goog-api-key': GEMINI_API_KEY,
