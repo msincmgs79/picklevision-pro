@@ -1,5 +1,5 @@
-// Client + server shared types and helpers for the ball-detection backend
-// (the FastAPI /infer service running on Railway).
+// Client + server shared types and helpers for the inference backend
+// (the FastAPI service on Railway: /infer = ball detection, /analyze-shots = Gemini).
 
 export interface BallDetection {
   frameNum: number;
@@ -21,19 +21,49 @@ export interface InferenceResult {
   trajectories: number;
 }
 
-function normalize(base: string): string | null {
-  base = base.trim().replace(/\/+$/, "");
-  if (!base) return null;
-  return base.endsWith("/infer") ? base : `${base}/infer`;
+export interface ShotAnalysis {
+  summary: string;
+  ratings: {
+    serve: number;
+    return: number;
+    offense: number;
+    defense: number;
+    consistency: number;
+  };
+  shotsObserved: { type: string; note: string }[];
+  strengths: string[];
+  improvements: string[];
+  coachTip: string;
 }
 
-// Server-side endpoint (Vercel route) — kept as a fallback.
+export interface ShotAnalysisResult {
+  success: boolean;
+  model: string;
+  framesAnalyzed: number;
+  duration: number;
+  analysis: ShotAnalysis;
+}
+
+// Base URL of the Railway service, with any trailing slash or /infer stripped.
+function baseUrl(raw: string): string | null {
+  const b = raw.trim().replace(/\/+$/, "").replace(/\/infer$/, "");
+  return b || null;
+}
+
+// Server-side (kept for the /api/analyze fallback route).
 export function inferEndpoint(): string | null {
-  return normalize(process.env.RAILWAY_INFERENCE_URL || "");
+  const b = baseUrl(process.env.RAILWAY_INFERENCE_URL || "");
+  return b ? `${b}/infer` : null;
 }
 
-// Browser-callable endpoint. NEXT_PUBLIC_ vars are inlined at build time so the
-// browser can call the inference service directly (no serverless timeout).
+// Browser-callable endpoints. NEXT_PUBLIC_ is inlined at build time so the
+// browser can call the service directly (no serverless timeout).
 export function inferEndpointPublic(): string | null {
-  return normalize(process.env.NEXT_PUBLIC_RAILWAY_INFERENCE_URL || "");
+  const b = baseUrl(process.env.NEXT_PUBLIC_RAILWAY_INFERENCE_URL || "");
+  return b ? `${b}/infer` : null;
+}
+
+export function shotEndpointPublic(): string | null {
+  const b = baseUrl(process.env.NEXT_PUBLIC_RAILWAY_INFERENCE_URL || "");
+  return b ? `${b}/analyze-shots` : null;
 }

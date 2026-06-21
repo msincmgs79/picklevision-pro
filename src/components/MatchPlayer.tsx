@@ -5,7 +5,12 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "../lib/supabase/client";
 import { VIDEO_BUCKET } from "../lib/supabase/config";
-import { inferEndpointPublic, type InferenceResult } from "../lib/analysis";
+import {
+  inferEndpointPublic,
+  shotEndpointPublic,
+  type InferenceResult,
+  type ShotAnalysisResult,
+} from "../lib/analysis";
 
 interface Bookmark {
   id: string;
@@ -37,6 +42,11 @@ export default function MatchPlayer({
     (match.ball_analysis as InferenceResult) || null
   );
   const [analysisError, setAnalysisError] = useState<string | null>(null);
+  const [shotBusy, setShotBusy] = useState(false);
+  const [shot, setShot] = useState<ShotAnalysisResult | null>(
+    (match.shot_analysis as ShotAnalysisResult) || null
+  );
+  const [shotError, setShotError] = useState<string | null>(null);
 
   const supabase = createClient();
   const fmt = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
@@ -146,6 +156,37 @@ export default function MatchPlayer({
       setAnalysisError(e?.message || "Analysis failed.");
     } finally {
       setAnalyzing(false);
+    }
+  }
+
+  async function runShotAnalysis() {
+    setShotBusy(true);
+    setShotError(null);
+    try {
+      const endpoint = shotEndpointPublic();
+      if (!endpoint) throw new Error("Shot-analysis URL is not configured.");
+      if (!match.video_path) throw new Error("This match has no uploaded video.");
+      const { data: signed, error: sErr } = await supabase.storage
+        .from(VIDEO_BUCKET)
+        .createSignedUrl(match.video_path, 600);
+      if (sErr || !signed?.signedUrl) throw new Error("Could not sign the video URL.");
+
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ videoUrl: signed.signedUrl }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.detail || data?.error || `Analysis failed (${res.status}).`);
+      setShot(data);
+      await supabase
+        .from("matches")
+        .update({ shot_analysis: data, shot_analyzed_at: new Date().toISOString() })
+        .eq("id", match.id);
+    } catch (e: any) {
+      setShotError(e?.message || "Shot analysis failed.");
+    } finally {
+      setShotBusy(false);
     }
   }
 
@@ -293,6 +334,94 @@ export default function MatchPlayer({
             )}
           </div>
         </div>
+      </div>
+
+      {/* AI Shot Breakdown (Gemini) */}
+      <div className="card" style={{ marginTop: 18, borderColor: "rgba(129,140,248,0.4)" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
+          <div>
+            <div className="section-title">AI Shot Breakdown</div>
+            <div className="muted" style={{ fontSize: 13, marginTop: 2 }}>
+              Gemini reviews keyframes from your match and returns a coaching read.
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+            <span className="badge badge-average" style={{ fontSize: 11 }}>beta</span>
+            <button
+              className="btn btn-indigo btn-sm"
+              onClick={runShotAnalysis}
+              disabled={shotBusy || !videoUrl}
+              style={{ opacity: shotBusy || !videoUrl ? 0.6 : 1 }}
+            >
+              {shotBusy ? "Analyzing… (up to a minute)" : shot ? "↻ Re-run" : "✦ Run AI shot breakdown"}
+            </button>
+          </div>
+        </div>
+
+        {shotError && <div style={{ marginTop: 10, fontSize: 13, color: "var(--poor)" }}>{shotError}</div>}
+
+        {shot?.analysis && (
+          <div style={{ marginTop: 16 }}>
+            <p style={{ fontSize: 14.5, lineHeight: 1.6 }}>{shot.analysis.summary}</p>
+
+            <div className="grid" style={{ gridTemplateColumns: "1fr 1fr", marginTop: 16, gap: 18 }}>
+              <div>
+                <div className="dim" style={{ fontSize: 12, marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.5 }}>Skill read (0–5)</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
+                  {shot.analysis.ratings &&
+                    Object.entries(shot.analysis.ratings).map(([k, v]) => (
+                      <div key={k}>
+                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 4 }}>
+                          <span style={{ textTransform: "capitalize" }}>{k}</span>
+                          <b>{Number(v).toFixed(1)}</b>
+                        </div>
+                        <div className="progress">
+                          <div className="progress-bar" style={{ width: `${(Number(v) / 5) * 100}%`, background: "linear-gradient(90deg,var(--indigo-dim),var(--indigo))" }} />
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              </div>
+              <div>
+                <div className="dim" style={{ fontSize: 12, marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.5 }}>Shots observed</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {(shot.analysis.shotsObserved || []).map((s, i) => (
+                    <div key={i} style={{ border: "1px solid var(--border)", borderRadius: 9, padding: "8px 10px" }}>
+                      <span className="chip" style={{ padding: "2px 9px", fontSize: 12 }}>{s.type}</span>
+                      <span className="muted" style={{ fontSize: 12.5, marginLeft: 8 }}>{s.note}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="grid" style={{ gridTemplateColumns: "1fr 1fr", marginTop: 16, gap: 18 }}>
+              <div>
+                <div className="dim" style={{ fontSize: 12, marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.5, color: "var(--excellent)" }}>Strengths</div>
+                <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13.5, lineHeight: 1.6 }}>
+                  {(shot.analysis.strengths || []).map((s, i) => <li key={i}>{s}</li>)}
+                </ul>
+              </div>
+              <div>
+                <div className="dim" style={{ fontSize: 12, marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.5, color: "var(--average)" }}>Work on</div>
+                <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13.5, lineHeight: 1.6 }}>
+                  {(shot.analysis.improvements || []).map((s, i) => <li key={i}>{s}</li>)}
+                </ul>
+              </div>
+            </div>
+
+            {shot.analysis.coachTip && (
+              <div style={{ marginTop: 16, background: "rgba(129,140,248,0.1)", border: "1px solid rgba(129,140,248,0.3)", borderRadius: 10, padding: "12px 14px" }}>
+                <span style={{ fontWeight: 700, color: "var(--indigo)" }}>Coach tip · </span>
+                <span style={{ fontSize: 14 }}>{shot.analysis.coachTip}</span>
+              </div>
+            )}
+
+            <p className="dim" style={{ fontSize: 11, marginTop: 12 }}>
+              {shot.model} · {shot.framesAnalyzed} keyframes · AI estimate from sparse frames, not exact stats.
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );
