@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import MatchSwitcher from "./MatchSwitcher";
 import type { ReviewData, BallDetection } from "../lib/analysis";
 
 export default function RealReview({ review }: { review: ReviewData }) {
@@ -39,7 +40,10 @@ export default function RealReview({ review }: { review: ReviewData }) {
           <h1 className="page-title" style={{ marginTop: 6 }}>Video Review</h1>
           <p className="page-sub">{review.team} vs {review.opponent} · jump to detected activity and saved moments.</p>
         </div>
-        <Link href={`/matches/${review.matchId}`} className="btn btn-sm">Draw &amp; bookmark →</Link>
+        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+          <MatchSwitcher current={review.matchId} />
+          <Link href={`/matches/${review.matchId}`} className="btn btn-sm">Draw &amp; bookmark →</Link>
+        </div>
       </div>
 
       <div className="grid" style={{ gridTemplateColumns: "1.6fr 1fr", marginTop: 22, alignItems: "start" }}>

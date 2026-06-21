@@ -4,8 +4,8 @@ import DemoReview from "../../components/DemoReview";
 
 export const dynamic = "force-dynamic";
 
-export default async function ReviewPage() {
-  const review = await loadLatestReview();
+export default async function ReviewPage({ searchParams }: { searchParams?: { match?: string } }) {
+  const review = await loadLatestReview(typeof searchParams?.match === "string" ? searchParams.match : undefined);
   if (review && review.videoUrl) return <RealReview review={review} />;
   return <DemoReview />;
 }

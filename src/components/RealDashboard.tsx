@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { HBars } from "./charts";
+import MatchSwitcher from "./MatchSwitcher";
 import type { LatestAnalysis } from "../lib/analysis";
 
 export default function RealDashboard({ real }: { real: LatestAnalysis }) {
@@ -23,7 +24,8 @@ export default function RealDashboard({ real }: { real: LatestAnalysis }) {
           <h1 className="page-title" style={{ marginTop: 6 }}>{real.team} vs {real.opponent}</h1>
           <p className="page-sub">{real.title} · AI analysis of your footage</p>
         </div>
-        <div style={{ display: "flex", gap: 10 }}>
+        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+          <MatchSwitcher current={real.matchId} />
           <Link href={`/matches/${real.matchId}`} className="btn">Open match</Link>
           <Link href="/record" className="btn btn-primary">● Record New Game</Link>
         </div>

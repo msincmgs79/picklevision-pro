@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { RadarChart, HBars } from "./charts";
+import MatchSwitcher from "./MatchSwitcher";
 import type { LatestAnalysis } from "../lib/analysis";
 
 export default function RealRatings({ real }: { real: LatestAnalysis }) {
@@ -43,7 +44,10 @@ export default function RealRatings({ real }: { real: LatestAnalysis }) {
           <h1 className="page-title" style={{ marginTop: 6 }}>Ratings &amp; Insights</h1>
           <p className="page-sub">{real.team} vs {real.opponent} · graded by AI from your match footage.</p>
         </div>
-        <Link href={`/matches/${real.matchId}`} className="btn btn-sm btn-ghost">Open match →</Link>
+        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+          <MatchSwitcher current={real.matchId} />
+          <Link href={`/matches/${real.matchId}`} className="btn btn-sm btn-ghost">Open match →</Link>
+        </div>
       </div>
 
       <div className="grid" style={{ gridTemplateColumns: "1fr 1fr", marginTop: 22, alignItems: "start" }}>

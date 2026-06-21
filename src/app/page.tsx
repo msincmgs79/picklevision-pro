@@ -4,8 +4,8 @@ import DemoDashboard from "../components/DemoDashboard";
 
 export const dynamic = "force-dynamic";
 
-export default async function HomePage() {
-  const real = await loadLatestAnalysis();
+export default async function HomePage({ searchParams }: { searchParams?: { match?: string } }) {
+  const real = await loadLatestAnalysis(typeof searchParams?.match === "string" ? searchParams.match : undefined);
   if (real && (real.ball || real.shot?.analysis)) return <RealDashboard real={real} />;
   return <DemoDashboard />;
 }

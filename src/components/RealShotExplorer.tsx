@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { Heatmap } from "./charts";
+import MatchSwitcher from "./MatchSwitcher";
 import type { LatestAnalysis, BallDetection } from "../lib/analysis";
 
 export default function RealShotExplorer({ real }: { real: LatestAnalysis }) {
@@ -18,7 +19,10 @@ export default function RealShotExplorer({ real }: { real: LatestAnalysis }) {
           <h1 className="page-title" style={{ marginTop: 6 }}>Shot Explorer</h1>
           <p className="page-sub">{real.team} vs {real.opponent} · computed from your match footage.</p>
         </div>
-        <Link href={`/matches/${real.matchId}`} className="btn btn-sm btn-ghost">Open match →</Link>
+        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+          <MatchSwitcher current={real.matchId} />
+          <Link href={`/matches/${real.matchId}`} className="btn btn-sm btn-ghost">Open match →</Link>
+        </div>
       </div>
 
       {/* metrics */}

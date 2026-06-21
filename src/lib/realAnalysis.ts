@@ -5,7 +5,7 @@ import type { InferenceResult, ShotAnalysisResult, LatestAnalysis, ReviewData } 
 // Loads the signed-in user's most recent match that has any analysis.
 // Returns null in demo mode, when signed out, or when nothing is analyzed yet —
 // the analysis screens fall back to the demo data in those cases.
-export async function loadLatestAnalysis(): Promise<LatestAnalysis | null> {
+export async function loadLatestAnalysis(matchId?: string): Promise<LatestAnalysis | null> {
   if (!isSupabaseConfigured) return null;
   const supabase = createClient();
   const {
@@ -13,13 +13,16 @@ export async function loadLatestAnalysis(): Promise<LatestAnalysis | null> {
   } = await supabase.auth.getUser();
   if (!user) return null;
 
-  const { data } = await supabase
+  const base = supabase
     .from("matches")
-    .select("id,title,team,opponent,recorded_at,ball_analysis,shot_analysis,created_at")
-    .or("ball_analysis.not.is.null,shot_analysis.not.is.null")
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .select("id,title,team,opponent,recorded_at,ball_analysis,shot_analysis,created_at");
+  const { data } = matchId
+    ? await base.eq("id", matchId).maybeSingle()
+    : await base
+        .or("ball_analysis.not.is.null,shot_analysis.not.is.null")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
 
   if (!data) return null;
 
@@ -35,7 +38,7 @@ export async function loadLatestAnalysis(): Promise<LatestAnalysis | null> {
 }
 
 // Latest analyzed match plus its signed video URL and saved bookmarks (for /review).
-export async function loadLatestReview(): Promise<ReviewData | null> {
+export async function loadLatestReview(matchId?: string): Promise<ReviewData | null> {
   if (!isSupabaseConfigured) return null;
   const supabase = createClient();
   const {
@@ -43,13 +46,16 @@ export async function loadLatestReview(): Promise<ReviewData | null> {
   } = await supabase.auth.getUser();
   if (!user) return null;
 
-  const { data } = await supabase
+  const base = supabase
     .from("matches")
-    .select("id,title,team,opponent,recorded_at,video_path,ball_analysis,shot_analysis,created_at")
-    .or("ball_analysis.not.is.null,shot_analysis.not.is.null")
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .select("id,title,team,opponent,recorded_at,video_path,ball_analysis,shot_analysis,created_at");
+  const { data } = matchId
+    ? await base.eq("id", matchId).maybeSingle()
+    : await base
+        .or("ball_analysis.not.is.null,shot_analysis.not.is.null")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
   if (!data) return null;
 
   let videoUrl: string | null = null;
