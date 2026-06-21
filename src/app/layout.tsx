@@ -1,8 +1,11 @@
-import type { Metadata } from 'next';
+import type { Metadata } from "next";
+import "./globals.css";
+import Sidebar from "../components/Sidebar";
 
 export const metadata: Metadata = {
-  title: 'PickleVision Pro',
-  description: 'Professional Pickleball Analysis',
+  title: "PickleVision Pro — AI Pickleball Analysis",
+  description:
+    "Record, analyze and review your pickleball games with AI shot tracking, 3D trajectories, heatmaps and skill ratings.",
 };
 
 export default function RootLayout({
@@ -12,11 +15,11 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <head>
-        <link href="https://cdn.tailwindcss.com" rel="stylesheet" />
-      </head>
       <body>
-        {children}
+        <div className="app">
+          <Sidebar />
+          <main className="main">{children}</main>
+        </div>
       </body>
     </html>
   );
