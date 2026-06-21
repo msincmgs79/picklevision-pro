@@ -33,7 +33,9 @@ export default function MatchPlayer({
   const [bookmarks, setBookmarks] = useState<Bookmark[]>(initialBookmarks);
   const [deleting, setDeleting] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
-  const [analysis, setAnalysis] = useState<InferenceResult | null>(null);
+  const [analysis, setAnalysis] = useState<InferenceResult | null>(
+    (match.ball_analysis as InferenceResult) || null
+  );
   const [analysisError, setAnalysisError] = useState<string | null>(null);
 
   const supabase = createClient();
@@ -134,6 +136,12 @@ export default function MatchPlayer({
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.detail || data?.error || `Inference failed (${res.status}).`);
       setAnalysis(data);
+      // Persist so it doesn't re-run on every visit (ignore errors so a failed
+      // save never hides a good result).
+      await supabase
+        .from("matches")
+        .update({ ball_analysis: data, ball_analyzed_at: new Date().toISOString() })
+        .eq("id", match.id);
     } catch (e: any) {
       setAnalysisError(e?.message || "Analysis failed.");
     } finally {
