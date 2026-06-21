@@ -21,7 +21,7 @@ import requests
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="PickleVision Ball Detection", version="1.3.0")
+app = FastAPI(title="PickleVision Ball Detection", version="1.4.0")
 
 # Allow the browser frontend to call this directly (avoids serverless timeouts).
 # Open for now; can be restricted to the Vercel domain later.
@@ -240,7 +240,9 @@ SHOT_PROMPT = (
     ' "shotTypes": [{"type": string, "emphasis": string}],'
     ' "shotsObserved": [{"type": string, "note": string}],'
     ' "strengths": [string], "improvements": [string], "coachTip": string}\n'
-    "ratings are 0-5 (one decimal). kitchenControl is 0-100 (how consistently the "
+    "ratings are AI ESTIMATES on the DUPR scale 2.0-8.0 (one decimal): about 3.0 "
+    "is a beginner, 4.0 intermediate, 5.0 advanced, 6.0-8.0 elite/pro. Do NOT claim "
+    "to be an official DUPR. kitchenControl is 0-100 (how consistently the "
     "player holds the non-volley-zone line). positioning is one sentence on court "
     "positioning and movement. shotTypes lists the shot types you actually see "
     "(serve, return, drive, drop, dink, volley, lob, smash) each with emphasis "
