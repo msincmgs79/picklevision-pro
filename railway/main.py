@@ -21,7 +21,7 @@ import requests
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="PickleVision Ball Detection", version="1.4.0")
+app = FastAPI(title="PickleVision Ball Detection", version="1.4.1")
 
 # Allow the browser frontend to call this directly (avoids serverless timeouts).
 # Open for now; can be restricted to the Vercel domain later.
@@ -40,6 +40,7 @@ MAX_DOWNLOAD_BYTES = 300 * 1024 * 1024  # 300 MB safety cap
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 SHOT_KEYFRAMES = 20                     # keyframes sent to Gemini
+RATING_CALIBRATION = 0.4                 # added to each AI skill rating (user-calibrated)
 
 
 class InferenceRequest(BaseModel):
@@ -302,6 +303,16 @@ async def analyze_shots(request: ShotAnalysisRequest):
             raise ValueError("No frames could be extracted from the video")
 
         analysis = gemini_breakdown(frames)
+
+        # Calibration: nudge AI ratings to better match observed real-world level.
+        ratings = analysis.get("ratings")
+        if isinstance(ratings, dict):
+            for k, v in list(ratings.items()):
+                try:
+                    ratings[k] = round(min(8.0, max(2.0, float(v) + RATING_CALIBRATION)), 1)
+                except (TypeError, ValueError):
+                    pass
+
         return {
             "success": True,
             "model": GEMINI_MODEL,
