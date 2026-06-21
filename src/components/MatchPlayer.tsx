@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "../lib/supabase/client";
 import { VIDEO_BUCKET } from "../lib/supabase/config";
+import type { InferenceResult } from "../lib/analysis";
 
 interface Bookmark {
   id: string;
@@ -31,6 +32,9 @@ export default function MatchPlayer({
   const [drawMode, setDrawMode] = useState(false);
   const [bookmarks, setBookmarks] = useState<Bookmark[]>(initialBookmarks);
   const [deleting, setDeleting] = useState(false);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [analysis, setAnalysis] = useState<InferenceResult | null>(null);
+  const [analysisError, setAnalysisError] = useState<string | null>(null);
 
   const supabase = createClient();
   const fmt = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
@@ -106,6 +110,25 @@ export default function MatchPlayer({
     await supabase.from("matches").delete().eq("id", match.id);
     router.push("/matches");
     router.refresh();
+  }
+
+  async function runAnalysis() {
+    setAnalyzing(true);
+    setAnalysisError(null);
+    try {
+      const res = await fetch("/api/analyze", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ matchId: match.id }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "Analysis failed.");
+      setAnalysis(data);
+    } catch (e: any) {
+      setAnalysisError(e?.message || "Analysis failed.");
+    } finally {
+      setAnalyzing(false);
+    }
   }
 
   return (
@@ -212,15 +235,85 @@ export default function MatchPlayer({
             )}
           </div>
 
-          <div className="card" style={{ borderColor: "rgba(129,140,248,0.35)" }}>
-            <div className="section-title" style={{ marginBottom: 4 }}>AI analysis</div>
-            <p className="muted" style={{ fontSize: 13.5, lineHeight: 1.55 }}>
-              Automatic shot tracking for your uploads is coming as the next phase. See what the analyzed view looks like on the demo match.
+          <div className="card" style={{ borderColor: "rgba(163,230,53,0.35)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div className="section-title">Ball detection</div>
+              <span className="badge badge-average" style={{ fontSize: 11 }}>beta</span>
+            </div>
+            <p className="muted" style={{ fontSize: 13, lineHeight: 1.5, marginTop: 4 }}>
+              Runs real computer-vision ball detection on this video via the inference service.
             </p>
-            <Link href="/analysis" className="btn btn-sm btn-indigo" style={{ marginTop: 12 }}>Preview analysis →</Link>
+            <button
+              className="btn btn-primary btn-sm"
+              style={{ marginTop: 12, opacity: analyzing || !videoUrl ? 0.6 : 1 }}
+              onClick={runAnalysis}
+              disabled={analyzing || !videoUrl}
+            >
+              {analyzing ? "Analyzing… (up to a minute)" : analysis ? "↻ Re-run detection" : "▶ Run ball detection"}
+            </button>
+
+            {analysisError && (
+              <div style={{ marginTop: 10, fontSize: 12.5, color: "var(--poor)" }}>{analysisError}</div>
+            )}
+
+            {analysis && (
+              <div style={{ marginTop: 14 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                  <Metric label="Ball hits found" value={String(analysis.detectionsFound)} />
+                  <Metric label="Video length" value={`${analysis.duration.toFixed(1)}s`} />
+                  <Metric label="Frames scanned" value={String(analysis.totalFrames)} />
+                  <Metric label="Source FPS" value={analysis.fps.toFixed(0)} />
+                </div>
+                <div className="dim" style={{ fontSize: 11.5, margin: "12px 0 6px" }}>
+                  Detected ball positions on the court
+                </div>
+                <CourtScatter detections={analysis.detections} />
+                <p className="dim" style={{ fontSize: 11, marginTop: 8, lineHeight: 1.5 }}>
+                  Note: this detects ball positions only (color-based). Shot types &amp; grading come in the next step.
+                </p>
+              </div>
+            )}
           </div>
         </div>
       </div>
     </div>
+  );
+}
+
+function Metric({ label, value }: { label: string; value: string }) {
+  return (
+    <div style={{ background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 9, padding: "8px 10px" }}>
+      <div className="dim" style={{ fontSize: 11 }}>{label}</div>
+      <div style={{ fontSize: 18, fontWeight: 800, letterSpacing: "-0.5px" }}>{value}</div>
+    </div>
+  );
+}
+
+// Plots detected ball positions on a pickleball court (20ft wide x 44ft long).
+function CourtScatter({
+  detections,
+}: {
+  detections: { courtX: number; courtY: number; confidence: number }[];
+}) {
+  const w = 200;
+  const h = 360;
+  const pad = 8;
+  const x = (ft: number) => pad + (Math.min(20, Math.max(0, ft)) / 20) * (w - pad * 2);
+  const y = (ft: number) => pad + (Math.min(44, Math.max(0, ft)) / 44) * (h - pad * 2);
+  return (
+    <svg viewBox={`0 0 ${w} ${h}`} width="100%" style={{ maxWidth: w }}>
+      <rect x={pad} y={pad} width={w - pad * 2} height={h - pad * 2} fill="#16243f" stroke="rgba(255,255,255,0.5)" strokeWidth={2} />
+      {/* net at mid-court */}
+      <line x1={pad} y1={h / 2} x2={w - pad} y2={h / 2} stroke="#fff" strokeWidth={2} />
+      {/* kitchen lines (7ft each side of net) */}
+      <line x1={pad} y1={y(15)} x2={w - pad} y2={y(15)} stroke="rgba(255,255,255,0.45)" strokeDasharray="5 4" />
+      <line x1={pad} y1={y(29)} x2={w - pad} y2={y(29)} stroke="rgba(255,255,255,0.45)" strokeDasharray="5 4" />
+      {detections.map((d, i) => (
+        <circle key={i} cx={x(d.courtX)} cy={y(d.courtY)} r={3} fill="var(--primary)" opacity={0.35 + d.confidence * 0.55} />
+      ))}
+      {detections.length === 0 && (
+        <text x={w / 2} y={h / 2} textAnchor="middle" fontSize={11} fill="var(--text-dim)">No balls detected</text>
+      )}
+    </svg>
   );
 }
