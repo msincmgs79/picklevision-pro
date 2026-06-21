@@ -1,11 +1,15 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { createClient } from "../lib/supabase/client";
+import { isSupabaseConfigured } from "../lib/supabase/config";
 
 const links = [
   { section: "Overview" },
   { href: "/", label: "Dashboard", icon: "▦" },
+  { href: "/matches", label: "My Matches", icon: "▤" },
   { href: "/record", label: "Record & Upload", icon: "●" },
   { section: "Analysis" },
   { href: "/analysis", label: "Shot Explorer", icon: "✦" },
@@ -16,6 +20,27 @@ const links = [
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const router = useRouter();
+  const [email, setEmail] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isSupabaseConfigured) return;
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data }) => setEmail(data.user?.email ?? null));
+    const { data: sub } = supabase.auth.onAuthStateChange((_e, session) =>
+      setEmail(session?.user?.email ?? null)
+    );
+    return () => sub.subscription.unsubscribe();
+  }, []);
+
+  async function signOut() {
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    setEmail(null);
+    router.push("/");
+    router.refresh();
+  }
+
   return (
     <aside className="sidebar">
       <Link href="/" className="brand">
@@ -31,34 +56,35 @@ export default function Sidebar() {
             {l.section}
           </div>
         ) : (
-          <Link
-            key={l.href}
-            href={l.href!}
-            className={
-              "nav-link" +
-              (pathname === l.href ? " active" : "")
-            }
-          >
+          <Link key={l.href} href={l.href!} className={"nav-link" + (pathname === l.href ? " active" : "")}>
             <span className="nav-icon">{l.icon}</span>
             {l.label}
           </Link>
         )
       )}
 
-      <div style={{ marginTop: "auto", padding: "12px 10px 4px" }}>
-        <div
-          style={{
-            background: "var(--surface)",
-            border: "1px solid var(--border)",
-            borderRadius: "12px",
-            padding: "14px",
-          }}
-        >
-          <div style={{ fontWeight: 700, fontSize: 13.5 }}>DUPR Connected</div>
-          <div style={{ color: "var(--text-muted)", fontSize: 12.5, marginTop: 2 }}>
-            Rating 4.412 · +0.06
+      <div style={{ marginTop: "auto", padding: "12px 6px 4px" }}>
+        {email ? (
+          <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12, padding: 14 }}>
+            <div style={{ fontWeight: 700, fontSize: 13, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+              {email}
+            </div>
+            <button
+              onClick={signOut}
+              style={{ marginTop: 8, background: "none", border: "none", color: "var(--text-muted)", fontWeight: 600, fontSize: 12.5, cursor: "pointer", padding: 0 }}
+            >
+              Sign out →
+            </button>
           </div>
-        </div>
+        ) : (
+          <Link
+            href="/login"
+            className="btn btn-primary"
+            style={{ width: "100%", justifyContent: "center", fontSize: 13.5 }}
+          >
+            Sign in
+          </Link>
+        )}
       </div>
     </aside>
   );

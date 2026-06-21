@@ -3,20 +3,22 @@
     "version": "0.1.0",
     "private": true,
     "scripts": {
-          "dev": "next dev",
-          "build": "next build",
-          "start": "next start",
-          "lint": "next lint"
+        "dev": "next dev",
+        "build": "next build",
+        "start": "next start",
+        "lint": "next lint"
     },
     "dependencies": {
-          "react": "^18.2.0",
-          "react-dom": "^18.2.0",
-          "next": "13.4.0"
+        "@supabase/ssr": "^0.12.0",
+        "@supabase/supabase-js": "^2.108.2",
+        "next": "13.4.0",
+        "react": "^18.2.0",
+        "react-dom": "^18.2.0"
     },
     "devDependencies": {
-          "typescript": "^5.0.0",
-          "@types/node": "^18.15.11",
-          "@types/react": "^18.0.27",
-          "@types/react-dom": "^18.0.10"
+        "@types/node": "^18.15.11",
+        "@types/react": "^18.0.27",
+        "@types/react-dom": "^18.0.10",
+        "typescript": "^5.0.0"
     }
 }
