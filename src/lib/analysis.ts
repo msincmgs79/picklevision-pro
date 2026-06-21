@@ -55,6 +55,18 @@ export interface LatestAnalysis {
   shot: ShotAnalysisResult | null;
 }
 
+export interface ReviewBookmark {
+  id: string;
+  t: number;
+  label: string | null;
+}
+
+// Everything the Video Review screen needs for the latest analyzed match.
+export interface ReviewData extends LatestAnalysis {
+  videoUrl: string | null;
+  bookmarks: ReviewBookmark[];
+}
+
 // Base URL of the Railway service, with any trailing slash or /infer stripped.
 function baseUrl(raw: string): string | null {
   const b = raw.trim().replace(/\/+$/, "").replace(/\/infer$/, "");
