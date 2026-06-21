@@ -33,7 +33,7 @@ export default function RealDashboard({ real }: { real: LatestAnalysis }) {
 
       {/* real stat tiles */}
       <div className="grid" style={{ gridTemplateColumns: "repeat(4, 1fr)", marginTop: 26 }}>
-        <Stat label="Overall Rating" value={overall != null ? overall.toFixed(1) : "—"} sub={a ? "AI skill composite" : "run shot breakdown"} />
+        <Stat label="Overall Rating" value={overall != null ? overall.toFixed(1) : "—"} sub={a ? "AI estimate · DUPR scale" : "run shot breakdown"} />
         <Stat label="Ball Positions" value={real.ball ? String(real.ball.detectionsFound) : "—"} sub={real.ball ? "detected on court" : "run ball detection"} />
         <Stat label="Footage Analyzed" value={real.ball ? `${Math.round(real.ball.duration)}s` : "—"} sub={real.ball ? `${real.ball.totalFrames} frames` : ""} />
         <Stat label="Shots Observed" value={a ? String(a.shotsObserved?.length ?? 0) : "—"} sub={a ? "by AI from keyframes" : ""} />
@@ -55,7 +55,7 @@ export default function RealDashboard({ real }: { real: LatestAnalysis }) {
               <div className="section-title">Skill Snapshot</div>
               {overall != null && <span style={{ fontSize: 22, fontWeight: 800, color: "var(--primary)" }}>{overall.toFixed(1)}</span>}
             </div>
-            <HBars data={ratings} max={5} />
+            <HBars data={ratings} max={8} />
           </div>
         )}
 

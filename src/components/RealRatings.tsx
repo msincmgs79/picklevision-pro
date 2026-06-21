@@ -54,15 +54,18 @@ export default function RealRatings({ real }: { real: LatestAnalysis }) {
         {/* radar */}
         <div className="card" style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
           <div style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <div className="section-title">Skill Ratings</div>
+            <div>
+              <div className="section-title">Skill Ratings</div>
+              <div className="dim" style={{ fontSize: 11.5, marginTop: 2 }}>AI estimate · DUPR scale (2–8)</div>
+            </div>
             <div style={{ textAlign: "right" }}>
               <div style={{ fontSize: 30, fontWeight: 800, color: "var(--primary)", lineHeight: 1 }}>{overall.toFixed(1)}</div>
-              <div className="dim" style={{ fontSize: 11.5 }}>overall</div>
+              <div className="dim" style={{ fontSize: 11.5 }}>AI DUPR est.</div>
             </div>
           </div>
-          <RadarChart data={ratingData} max={5} />
+          <RadarChart data={ratingData} max={8} />
           <div style={{ width: "100%", marginTop: 8 }}>
-            <HBars data={ratingData} max={5} />
+            <HBars data={ratingData} max={8} />
           </div>
         </div>
 
@@ -119,9 +122,10 @@ export default function RealRatings({ real }: { real: LatestAnalysis }) {
             <div className="muted" style={{ fontSize: 13, marginTop: 2 }}>Track your AI composite alongside your official rating</div>
           </div>
           <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-            <div className="stat" style={{ minWidth: 130 }}>
-              <div className="stat-label">PickleVision AI</div>
+            <div className="stat" style={{ minWidth: 150 }}>
+              <div className="stat-label">AI estimate</div>
               <div className="stat-value" style={{ fontSize: 24 }}>{overall.toFixed(1)}</div>
+              <div className="dim" style={{ fontSize: 11 }}>DUPR scale · not official</div>
             </div>
             <a className="btn btn-indigo btn-sm" href="https://dupr.com" target="_blank" rel="noreferrer">Open DUPR ↗</a>
           </div>
@@ -179,7 +183,7 @@ function buildExport(real: LatestAnalysis): string {
     lines.push("SUMMARY");
     lines.push(a.summary);
     lines.push("");
-    lines.push("SKILL RATINGS (0-5)");
+    lines.push("SKILL RATINGS (AI estimate, DUPR scale 2-8)");
     Object.entries(a.ratings || {}).forEach(([k, v]) => lines.push(`- ${k}: ${v}`));
     lines.push("");
     lines.push("STRENGTHS");

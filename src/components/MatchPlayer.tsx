@@ -399,7 +399,7 @@ export default function MatchPlayer({
 
             <div className="grid" style={{ gridTemplateColumns: "1fr 1fr", marginTop: 16, gap: 18 }}>
               <div>
-                <div className="dim" style={{ fontSize: 12, marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.5 }}>Skill read (0–5)</div>
+                <div className="dim" style={{ fontSize: 12, marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.5 }}>Skill read · DUPR scale (AI est.)</div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
                   {shot.analysis.ratings &&
                     Object.entries(shot.analysis.ratings).map(([k, v]) => (
@@ -409,7 +409,7 @@ export default function MatchPlayer({
                           <b>{Number(v).toFixed(1)}</b>
                         </div>
                         <div className="progress">
-                          <div className="progress-bar" style={{ width: `${(Number(v) / 5) * 100}%`, background: "linear-gradient(90deg,var(--indigo-dim),var(--indigo))" }} />
+                          <div className="progress-bar" style={{ width: `${(Number(v) / 8) * 100}%`, background: "linear-gradient(90deg,var(--indigo-dim),var(--indigo))" }} />
                         </div>
                       </div>
                     ))}
