@@ -59,7 +59,7 @@ export default function RatingsPage() {
           <div className="card">
             <div className="section-title" style={{ marginBottom: 4 }}>Team Stats — Doubles</div>
             <div className="muted" style={{ fontSize: 13, marginBottom: 16 }}>
-              {matchSummary.team} (you &amp; {matchSummary.partner}) vs {matchSummary.opponent}
+              {matchSummary.team} vs {matchSummary.opponent}
             </div>
             <Versus label="Kitchen arrival rate" you={teamStats.kitchenArrival} partner={teamStats.partnerKitchen} unit="%" />
             <Versus label="Share of shots taken" you={teamStats.yourShots} partner={teamStats.partnerShots} unit="%" />
@@ -167,7 +167,7 @@ function buildExport(): string {
   const top = [...shotTypeCounts].sort((a, b) => b.count - a.count).slice(0, 5).map((s) => `${s.type}: ${s.count}`).join(", ");
   return `PICKLEVISION MATCH EXPORT
 Date: ${matchSummary.date} | Result: ${matchSummary.result} (${matchSummary.score})
-Partner: ${matchSummary.partner} | Opponent: ${matchSummary.opponent}
+Team: ${matchSummary.team} | Opponent: ${matchSummary.opponent}
 Duration: ${matchSummary.duration} (active play ${matchSummary.activePlay})
 
 SUMMARY

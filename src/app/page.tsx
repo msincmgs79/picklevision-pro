@@ -26,7 +26,7 @@ export default function Dashboard() {
             {matchSummary.team} vs {matchSummary.opponent}
           </h1>
           <p className="page-sub">
-            with {matchSummary.partner} · {matchSummary.score} ·{" "}
+            {matchSummary.score} ·{" "}
             <span style={{ color: "var(--excellent)", fontWeight: 700 }}>{matchSummary.result}</span>
           </p>
         </div>

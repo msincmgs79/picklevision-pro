@@ -262,7 +262,6 @@ export const matchSummary = {
   date: "Jun 21, 2026",
   team: "Team Martin",
   opponent: "Team Whan",
-  partner: "Jordan",
   duration: "47:12",
   activePlay: "22:48",
   deadTimeCut: "24:24",
