@@ -21,7 +21,7 @@ import requests
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="PickleVision Ball Detection", version="1.2.0")
+app = FastAPI(title="PickleVision Ball Detection", version="1.3.0")
 
 # Allow the browser frontend to call this directly (avoids serverless timeouts).
 # Open for now; can be restricted to the Vercel domain later.
@@ -39,7 +39,7 @@ MAX_DOWNLOAD_BYTES = 300 * 1024 * 1024  # 300 MB safety cap
 # Gemini (shot breakdown). Key is set on Railway as GEMINI_API_KEY.
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
-SHOT_KEYFRAMES = 12                     # keyframes sent to Gemini
+SHOT_KEYFRAMES = 20                     # keyframes sent to Gemini
 
 
 class InferenceRequest(BaseModel):
@@ -231,14 +231,21 @@ SHOT_PROMPT = (
     "You are a professional pickleball coach. The images are still frames sampled "
     "evenly and in chronological order from a single match video. Judge ONLY from "
     "what is visible (player positions, paddle prep, court coverage, shot context). "
-    "Return a concise coaching breakdown as STRICT JSON with this exact shape:\n"
+    "Return a detailed coaching breakdown as STRICT JSON with this exact shape:\n"
     '{"summary": string,'
     ' "ratings": {"serve": number, "return": number, "offense": number, '
     '"defense": number, "consistency": number},'
+    ' "kitchenControl": number,'
+    ' "positioning": string,'
+    ' "shotTypes": [{"type": string, "emphasis": string}],'
     ' "shotsObserved": [{"type": string, "note": string}],'
     ' "strengths": [string], "improvements": [string], "coachTip": string}\n'
-    "Ratings are 0-5 with one decimal. Keep arrays to 2-4 short items each. "
-    "These are sparse frames, so give your best coaching estimate."
+    "ratings are 0-5 (one decimal). kitchenControl is 0-100 (how consistently the "
+    "player holds the non-volley-zone line). positioning is one sentence on court "
+    "positioning and movement. shotTypes lists the shot types you actually see "
+    "(serve, return, drive, drop, dink, volley, lob, smash) each with emphasis "
+    '"High", "Medium" or "Low". shotsObserved cites specific frames. Keep arrays to '
+    "3-6 short items. Frames are sparse, so give your best coaching estimate."
 )
 
 
