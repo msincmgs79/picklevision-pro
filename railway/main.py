@@ -5,6 +5,8 @@ Time- and memory-bounded so it can handle long videos on a small instance.
 """
 
 import os
+import json
+import base64
 import logging
 import tempfile
 from typing import List, Tuple
@@ -19,7 +21,7 @@ import requests
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="PickleVision Ball Detection", version="1.1.0")
+app = FastAPI(title="PickleVision Ball Detection", version="1.2.0")
 
 # Allow the browser frontend to call this directly (avoids serverless timeouts).
 # Open for now; can be restricted to the Vercel domain later.
@@ -34,8 +36,17 @@ MAX_FRAMES = 150                       # frames we actually decode/analyze
 DOWNLOAD_TIMEOUT = 120                 # seconds
 MAX_DOWNLOAD_BYTES = 300 * 1024 * 1024  # 300 MB safety cap
 
+# Gemini (shot breakdown). Key is set on Railway as GEMINI_API_KEY.
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+SHOT_KEYFRAMES = 12                     # keyframes sent to Gemini
+
 
 class InferenceRequest(BaseModel):
+    videoUrl: str
+
+
+class ShotAnalysisRequest(BaseModel):
     videoUrl: str
 
 
@@ -208,6 +219,92 @@ async def infer(request: InferenceRequest):
     except Exception as e:
         logger.error(f"[INFERENCE] FATAL: {type(e).__name__}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Inference failed: {e}")
+    finally:
+        if video_path:
+            try:
+                os.remove(video_path)
+            except OSError:
+                pass
+
+
+SHOT_PROMPT = (
+    "You are a professional pickleball coach. The images are still frames sampled "
+    "evenly and in chronological order from a single match video. Judge ONLY from "
+    "what is visible (player positions, paddle prep, court coverage, shot context). "
+    "Return a concise coaching breakdown as STRICT JSON with this exact shape:\n"
+    '{"summary": string,'
+    ' "ratings": {"serve": number, "return": number, "offense": number, '
+    '"defense": number, "consistency": number},'
+    ' "shotsObserved": [{"type": string, "note": string}],'
+    ' "strengths": [string], "improvements": [string], "coachTip": string}\n'
+    "Ratings are 0-5 with one decimal. Keep arrays to 2-4 short items each. "
+    "These are sparse frames, so give your best coaching estimate."
+)
+
+
+def gemini_breakdown(frames: List[Tuple[int, np.ndarray]]) -> dict:
+    parts = []
+    for _idx, frame in frames:
+        ok, buf = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), 70])
+        if ok:
+            parts.append({
+                "inline_data": {
+                    "mime_type": "image/jpeg",
+                    "data": base64.b64encode(buf.tobytes()).decode("ascii"),
+                }
+            })
+    if not parts:
+        raise ValueError("No frames to send to Gemini")
+    parts.append({"text": SHOT_PROMPT})
+
+    body = {
+        "contents": [{"parts": parts}],
+        "generationConfig": {"responseMimeType": "application/json", "temperature": 0.3},
+    }
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent"
+    r = requests.post(
+        url,
+        headers={"x-goog-api-key": GEMINI_API_KEY, "Content-Type": "application/json"},
+        json=body,
+        timeout=120,
+    )
+    if not r.ok:
+        raise HTTPException(status_code=502, detail=f"Gemini error {r.status_code}: {r.text[:300]}")
+    data = r.json()
+    try:
+        text = data["candidates"][0]["content"]["parts"][0]["text"]
+    except (KeyError, IndexError):
+        raise HTTPException(status_code=502, detail=f"Gemini returned no content: {str(data)[:300]}")
+    return json.loads(text)
+
+
+@app.post("/analyze-shots")
+async def analyze_shots(request: ShotAnalysisRequest):
+    if not GEMINI_API_KEY:
+        raise HTTPException(status_code=503, detail="GEMINI_API_KEY is not configured on the backend")
+    if not request.videoUrl:
+        raise HTTPException(status_code=400, detail="videoUrl required")
+
+    video_path = None
+    try:
+        video_path = download_video(request.videoUrl)
+        frames, total_frames, video_fps, duration = sample_frames(video_path, max_frames=SHOT_KEYFRAMES)
+        if not frames:
+            raise ValueError("No frames could be extracted from the video")
+
+        analysis = gemini_breakdown(frames)
+        return {
+            "success": True,
+            "model": GEMINI_MODEL,
+            "framesAnalyzed": len(frames),
+            "duration": float(duration),
+            "analysis": analysis,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"[SHOTS] FATAL: {type(e).__name__}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Shot analysis failed: {e}")
     finally:
         if video_path:
             try:
