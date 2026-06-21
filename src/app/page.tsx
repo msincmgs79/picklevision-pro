@@ -23,7 +23,7 @@ export default function Dashboard() {
         <div>
           <div className="eyebrow">Latest Match · {matchSummary.date}</div>
           <h1 className="page-title" style={{ marginTop: 6 }}>
-            vs {matchSummary.opponent}
+            {matchSummary.team} vs {matchSummary.opponent}
           </h1>
           <p className="page-sub">
             with {matchSummary.partner} · {matchSummary.score} ·{" "}

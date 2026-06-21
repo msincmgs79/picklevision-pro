@@ -59,7 +59,7 @@ export default function RatingsPage() {
           <div className="card">
             <div className="section-title" style={{ marginBottom: 4 }}>Team Stats — Doubles</div>
             <div className="muted" style={{ fontSize: 13, marginBottom: 16 }}>
-              You &amp; {matchSummary.partner} vs {matchSummary.opponent}
+              {matchSummary.team} (you &amp; {matchSummary.partner}) vs {matchSummary.opponent}
             </div>
             <Versus label="Kitchen arrival rate" you={teamStats.kitchenArrival} partner={teamStats.partnerKitchen} unit="%" />
             <Versus label="Share of shots taken" you={teamStats.yourShots} partner={teamStats.partnerShots} unit="%" />
