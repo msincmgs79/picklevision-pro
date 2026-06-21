@@ -44,6 +44,17 @@ export interface ShotAnalysisResult {
   analysis: ShotAnalysis;
 }
 
+// The most-recently-analyzed match, loaded server-side for the analysis screens.
+export interface LatestAnalysis {
+  matchId: string;
+  title: string;
+  team: string;
+  opponent: string;
+  recordedAt: string | null;
+  ball: InferenceResult | null;
+  shot: ShotAnalysisResult | null;
+}
+
 // Base URL of the Railway service, with any trailing slash or /infer stripped.
 function baseUrl(raw: string): string | null {
   const b = raw.trim().replace(/\/+$/, "").replace(/\/infer$/, "");
