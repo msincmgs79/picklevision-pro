@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "../lib/supabase/client";
 import { VIDEO_BUCKET } from "../lib/supabase/config";
-import type { InferenceResult } from "../lib/analysis";
+import { inferEndpointPublic, type InferenceResult } from "../lib/analysis";
 
 interface Bookmark {
   id: string;
@@ -116,13 +116,23 @@ export default function MatchPlayer({
     setAnalyzing(true);
     setAnalysisError(null);
     try {
-      const res = await fetch("/api/analyze", {
+      const endpoint = inferEndpointPublic();
+      if (!endpoint) throw new Error("Inference service URL is not configured.");
+      if (!match.video_path) throw new Error("This match has no uploaded video.");
+
+      // Sign the private video URL in the browser, then call the service directly.
+      const { data: signed, error: sErr } = await supabase.storage
+        .from(VIDEO_BUCKET)
+        .createSignedUrl(match.video_path, 600);
+      if (sErr || !signed?.signedUrl) throw new Error("Could not sign the video URL.");
+
+      const res = await fetch(endpoint, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ matchId: match.id }),
+        body: JSON.stringify({ videoUrl: signed.signedUrl }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || "Analysis failed.");
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.detail || data?.error || `Inference failed (${res.status}).`);
       setAnalysis(data);
     } catch (e: any) {
       setAnalysisError(e?.message || "Analysis failed.");

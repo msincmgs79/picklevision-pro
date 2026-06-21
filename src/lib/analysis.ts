@@ -21,10 +21,19 @@ export interface InferenceResult {
   trajectories: number;
 }
 
-// Normalize RAILWAY_INFERENCE_URL (which may or may not already include /infer).
-export function inferEndpoint(): string | null {
-  let base = (process.env.RAILWAY_INFERENCE_URL || "").trim().replace(/\/+$/, "");
+function normalize(base: string): string | null {
+  base = base.trim().replace(/\/+$/, "");
   if (!base) return null;
-  if (base.endsWith("/infer")) return base;
-  return `${base}/infer`;
+  return base.endsWith("/infer") ? base : `${base}/infer`;
+}
+
+// Server-side endpoint (Vercel route) — kept as a fallback.
+export function inferEndpoint(): string | null {
+  return normalize(process.env.RAILWAY_INFERENCE_URL || "");
+}
+
+// Browser-callable endpoint. NEXT_PUBLIC_ vars are inlined at build time so the
+// browser can call the inference service directly (no serverless timeout).
+export function inferEndpointPublic(): string | null {
+  return normalize(process.env.NEXT_PUBLIC_RAILWAY_INFERENCE_URL || "");
 }
