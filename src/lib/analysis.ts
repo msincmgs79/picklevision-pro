@@ -30,6 +30,9 @@ export interface ShotAnalysis {
     defense: number;
     consistency: number;
   };
+  kitchenControl?: number;
+  positioning?: string;
+  shotTypes?: { type: string; emphasis: string }[];
   shotsObserved: { type: string; note: string }[];
   strengths: string[];
   improvements: string[];

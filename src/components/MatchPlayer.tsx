@@ -364,6 +364,39 @@ export default function MatchPlayer({
           <div style={{ marginTop: 16 }}>
             <p style={{ fontSize: 14.5, lineHeight: 1.6 }}>{shot.analysis.summary}</p>
 
+            {(shot.analysis.kitchenControl != null || shot.analysis.positioning) && (
+              <div className="grid" style={{ gridTemplateColumns: shot.analysis.kitchenControl != null ? "200px 1fr" : "1fr", gap: 16, marginTop: 14, alignItems: "center" }}>
+                {shot.analysis.kitchenControl != null && (
+                  <div>
+                    <div className="dim" style={{ fontSize: 12, marginBottom: 4 }}>Kitchen (NVZ) control</div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <div className="progress" style={{ flex: 1 }}>
+                        <div className="progress-bar" style={{ width: `${Math.min(100, Math.max(0, shot.analysis.kitchenControl))}%` }} />
+                      </div>
+                      <b style={{ fontSize: 14 }}>{shot.analysis.kitchenControl}%</b>
+                    </div>
+                  </div>
+                )}
+                {shot.analysis.positioning && (
+                  <div className="muted" style={{ fontSize: 13.5, lineHeight: 1.5 }}>{shot.analysis.positioning}</div>
+                )}
+              </div>
+            )}
+
+            {shot.analysis.shotTypes && shot.analysis.shotTypes.length > 0 && (
+              <div style={{ marginTop: 14 }}>
+                <div className="dim" style={{ fontSize: 12, marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.5 }}>Shot mix</div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                  {shot.analysis.shotTypes.map((s, i) => (
+                    <span key={i} className="chip" style={{ borderColor: emphasisColor(s.emphasis) }}>
+                      {s.type}
+                      <span style={{ color: emphasisColor(s.emphasis), fontWeight: 700, marginLeft: 5 }}>{s.emphasis}</span>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div className="grid" style={{ gridTemplateColumns: "1fr 1fr", marginTop: 16, gap: 18 }}>
               <div>
                 <div className="dim" style={{ fontSize: 12, marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.5 }}>Skill read (0–5)</div>
@@ -425,6 +458,13 @@ export default function MatchPlayer({
       </div>
     </div>
   );
+}
+
+function emphasisColor(e: string): string {
+  const v = (e || "").toLowerCase();
+  if (v.startsWith("high")) return "var(--excellent)";
+  if (v.startsWith("low")) return "var(--text-dim)";
+  return "var(--average)";
 }
 
 function Metric({ label, value }: { label: string; value: string }) {

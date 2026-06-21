@@ -67,6 +67,20 @@ export default function RealRatings({ real }: { real: LatestAnalysis }) {
           <div className="card">
             <div className="section-title" style={{ marginBottom: 6 }}>Coach summary</div>
             <p style={{ fontSize: 14, lineHeight: 1.6 }}>{a.summary}</p>
+            {a.kitchenControl != null && (
+              <div style={{ marginTop: 12 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, marginBottom: 4 }}>
+                  <span className="dim">Kitchen (NVZ) control</span>
+                  <b>{a.kitchenControl}%</b>
+                </div>
+                <div className="progress">
+                  <div className="progress-bar" style={{ width: `${Math.min(100, Math.max(0, a.kitchenControl))}%` }} />
+                </div>
+              </div>
+            )}
+            {a.positioning && (
+              <p className="muted" style={{ fontSize: 13, lineHeight: 1.55, marginTop: 10 }}>{a.positioning}</p>
+            )}
             {a.coachTip && (
               <div style={{ marginTop: 14, background: "rgba(129,140,248,0.1)", border: "1px solid rgba(129,140,248,0.3)", borderRadius: 10, padding: "12px 14px" }}>
                 <span style={{ fontWeight: 700, color: "var(--indigo)" }}>Coach tip · </span>

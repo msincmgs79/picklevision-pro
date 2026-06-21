@@ -6,7 +6,8 @@ import type { LatestAnalysis, BallDetection } from "../lib/analysis";
 
 export default function RealShotExplorer({ real }: { real: LatestAnalysis }) {
   const ball = real.ball;
-  const shots = real.shot?.analysis?.shotsObserved || [];
+  const a = real.shot?.analysis;
+  const shots = a?.shotsObserved || [];
   const grid = ball ? buildGrid(ball.detections) : null;
 
   return (
@@ -27,6 +28,21 @@ export default function RealShotExplorer({ real }: { real: LatestAnalysis }) {
           <Stat label="Footage analyzed" value={`${Math.round(ball.duration)}s`} />
           <Stat label="Frames scanned" value={String(ball.totalFrames)} />
           <Stat label="Source FPS" value={ball.fps.toFixed(0)} />
+        </div>
+      )}
+
+      {a?.shotTypes && a.shotTypes.length > 0 && (
+        <div className="card" style={{ marginTop: 18 }}>
+          <div className="section-title" style={{ marginBottom: 4 }}>Shot Mix</div>
+          <div className="muted" style={{ fontSize: 13, marginBottom: 12 }}>Shot types the AI saw emphasized</div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            {a.shotTypes.map((s, i) => (
+              <span key={i} className="chip" style={{ borderColor: emph(s.emphasis) }}>
+                {s.type}
+                <b style={{ color: emph(s.emphasis), marginLeft: 5 }}>{s.emphasis}</b>
+              </span>
+            ))}
+          </div>
         </div>
       )}
 
@@ -110,6 +126,13 @@ function buildGrid(dets: BallDetection[], rows = 12, cols = 8): number[][] {
     if (grid[r][c] > max) max = grid[r][c];
   }
   return grid.map((row) => row.map((v) => (max ? v / max : 0)));
+}
+
+function emph(e: string): string {
+  const v = (e || "").toLowerCase();
+  if (v.startsWith("high")) return "var(--excellent)";
+  if (v.startsWith("low")) return "var(--text-dim)";
+  return "var(--average)";
 }
 
 function Stat({ label, value }: { label: string; value: string }) {
