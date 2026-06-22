@@ -10,6 +10,7 @@ import base64
 import logging
 import tempfile
 from typing import List, Tuple
+from concurrent.futures import ThreadPoolExecutor
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -21,7 +22,7 @@ import requests
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="PickleVision Ball Detection", version="1.6.0")
+app = FastAPI(title="PickleVision Ball Detection", version="1.7.0")
 
 # Allow the browser frontend to call this directly (avoids serverless timeouts).
 # Open for now; can be restricted to the Vercel domain later.
@@ -257,6 +258,13 @@ async def infer(request: InferenceRequest):
 # ---------------- Dense ball tracking (Phase 2) ----------------
 TRACK_MAX_FRAMES = 800
 TRACK_MAX_WINDOW = 30.0
+# Roboflow trained ball model (Phase 2.5). When the key is set, /track uses it
+# instead of the color blob. Sampled + parallel to bound cost/latency.
+ROBOFLOW_API_KEY = os.getenv("ROBOFLOW_API_KEY", "")
+ROBOFLOW_MODEL = os.getenv("ROBOFLOW_MODEL", "pickleball-detection/4")
+ROBOFLOW_TARGET_FPS = 6
+ROBOFLOW_MAX_FRAMES = 120
+ROBOFLOW_WORKERS = 6
 _HSV_LO = np.array([15, 100, 100])
 _HSV_HI = np.array([45, 255, 255])
 _KERNEL = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
@@ -321,6 +329,74 @@ def track_window(video_path, start_sec, window_sec):
     return pts, count
 
 
+def roboflow_infer(frame):
+    """Detect the highest-confidence ball with the Roboflow model (raises on HTTP error)."""
+    ok, buf = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), 75])
+    b64 = base64.b64encode(buf.tobytes()).decode("ascii")
+    url = f"https://detect.roboflow.com/{ROBOFLOW_MODEL}?api_key={ROBOFLOW_API_KEY}"
+    r = requests.post(url, data=b64, headers={"Content-Type": "application/x-www-form-urlencoded"}, timeout=25)
+    if not r.ok:
+        raise HTTPException(status_code=502, detail=f"Roboflow error {r.status_code}: {r.text[:200]}")
+    preds = r.json().get("predictions", [])
+    if not preds:
+        return None
+    best = max(preds, key=lambda p: p.get("confidence", 0))
+    return {"x": float(best["x"]), "y": float(best["y"]), "conf": float(best.get("confidence", 0.5))}
+
+
+def roboflow_infer_safe(frame):
+    try:
+        return roboflow_infer(frame)
+    except HTTPException:
+        raise
+    except Exception:
+        return None
+
+
+def collect_window_frames(video_path, start_sec, window_sec,
+                          target_fps=ROBOFLOW_TARGET_FPS, max_frames=ROBOFLOW_MAX_FRAMES):
+    cap = cv2.VideoCapture(video_path)
+    if not cap.isOpened():
+        raise ValueError("Cannot open video file")
+    fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
+    cap.set(cv2.CAP_PROP_POS_MSEC, max(0.0, start_sec) * 1000.0)
+    end_ms = (start_sec + window_sec) * 1000.0
+    step = max(1, int(round(fps / target_fps)))
+    kept, idx = [], 0
+    while len(kept) < max_frames:
+        if not cap.grab():
+            break
+        t = cap.get(cv2.CAP_PROP_POS_MSEC)
+        if t > 0 and t > end_ms:
+            break
+        if idx % step == 0:
+            ok, frame = cap.retrieve()
+            if ok and frame is not None:
+                kept.append((t / 1000.0, frame))
+        idx += 1
+    cap.release()
+    return kept
+
+
+def track_window_roboflow(video_path, start_sec, window_sec):
+    kept = collect_window_frames(video_path, start_sec, window_sec)
+    if not kept:
+        return [], 0
+    # Validate key/model on the first frame (let auth/model errors surface).
+    first = roboflow_infer(kept[0][1])
+    rest = []
+    if len(kept) > 1:
+        with ThreadPoolExecutor(max_workers=ROBOFLOW_WORKERS) as ex:
+            rest = list(ex.map(lambda fr: roboflow_infer_safe(fr), [k[1] for k in kept[1:]]))
+    results = [first] + rest
+    pts = []
+    for (t, frame), r in zip(kept, results):
+        if r:
+            h, w = frame.shape[:2]
+            pts.append({"t": t, "x": r["x"], "y": r["y"], "conf": r["conf"], "w": w, "h": h})
+    return pts, len(kept)
+
+
 @app.post("/track")
 async def track(request: TrackRequest):
     if not request.videoUrl:
@@ -331,7 +407,12 @@ async def track(request: TrackRequest):
     video_path = None
     try:
         video_path = download_video(request.videoUrl)
-        pts, scanned = track_window(video_path, start, window)
+        if ROBOFLOW_API_KEY:
+            pts, scanned = track_window_roboflow(video_path, start, window)
+            detector = "roboflow"
+        else:
+            pts, scanned = track_window(video_path, start, window)
+            detector = "color"
 
         H = None
         if request.corners and len(request.corners) == 4:
@@ -382,6 +463,7 @@ async def track(request: TrackRequest):
             "framesScanned": scanned,
             "pointsDetected": len(mapped),
             "calibrated": H is not None,
+            "detector": detector,
             "trajectories": out,
         }
     except HTTPException:
