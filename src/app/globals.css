@@ -34,8 +34,10 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica,
     Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
+  -webkit-text-size-adjust: 100%;
   font-size: 15px;
   line-height: 1.5;
+  overflow-x: hidden;
 }
 
 a {
@@ -387,11 +389,71 @@ tbody tr:hover {
   background: var(--surface-2);
 }
 
+/* ---------- Mobile bottom nav (shown when sidebar is hidden) ---------- */
+.mobile-nav {
+  display: none;
+}
+.mnav-link {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  flex: 1;
+  padding: 5px 4px;
+  color: var(--text-muted);
+  font-size: 10.5px;
+  font-weight: 600;
+}
+.mnav-link.active {
+  color: var(--primary);
+}
+.mnav-icon {
+  font-size: 17px;
+  line-height: 1;
+}
+
 @media (max-width: 860px) {
   .sidebar {
     display: none;
   }
   .main {
-    padding: 22px 18px 70px;
+    padding: 20px 16px calc(86px + env(safe-area-inset-bottom));
+    max-width: 100%;
+  }
+  .mobile-nav {
+    display: flex;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 50;
+    justify-content: space-around;
+    background: rgba(15, 22, 38, 0.96);
+    backdrop-filter: blur(8px);
+    border-top: 1px solid var(--border);
+    padding: 7px 4px calc(7px + env(safe-area-inset-bottom));
+  }
+}
+
+/* ---------- Responsive layout for phones ---------- */
+@media (max-width: 760px) {
+  body {
+    font-size: 14.5px;
+  }
+  .grid {
+    grid-template-columns: 1fr !important;
+  }
+  .row {
+    flex-direction: column;
+  }
+  .page-title {
+    font-size: 22px;
+  }
+  .card,
+  .card-pad-lg {
+    padding: 16px;
+  }
+  .tabs {
+    overflow-x: auto;
   }
 }
