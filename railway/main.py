@@ -21,7 +21,7 @@ import requests
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="PickleVision Ball Detection", version="1.4.1")
+app = FastAPI(title="PickleVision Ball Detection", version="1.5.0")
 
 # Allow the browser frontend to call this directly (avoids serverless timeouts).
 # Open for now; can be restricted to the Vercel domain later.
@@ -45,6 +45,9 @@ RATING_CALIBRATION = 0.4                 # added to each AI skill rating (user-c
 
 class InferenceRequest(BaseModel):
     videoUrl: str
+    # Optional court calibration: 4 image-pixel points in native video resolution,
+    # ordered Top-Left, Top-Right, Bottom-Right, Bottom-Left of the court.
+    corners: list | None = None
 
 
 class ShotAnalysisRequest(BaseModel):
@@ -59,6 +62,7 @@ class BallDetection(BaseModel):
     confidence: float
     courtX: float
     courtY: float
+    inOut: str | None = None  # "in"/"out" when court calibration is provided
 
 
 class InferenceResponse(BaseModel):
@@ -190,9 +194,30 @@ async def infer(request: InferenceRequest):
             raise ValueError("No frames could be extracted from the video")
 
         raw = detect_balls(frames)
+
+        # Court calibration: build a homography (image px -> court feet) if the
+        # caller supplied 4 corners. Court is 20ft wide (X) x 44ft long (Y).
+        H = None
+        if request.corners and len(request.corners) == 4:
+            try:
+                src = np.array(request.corners, dtype=np.float32)
+                dst = np.array([[0, 0], [20, 0], [20, 44], [0, 44]], dtype=np.float32)
+                H = cv2.getPerspectiveTransform(src, dst)
+            except Exception as e:
+                logger.warning(f"[INFERENCE] bad corners, ignoring: {e}")
+                H = None
+
         detections: List[BallDetection] = []
         for d in raw:
-            cx, cy = to_court(d["x"], d["y"], d["w"], d["h"])
+            in_out = None
+            if H is not None:
+                p = cv2.perspectiveTransform(
+                    np.array([[[d["x"], d["y"]]]], dtype=np.float32), H
+                )[0][0]
+                cx, cy = float(p[0]), float(p[1])
+                in_out = "in" if (-0.5 <= cx <= 20.5 and -0.5 <= cy <= 44.5) else "out"
+            else:
+                cx, cy = to_court(d["x"], d["y"], d["w"], d["h"])
             detections.append(
                 BallDetection(
                     frameNum=d["frame"],
@@ -202,6 +227,7 @@ async def infer(request: InferenceRequest):
                     confidence=d["confidence"],
                     courtX=float(cx),
                     courtY=float(cy),
+                    inOut=in_out,
                 )
             )
 
