@@ -619,6 +619,7 @@ export default function MatchPlayer({
             </div>
             <TrajectoryMap3D trajectories={track.trajectories} view={trackView} />
             <p className="dim" style={{ fontSize: 11, marginTop: 8, lineHeight: 1.5 }}>
+              Detector: <b>{track.detector === "roboflow" ? "Roboflow trained model" : "color (blob)"}</b>.{" "}
               {track.calibrated ? "In/out uses your court calibration. " : "Calibrate the court for accurate in/out. "}
               Arc heights are physics-estimated — a single camera can&apos;t measure true 3D.
             </p>

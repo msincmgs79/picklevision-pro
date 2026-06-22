@@ -38,6 +38,7 @@ export interface TrackResult {
   framesScanned: number;
   pointsDetected: number;
   calibrated: boolean;
+  detector?: string;
   trajectories: Trajectory[];
 }
 
