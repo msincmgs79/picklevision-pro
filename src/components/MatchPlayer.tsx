@@ -47,6 +47,11 @@ export default function MatchPlayer({
     (match.shot_analysis as ShotAnalysisResult) || null
   );
   const [shotError, setShotError] = useState<string | null>(null);
+  const [corners, setCorners] = useState<number[][]>(
+    Array.isArray(match.court_corners) ? match.court_corners : []
+  );
+  const [calibrating, setCalibrating] = useState(false);
+  const [vdims, setVdims] = useState<{ w: number; h: number } | null>(null);
 
   const supabase = createClient();
   const fmt = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
@@ -55,7 +60,10 @@ export default function MatchPlayer({
     const v = videoRef.current;
     if (!v) return;
     const onTime = () => setTime(v.currentTime);
-    const onMeta = () => setDuration(v.duration || duration);
+    const onMeta = () => {
+      setDuration(v.duration || duration);
+      if (v.videoWidth) setVdims({ w: v.videoWidth, h: v.videoHeight });
+    };
     v.addEventListener("timeupdate", onTime);
     v.addEventListener("loadedmetadata", onMeta);
     return () => {
@@ -115,6 +123,35 @@ export default function MatchPlayer({
     await supabase.from("bookmarks").delete().eq("id", id);
   }
 
+  // ---- court calibration (for accurate in/out) ----
+  function clickToNative(e: React.MouseEvent): number[] | null {
+    const v = videoRef.current;
+    if (!v || !v.videoWidth) return null;
+    const rect = v.getBoundingClientRect();
+    const scale = Math.min(rect.width / v.videoWidth, rect.height / v.videoHeight);
+    const offX = (rect.width - v.videoWidth * scale) / 2;
+    const offY = (rect.height - v.videoHeight * scale) / 2;
+    const x = Math.max(0, Math.min(v.videoWidth, (e.clientX - rect.left - offX) / scale));
+    const y = Math.max(0, Math.min(v.videoHeight, (e.clientY - rect.top - offY) / scale));
+    return [Math.round(x), Math.round(y)];
+  }
+  async function handleCalibClick(e: React.MouseEvent) {
+    if (!calibrating) return;
+    const p = clickToNative(e);
+    if (!p) return;
+    const next = [...corners, p];
+    setCorners(next);
+    if (next.length >= 4) {
+      setCalibrating(false);
+      await supabase.from("matches").update({ court_corners: next }).eq("id", match.id);
+    }
+  }
+  function startCalibration() {
+    setCorners([]);
+    setCalibrating(true);
+    videoRef.current?.pause();
+  }
+
   async function deleteMatch() {
     if (!confirm("Delete this match and its video? This cannot be undone.")) return;
     setDeleting(true);
@@ -141,7 +178,10 @@ export default function MatchPlayer({
       const res = await fetch(endpoint, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ videoUrl: signed.signedUrl }),
+        body: JSON.stringify({
+          videoUrl: signed.signedUrl,
+          corners: corners.length === 4 ? corners : undefined,
+        }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.detail || data?.error || `Inference failed (${res.status}).`);
@@ -237,6 +277,26 @@ export default function MatchPlayer({
               onPointerLeave={up}
               style={{ position: "absolute", inset: 0, width: "100%", height: "100%", cursor: drawMode ? "crosshair" : "default", touchAction: "none", pointerEvents: drawMode ? "auto" : "none" }}
             />
+            {corners.length > 0 && vdims && (
+              <svg viewBox={`0 0 ${vdims.w} ${vdims.h}`} preserveAspectRatio="xMidYMid meet" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none" }}>
+                {corners.length === 4 && (
+                  <polygon points={corners.map((c) => c.join(",")).join(" ")} fill="rgba(163,230,53,0.12)" stroke="var(--primary)" strokeWidth={Math.max(2, vdims.w / 400)} />
+                )}
+                {corners.map((c, i) => (
+                  <g key={i}>
+                    <circle cx={c[0]} cy={c[1]} r={Math.max(4, vdims.w / 130)} fill="var(--primary)" />
+                    <text x={c[0]} y={c[1] - Math.max(8, vdims.w / 90)} fill="var(--primary)" fontSize={Math.max(12, vdims.w / 45)} textAnchor="middle" fontWeight="700">{i + 1}</text>
+                  </g>
+                ))}
+              </svg>
+            )}
+            {calibrating && (
+              <div onClick={handleCalibClick} style={{ position: "absolute", inset: 0, cursor: "crosshair", background: "rgba(0,0,0,0.2)" }}>
+                <div style={{ position: "absolute", top: 12, left: "50%", transform: "translateX(-50%)", background: "rgba(0,0,0,0.75)", padding: "6px 14px", borderRadius: 8, fontSize: 13, fontWeight: 700 }}>
+                  Click corner {corners.length + 1}/4 · {["top-left", "top-right", "bottom-right", "bottom-left"][corners.length] || ""}
+                </div>
+              </div>
+            )}
             <div style={{ position: "absolute", top: 12, left: 12, background: "rgba(0,0,0,0.5)", padding: "5px 11px", borderRadius: 8, fontSize: 12.5, fontWeight: 700 }}>
               {fmt(time)} <span className="dim">/ {fmt(duration)}</span>
             </div>
@@ -271,7 +331,19 @@ export default function MatchPlayer({
             <button className={"btn btn-sm" + (drawMode ? " btn-indigo" : "")} onClick={() => setDrawMode((d) => !d)}>✎ Draw</button>
             <button className="btn btn-sm btn-ghost" onClick={clearDraw}>Clear</button>
             <button className="btn btn-sm" onClick={addBookmark}>★ Bookmark</button>
+            <button
+              className={"btn btn-sm" + (calibrating ? " btn-indigo" : "")}
+              onClick={calibrating ? () => setCalibrating(false) : startCalibration}
+              title="Mark the 4 court corners so in/out is accurate"
+            >
+              {calibrating ? "Cancel" : corners.length === 4 ? "⊹ Recalibrate" : "⊹ Calibrate court"}
+            </button>
           </div>
+          {corners.length === 4 && (
+            <div className="dim" style={{ fontSize: 12, marginTop: 8 }}>
+              ✓ Court calibrated — re-run ball detection for accurate in/out.
+            </div>
+          )}
         </div>
 
         {/* side */}
@@ -323,12 +395,20 @@ export default function MatchPlayer({
                   <Metric label="Frames scanned" value={String(analysis.totalFrames)} />
                   <Metric label="Source FPS" value={analysis.fps.toFixed(0)} />
                 </div>
+                {analysis.detections.some((d) => d.inOut) && (
+                  <div style={{ display: "flex", gap: 16, marginTop: 12, fontSize: 13 }}>
+                    <span><b style={{ color: "var(--excellent)" }}>{analysis.detections.filter((d) => d.inOut === "in").length}</b> in</span>
+                    <span><b style={{ color: "var(--poor)" }}>{analysis.detections.filter((d) => d.inOut === "out").length}</b> out</span>
+                  </div>
+                )}
                 <div className="dim" style={{ fontSize: 11.5, margin: "12px 0 6px" }}>
-                  Detected ball positions on the court
+                  Detected ball positions{analysis.detections.some((d) => d.inOut) ? " · green = in, red = out" : " on the court"}
                 </div>
                 <CourtScatter detections={analysis.detections} />
                 <p className="dim" style={{ fontSize: 11, marginTop: 8, lineHeight: 1.5 }}>
-                  Note: this detects ball positions only (color-based). Shot types &amp; grading come in the next step.
+                  {corners.length === 4
+                    ? "In/out uses your court calibration. Heights & smooth arcs come in later phases."
+                    : "Tip: use “⊹ Calibrate court”, then re-run for accurate in/out."}
                 </p>
               </div>
             )}
@@ -477,27 +557,32 @@ function Metric({ label, value }: { label: string; value: string }) {
 }
 
 // Plots detected ball positions on a pickleball court (20ft wide x 44ft long).
+// A margin around the court lets out-of-bounds points show outside the lines.
 function CourtScatter({
   detections,
 }: {
-  detections: { courtX: number; courtY: number; confidence: number }[];
+  detections: { courtX: number; courtY: number; confidence: number; inOut?: string | null }[];
 }) {
-  const w = 200;
-  const h = 360;
-  const pad = 8;
-  const x = (ft: number) => pad + (Math.min(20, Math.max(0, ft)) / 20) * (w - pad * 2);
-  const y = (ft: number) => pad + (Math.min(44, Math.max(0, ft)) / 44) * (h - pad * 2);
+  const w = 220;
+  const h = 380;
+  const m = 26; // margin around the court for out-of-bounds points
+  const cw = w - m * 2;
+  const ch = h - m * 2;
+  const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
+  const x = (ft: number) => clamp(m + (ft / 20) * cw, 3, w - 3);
+  const y = (ft: number) => clamp(m + (ft / 44) * ch, 3, h - 3);
   return (
     <svg viewBox={`0 0 ${w} ${h}`} width="100%" style={{ maxWidth: w }}>
-      <rect x={pad} y={pad} width={w - pad * 2} height={h - pad * 2} fill="#16243f" stroke="rgba(255,255,255,0.5)" strokeWidth={2} />
+      <rect x={m} y={m} width={cw} height={ch} fill="#16243f" stroke="rgba(255,255,255,0.5)" strokeWidth={2} />
       {/* net at mid-court */}
-      <line x1={pad} y1={h / 2} x2={w - pad} y2={h / 2} stroke="#fff" strokeWidth={2} />
+      <line x1={m} y1={h / 2} x2={w - m} y2={h / 2} stroke="#fff" strokeWidth={2} />
       {/* kitchen lines (7ft each side of net) */}
-      <line x1={pad} y1={y(15)} x2={w - pad} y2={y(15)} stroke="rgba(255,255,255,0.45)" strokeDasharray="5 4" />
-      <line x1={pad} y1={y(29)} x2={w - pad} y2={y(29)} stroke="rgba(255,255,255,0.45)" strokeDasharray="5 4" />
-      {detections.map((d, i) => (
-        <circle key={i} cx={x(d.courtX)} cy={y(d.courtY)} r={3} fill="var(--primary)" opacity={0.35 + d.confidence * 0.55} />
-      ))}
+      <line x1={m} y1={y(15)} x2={w - m} y2={y(15)} stroke="rgba(255,255,255,0.45)" strokeDasharray="5 4" />
+      <line x1={m} y1={y(29)} x2={w - m} y2={y(29)} stroke="rgba(255,255,255,0.45)" strokeDasharray="5 4" />
+      {detections.map((d, i) => {
+        const fill = d.inOut === "in" ? "var(--excellent)" : d.inOut === "out" ? "var(--poor)" : "var(--primary)";
+        return <circle key={i} cx={x(d.courtX)} cy={y(d.courtY)} r={3} fill={fill} opacity={0.4 + d.confidence * 0.5} />;
+      })}
       {detections.length === 0 && (
         <text x={w / 2} y={h / 2} textAnchor="middle" fontSize={11} fill="var(--text-dim)">No balls detected</text>
       )}

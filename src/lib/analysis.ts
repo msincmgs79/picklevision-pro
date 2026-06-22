@@ -9,6 +9,7 @@ export interface BallDetection {
   confidence: number;
   courtX: number; // 0..20 ft (court width)
   courtY: number; // 0..44 ft (court length)
+  inOut?: "in" | "out" | null; // set when court calibration was provided
 }
 
 export interface InferenceResult {
