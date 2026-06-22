@@ -409,12 +409,18 @@ async def track(request: TrackRequest):
     video_path = None
     try:
         video_path = download_video(request.videoUrl)
+        detector = "color"
         if ROBOFLOW_API_KEY:
-            pts, scanned = track_window_roboflow(video_path, start, window)
-            detector = "roboflow"
+            try:
+                pts, scanned = track_window_roboflow(video_path, start, window)
+                detector = "roboflow"
+            except Exception as e:
+                # Key set but model not trained/accessible yet — don't break tracking.
+                logger.warning(f"[TRACK] Roboflow unavailable, falling back to color: {e}")
+                pts, scanned = track_window(video_path, start, window)
+                detector = "color (roboflow unavailable)"
         else:
             pts, scanned = track_window(video_path, start, window)
-            detector = "color"
 
         H = None
         if request.corners and len(request.corners) == 4:
