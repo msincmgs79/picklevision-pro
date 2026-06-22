@@ -262,9 +262,11 @@ TRACK_MAX_WINDOW = 30.0
 # instead of the color blob. Sampled + parallel to bound cost/latency.
 ROBOFLOW_API_KEY = os.getenv("ROBOFLOW_API_KEY", "")
 ROBOFLOW_MODEL = os.getenv("ROBOFLOW_MODEL", "pickleball-detection/4")
-ROBOFLOW_TARGET_FPS = 6
-ROBOFLOW_MAX_FRAMES = 120
-ROBOFLOW_WORKERS = 6
+# Credit-conservative defaults (free Roboflow plan has limited inference credits).
+# Tunable via env without a code change.
+ROBOFLOW_TARGET_FPS = float(os.getenv("ROBOFLOW_FPS", "3"))
+ROBOFLOW_MAX_FRAMES = int(os.getenv("ROBOFLOW_MAX_FRAMES", "40"))
+ROBOFLOW_WORKERS = int(os.getenv("ROBOFLOW_WORKERS", "5"))
 _HSV_LO = np.array([15, 100, 100])
 _HSV_HI = np.array([45, 255, 255])
 _KERNEL = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
