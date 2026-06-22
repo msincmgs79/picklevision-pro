@@ -22,6 +22,25 @@ export interface InferenceResult {
   trajectories: number;
 }
 
+export interface TrajPoint {
+  t: number;
+  courtX: number;
+  courtY: number;
+  inOut?: string | null;
+}
+export interface Trajectory {
+  inOut?: string | null;
+  points: TrajPoint[];
+}
+export interface TrackResult {
+  success: boolean;
+  window: { start: number; seconds: number };
+  framesScanned: number;
+  pointsDetected: number;
+  calibrated: boolean;
+  trajectories: Trajectory[];
+}
+
 export interface ShotAnalysis {
   summary: string;
   ratings: {
@@ -93,4 +112,9 @@ export function inferEndpointPublic(): string | null {
 export function shotEndpointPublic(): string | null {
   const b = baseUrl(process.env.NEXT_PUBLIC_RAILWAY_INFERENCE_URL || "");
   return b ? `${b}/analyze-shots` : null;
+}
+
+export function trackEndpointPublic(): string | null {
+  const b = baseUrl(process.env.NEXT_PUBLIC_RAILWAY_INFERENCE_URL || "");
+  return b ? `${b}/track` : null;
 }

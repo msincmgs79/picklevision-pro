@@ -8,9 +8,12 @@ import { VIDEO_BUCKET } from "../lib/supabase/config";
 import {
   inferEndpointPublic,
   shotEndpointPublic,
+  trackEndpointPublic,
   type InferenceResult,
   type ShotAnalysisResult,
+  type TrackResult,
 } from "../lib/analysis";
+import TrajectoryMap3D from "./TrajectoryMap3D";
 
 interface Bookmark {
   id: string;
@@ -52,6 +55,10 @@ export default function MatchPlayer({
   );
   const [calibrating, setCalibrating] = useState(false);
   const [vdims, setVdims] = useState<{ w: number; h: number } | null>(null);
+  const [tracking, setTracking] = useState(false);
+  const [track, setTrack] = useState<TrackResult | null>(null);
+  const [trackError, setTrackError] = useState<string | null>(null);
+  const [trackView, setTrackView] = useState<"3d" | "top" | "side">("3d");
 
   const supabase = createClient();
   const fmt = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
@@ -227,6 +234,38 @@ export default function MatchPlayer({
       setShotError(e?.message || "Shot analysis failed.");
     } finally {
       setShotBusy(false);
+    }
+  }
+
+  async function runTracking() {
+    setTracking(true);
+    setTrackError(null);
+    try {
+      const endpoint = trackEndpointPublic();
+      if (!endpoint) throw new Error("Tracking service URL is not configured.");
+      if (!match.video_path) throw new Error("This match has no uploaded video.");
+      const { data: signed, error: sErr } = await supabase.storage
+        .from(VIDEO_BUCKET)
+        .createSignedUrl(match.video_path, 600);
+      if (sErr || !signed?.signedUrl) throw new Error("Could not sign the video URL.");
+
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          videoUrl: signed.signedUrl,
+          corners: corners.length === 4 ? corners : undefined,
+          startSec: Math.floor(time),
+          windowSec: 20,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.detail || data?.error || `Tracking failed (${res.status}).`);
+      setTrack(data);
+    } catch (e: any) {
+      setTrackError(e?.message || "Tracking failed.");
+    } finally {
+      setTracking(false);
     }
   }
 
@@ -532,6 +571,56 @@ export default function MatchPlayer({
 
             <p className="dim" style={{ fontSize: 11, marginTop: 12 }}>
               {shot.model} · {shot.framesAnalyzed} keyframes · AI estimate from sparse frames, not exact stats.
+            </p>
+          </div>
+        )}
+      </div>
+
+      {/* Ball Trajectories (3D) — Phase 2 */}
+      <div className="card" style={{ marginTop: 18, borderColor: "rgba(163,230,53,0.35)" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
+          <div>
+            <div className="section-title">Ball Trajectories (3D)</div>
+            <div className="muted" style={{ fontSize: 13, marginTop: 2 }}>
+              Dense tracking of a 20-second segment from the current time, mapped onto the court.
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <span className="badge badge-average" style={{ fontSize: 11 }}>beta</span>
+            <button className="btn btn-primary btn-sm" onClick={runTracking} disabled={tracking || !videoUrl} style={{ opacity: tracking || !videoUrl ? 0.6 : 1 }}>
+              {tracking ? "Tracking…" : `▶ Track 20s from ${fmt(time)}`}
+            </button>
+          </div>
+        </div>
+
+        {trackError && <div style={{ marginTop: 10, fontSize: 13, color: "var(--poor)" }}>{trackError}</div>}
+
+        {track && (
+          <div style={{ marginTop: 14 }}>
+            <div style={{ display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap", marginBottom: 12 }}>
+              <div className="tabs">
+                {(["3d", "top", "side"] as const).map((v) => (
+                  <button key={v} className={"tab" + (trackView === v ? " active" : "")} onClick={() => setTrackView(v)}>
+                    {v === "3d" ? "3D" : v === "top" ? "Top" : "Side"}
+                  </button>
+                ))}
+              </div>
+              <span className="muted" style={{ fontSize: 13 }}>
+                {track.trajectories.length} shots · {track.pointsDetected} points
+                {track.calibrated && (
+                  <>
+                    {" · "}
+                    <b style={{ color: "var(--excellent)" }}>{track.trajectories.filter((t) => t.inOut === "in").length} in</b>
+                    {" / "}
+                    <b style={{ color: "var(--poor)" }}>{track.trajectories.filter((t) => t.inOut === "out").length} out</b>
+                  </>
+                )}
+              </span>
+            </div>
+            <TrajectoryMap3D trajectories={track.trajectories} view={trackView} />
+            <p className="dim" style={{ fontSize: 11, marginTop: 8, lineHeight: 1.5 }}>
+              {track.calibrated ? "In/out uses your court calibration. " : "Calibrate the court for accurate in/out. "}
+              Arc heights are physics-estimated — a single camera can&apos;t measure true 3D.
             </p>
           </div>
         )}
