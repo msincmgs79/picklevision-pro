@@ -261,6 +261,7 @@ TRACK_MAX_WINDOW = 30.0
 # Full-video tracking: bounded sampling across the whole clip for a game-wide map.
 FULL_MAX_FRAMES = int(os.getenv("FULL_MAX_FRAMES", "900"))
 FULL_TARGET_FPS = float(os.getenv("FULL_FPS", "2"))
+FULL_WORKERS = int(os.getenv("FULL_WORKERS", "8"))
 # Roboflow trained ball model (Phase 2.5). When the key is set, /track uses it
 # instead of the color blob. Sampled + parallel to bound cost/latency.
 ROBOFLOW_API_KEY = os.getenv("ROBOFLOW_API_KEY", "")
@@ -412,16 +413,51 @@ def video_duration(path):
     return float(n) / float(fps) if fps else 0.0
 
 
-def track_sampled_color(video_path, start_sec, window_sec, target_fps, max_frames):
-    """Color-detector tracking over fps-sampled frames (used for full-video color mode)."""
-    kept = collect_window_frames(video_path, start_sec, window_sec, target_fps, max_frames)
-    pts = []
-    for t, frame in kept:
-        b = detect_best_ball(frame)
-        if b:
-            h, w = frame.shape[:2]
-            pts.append({"t": t, "x": b["x"], "y": b["y"], "conf": b["conf"], "w": w, "h": h})
-    return pts, len(kept)
+def _read_first_frame(video_path):
+    cap = cv2.VideoCapture(video_path)
+    ok, fr = cap.read()
+    cap.release()
+    return fr if ok else None
+
+
+def track_full(video_path, infer_fn, target_fps, max_frames, workers=FULL_WORKERS):
+    """Memory-bounded full-video tracking. Walks the clip sequentially (cheap grab,
+    decode only every Nth frame), runs detection on small parallel batches, and keeps
+    ONLY the result points — never the frames. Caps RAM at one batch regardless of
+    video length (the previous collect-all approach OOM-killed the container)."""
+    cap = cv2.VideoCapture(video_path)
+    if not cap.isOpened():
+        raise ValueError("Cannot open video file")
+    fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
+    step = max(1, int(round(fps / max(0.1, target_fps))))
+    pts, scanned, idx, batch = [], 0, 0, []
+    bsize = max(1, workers * 3)
+
+    def flush():
+        if not batch:
+            return
+        with ThreadPoolExecutor(max_workers=workers) as ex:
+            results = list(ex.map(lambda tf: infer_fn(tf[1]), batch))
+        for (t, frame), r in zip(batch, results):
+            if r:
+                h, w = frame.shape[:2]
+                pts.append({"t": t, "x": r["x"], "y": r["y"], "conf": r["conf"], "w": w, "h": h})
+        batch.clear()
+
+    while scanned < max_frames:
+        if not cap.grab():
+            break
+        if idx % step == 0:
+            ok, frame = cap.retrieve()
+            if ok and frame is not None:
+                batch.append((cap.get(cv2.CAP_PROP_POS_MSEC) / 1000.0, frame))
+                scanned += 1
+                if len(batch) >= bsize:
+                    flush()
+        idx += 1
+    flush()
+    cap.release()
+    return pts, scanned
 
 
 @app.post("/track")
@@ -434,30 +470,38 @@ async def track(request: TrackRequest):
     video_path = None
     try:
         video_path = download_video(request.videoUrl)
+        detector = "color"
         if full:
             dur = video_duration(video_path)
             window = dur + 1.0
             t_fps = min(FULL_TARGET_FPS, FULL_MAX_FRAMES / max(1.0, dur))
-            max_f = FULL_MAX_FRAMES
+            if ROBOFLOW_API_KEY:
+                try:
+                    fr0 = _read_first_frame(video_path)
+                    if fr0 is not None:
+                        roboflow_infer(fr0)  # surface auth/model errors -> fall back
+                    pts, scanned = track_full(video_path, roboflow_infer_safe, t_fps, FULL_MAX_FRAMES)
+                    detector = "roboflow"
+                except Exception as e:
+                    logger.warning(f"[TRACK] Roboflow unavailable, falling back to color: {e}")
+                    pts, scanned = track_full(video_path, detect_best_ball, t_fps, FULL_MAX_FRAMES)
+                    detector = "color (roboflow unavailable)"
+            else:
+                pts, scanned = track_full(video_path, detect_best_ball, t_fps, FULL_MAX_FRAMES)
         else:
             window = min(TRACK_MAX_WINDOW, max(2.0, float(request.windowSec or 20.0)))
             t_fps = ROBOFLOW_TARGET_FPS
-            max_f = ROBOFLOW_MAX_FRAMES
-
-        detector = "color"
-        if ROBOFLOW_API_KEY:
-            try:
-                pts, scanned = track_window_roboflow(video_path, start, window, t_fps, max_f)
-                detector = "roboflow"
-            except Exception as e:
-                # Key set but model not trained/accessible yet — don't break tracking.
-                logger.warning(f"[TRACK] Roboflow unavailable, falling back to color: {e}")
-                pts, scanned = (track_sampled_color(video_path, start, window, t_fps, max_f)
-                                if full else track_window(video_path, start, window))
-                detector = "color (roboflow unavailable)"
-        else:
-            pts, scanned = (track_sampled_color(video_path, start, window, t_fps, max_f)
-                            if full else track_window(video_path, start, window))
+            if ROBOFLOW_API_KEY:
+                try:
+                    pts, scanned = track_window_roboflow(video_path, start, window)
+                    detector = "roboflow"
+                except Exception as e:
+                    # Key set but model not trained/accessible yet — don't break tracking.
+                    logger.warning(f"[TRACK] Roboflow unavailable, falling back to color: {e}")
+                    pts, scanned = track_window(video_path, start, window)
+                    detector = "color (roboflow unavailable)"
+            else:
+                pts, scanned = track_window(video_path, start, window)
 
         H = None
         if request.corners and len(request.corners) == 4:
