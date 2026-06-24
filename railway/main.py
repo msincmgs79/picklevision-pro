@@ -258,6 +258,9 @@ async def infer(request: InferenceRequest):
 # ---------------- Dense ball tracking (Phase 2) ----------------
 TRACK_MAX_FRAMES = 800
 TRACK_MAX_WINDOW = 30.0
+# Full-video tracking: bounded sampling across the whole clip for a game-wide map.
+FULL_MAX_FRAMES = int(os.getenv("FULL_MAX_FRAMES", "900"))
+FULL_TARGET_FPS = float(os.getenv("FULL_FPS", "2"))
 # Roboflow trained ball model (Phase 2.5). When the key is set, /track uses it
 # instead of the color blob. Sampled + parallel to bound cost/latency.
 ROBOFLOW_API_KEY = os.getenv("ROBOFLOW_API_KEY", "")
@@ -277,6 +280,7 @@ class TrackRequest(BaseModel):
     corners: list | None = None
     startSec: float = 0.0
     windowSec: float = 20.0
+    fullVideo: bool = False
 
 
 def detect_best_ball(frame):
@@ -380,8 +384,9 @@ def collect_window_frames(video_path, start_sec, window_sec,
     return kept
 
 
-def track_window_roboflow(video_path, start_sec, window_sec):
-    kept = collect_window_frames(video_path, start_sec, window_sec)
+def track_window_roboflow(video_path, start_sec, window_sec,
+                          target_fps=ROBOFLOW_TARGET_FPS, max_frames=ROBOFLOW_MAX_FRAMES):
+    kept = collect_window_frames(video_path, start_sec, window_sec, target_fps, max_frames)
     if not kept:
         return [], 0
     # Validate key/model on the first frame (let auth/model errors surface).
@@ -399,28 +404,60 @@ def track_window_roboflow(video_path, start_sec, window_sec):
     return pts, len(kept)
 
 
+def video_duration(path):
+    cap = cv2.VideoCapture(path)
+    fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
+    n = cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0
+    cap.release()
+    return float(n) / float(fps) if fps else 0.0
+
+
+def track_sampled_color(video_path, start_sec, window_sec, target_fps, max_frames):
+    """Color-detector tracking over fps-sampled frames (used for full-video color mode)."""
+    kept = collect_window_frames(video_path, start_sec, window_sec, target_fps, max_frames)
+    pts = []
+    for t, frame in kept:
+        b = detect_best_ball(frame)
+        if b:
+            h, w = frame.shape[:2]
+            pts.append({"t": t, "x": b["x"], "y": b["y"], "conf": b["conf"], "w": w, "h": h})
+    return pts, len(kept)
+
+
 @app.post("/track")
 async def track(request: TrackRequest):
     if not request.videoUrl:
         raise HTTPException(status_code=400, detail="videoUrl required")
-    window = min(TRACK_MAX_WINDOW, max(2.0, float(request.windowSec or 20.0)))
-    start = max(0.0, float(request.startSec or 0.0))
+    full = bool(request.fullVideo)
+    start = 0.0 if full else max(0.0, float(request.startSec or 0.0))
 
     video_path = None
     try:
         video_path = download_video(request.videoUrl)
+        if full:
+            dur = video_duration(video_path)
+            window = dur + 1.0
+            t_fps = min(FULL_TARGET_FPS, FULL_MAX_FRAMES / max(1.0, dur))
+            max_f = FULL_MAX_FRAMES
+        else:
+            window = min(TRACK_MAX_WINDOW, max(2.0, float(request.windowSec or 20.0)))
+            t_fps = ROBOFLOW_TARGET_FPS
+            max_f = ROBOFLOW_MAX_FRAMES
+
         detector = "color"
         if ROBOFLOW_API_KEY:
             try:
-                pts, scanned = track_window_roboflow(video_path, start, window)
+                pts, scanned = track_window_roboflow(video_path, start, window, t_fps, max_f)
                 detector = "roboflow"
             except Exception as e:
                 # Key set but model not trained/accessible yet — don't break tracking.
                 logger.warning(f"[TRACK] Roboflow unavailable, falling back to color: {e}")
-                pts, scanned = track_window(video_path, start, window)
+                pts, scanned = (track_sampled_color(video_path, start, window, t_fps, max_f)
+                                if full else track_window(video_path, start, window))
                 detector = "color (roboflow unavailable)"
         else:
-            pts, scanned = track_window(video_path, start, window)
+            pts, scanned = (track_sampled_color(video_path, start, window, t_fps, max_f)
+                            if full else track_window(video_path, start, window))
 
         H = None
         if request.corners and len(request.corners) == 4:
@@ -442,8 +479,14 @@ async def track(request: TrackRequest):
                 io = None
             mapped.append({"t": p["t"], "courtX": cx, "courtY": cy, "inOut": io})
 
-        # group consecutive points into per-shot trajectories (gap-based)
-        GAP, MINPTS = 0.5, 4
+        # group consecutive points into per-shot trajectories (gap-based).
+        # Full-video sampling is sparser, so widen the gap and lower the min count
+        # so each in-play rally becomes one trajectory instead of being discarded.
+        if full:
+            interval = 1.0 / max(0.1, t_fps)
+            GAP, MINPTS = max(0.8, interval * 2.5), 2
+        else:
+            GAP, MINPTS = 0.5, 4
         trajs, cur = [], []
         for m in mapped:
             if cur and (m["t"] - cur[-1]["t"] > GAP):
@@ -472,6 +515,7 @@ async def track(request: TrackRequest):
             "pointsDetected": len(mapped),
             "calibrated": H is not None,
             "detector": detector,
+            "fullVideo": full,
             "trajectories": out,
         }
     except HTTPException:
