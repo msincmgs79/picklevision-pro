@@ -6,7 +6,8 @@ const W = 460;
 const H = 320;
 
 function colorFor(io?: string | null) {
-  return io === "in" ? "var(--excellent)" : io === "out" ? "var(--poor)" : "var(--primary)";
+  // green = in, red = out, neutral grey = in/out unknown (court not calibrated)
+  return io === "in" ? "var(--excellent)" : io === "out" ? "var(--poor)" : "#94a3b8";
 }
 
 // Synthesized arc height (we don't measure true Z) — parabola scaled by shot length.
