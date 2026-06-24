@@ -63,6 +63,15 @@ export default function MatchPlayer({
   const supabase = createClient();
   const fmt = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
 
+  // Restore a previously-computed full-video track so re-opening the match
+  // shows the map instantly without re-spending Roboflow credits.
+  useEffect(() => {
+    try {
+      const cached = localStorage.getItem(`pv_track_${match.id}`);
+      if (cached) setTrack(JSON.parse(cached));
+    } catch {}
+  }, [match.id]);
+
   useEffect(() => {
     const v = videoRef.current;
     if (!v) return;
@@ -237,7 +246,7 @@ export default function MatchPlayer({
     }
   }
 
-  async function runTracking() {
+  async function runTracking(full = false) {
     setTracking(true);
     setTrackError(null);
     try {
@@ -246,7 +255,7 @@ export default function MatchPlayer({
       if (!match.video_path) throw new Error("This match has no uploaded video.");
       const { data: signed, error: sErr } = await supabase.storage
         .from(VIDEO_BUCKET)
-        .createSignedUrl(match.video_path, 600);
+        .createSignedUrl(match.video_path, 900);
       if (sErr || !signed?.signedUrl) throw new Error("Could not sign the video URL.");
 
       const res = await fetch(endpoint, {
@@ -255,13 +264,18 @@ export default function MatchPlayer({
         body: JSON.stringify({
           videoUrl: signed.signedUrl,
           corners: corners.length === 4 ? corners : undefined,
-          startSec: Math.floor(time),
+          startSec: full ? 0 : Math.floor(time),
           windowSec: 20,
+          fullVideo: full,
         }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.detail || data?.error || `Tracking failed (${res.status}).`);
       setTrack(data);
+      // Cache full-video results so re-opening the match doesn't re-spend credits.
+      if (full) {
+        try { localStorage.setItem(`pv_track_${match.id}`, JSON.stringify(data)); } catch {}
+      }
     } catch (e: any) {
       setTrackError(e?.message || "Tracking failed.");
     } finally {
@@ -582,17 +596,26 @@ export default function MatchPlayer({
           <div>
             <div className="section-title">Ball Trajectories (3D)</div>
             <div className="muted" style={{ fontSize: 13, marginTop: 2 }}>
-              Dense tracking of a 20-second segment from the current time, mapped onto the court.
+              Ball positions mapped onto the court — a quick 20-second window, or the
+              entire match (≈1–2 min, uses ~1 Roboflow credit; result is saved).
             </div>
           </div>
-          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
             <span className="badge badge-average" style={{ fontSize: 11 }}>beta</span>
-            <button className="btn btn-primary btn-sm" onClick={runTracking} disabled={tracking || !videoUrl} style={{ opacity: tracking || !videoUrl ? 0.6 : 1 }}>
+            <button className="btn btn-sm" onClick={() => runTracking(false)} disabled={tracking || !videoUrl} style={{ opacity: tracking || !videoUrl ? 0.6 : 1 }}>
               {tracking ? "Tracking…" : `▶ Track 20s from ${fmt(time)}`}
+            </button>
+            <button className="btn btn-primary btn-sm" onClick={() => runTracking(true)} disabled={tracking || !videoUrl} style={{ opacity: tracking || !videoUrl ? 0.6 : 1 }}>
+              {tracking ? "Tracking…" : "▶ Track full video"}
             </button>
           </div>
         </div>
 
+        {tracking && (
+          <div className="muted" style={{ marginTop: 10, fontSize: 13 }}>
+            Tracking… a full match can take ~1–2 minutes — you can keep using the page.
+          </div>
+        )}
         {trackError && <div style={{ marginTop: 10, fontSize: 13, color: "var(--poor)" }}>{trackError}</div>}
 
         {track && (
@@ -606,7 +629,7 @@ export default function MatchPlayer({
                 ))}
               </div>
               <span className="muted" style={{ fontSize: 13 }}>
-                {track.trajectories.length} shots · {track.pointsDetected} points
+                {track.trajectories.length} {track.fullVideo ? "rallies" : "shots"} · {track.pointsDetected} points
                 {track.calibrated && (
                   <>
                     {" · "}

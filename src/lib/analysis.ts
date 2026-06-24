@@ -39,6 +39,7 @@ export interface TrackResult {
   pointsDetected: number;
   calibrated: boolean;
   detector?: string;
+  fullVideo?: boolean;
   trajectories: Trajectory[];
 }
 
