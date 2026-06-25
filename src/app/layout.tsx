@@ -13,8 +13,7 @@ export const metadata: Metadata = {
   manifest: "/manifest.webmanifest",
   applicationName: "PickleVision",
   themeColor: "#0a0e1a",
-  viewport:
-    "width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover",
+  viewport: "width=device-width, initial-scale=1, viewport-fit=cover",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
