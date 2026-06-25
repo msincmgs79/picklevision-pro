@@ -101,6 +101,23 @@ export default function MatchPlayer({
     };
   }, [duration]);
 
+  // keyboard shortcuts: space = play/pause, ←/→ = seek 5s, , / . = frame-step
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      const el = document.activeElement as HTMLElement | null;
+      if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA")) return;
+      const v = videoRef.current;
+      if (!v) return;
+      if (e.code === "Space") { e.preventDefault(); togglePlay(); }
+      else if (e.key === "ArrowLeft") { e.preventDefault(); seek(Math.max(0, v.currentTime - 5)); }
+      else if (e.key === "ArrowRight") { e.preventDefault(); seek(Math.min(duration, v.currentTime + 5)); }
+      else if (e.key === ",") seek(Math.max(0, v.currentTime - 1 / 30));
+      else if (e.key === ".") seek(Math.min(duration, v.currentTime + 1 / 30));
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [duration]);
+
   function seek(t: number) {
     if (videoRef.current) videoRef.current.currentTime = t;
     setTime(t);
@@ -110,6 +127,11 @@ export default function MatchPlayer({
     if (!v) return;
     if (v.paused) v.play();
     else v.pause();
+  }
+  function scrubAt(e: React.PointerEvent) {
+    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const frac = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
+    seek(frac * (duration || 0));
   }
   async function saveMeta() {
     setEditing(false);
@@ -418,21 +440,28 @@ export default function MatchPlayer({
             )}
           </div>
 
-          {/* timeline */}
-          <div style={{ position: "relative", marginTop: 14, height: 22 }}>
+          {/* timeline — scrubber with AI action ticks + bookmark markers */}
+          <div style={{ marginTop: 16 }}>
             <div
-              className="progress"
-              style={{ height: 8, cursor: "pointer", marginTop: 4 }}
-              onClick={(e) => {
-                const r = (e.currentTarget as HTMLDivElement).getBoundingClientRect();
-                seek(((e.clientX - r.left) / r.width) * (duration || 0));
-              }}
+              style={{ position: "relative", height: 18, display: "flex", alignItems: "center", cursor: "pointer", touchAction: "none" }}
+              onPointerDown={(e) => { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); scrubAt(e); }}
+              onPointerMove={(e) => { if (e.buttons === 1) scrubAt(e); }}
             >
-              <div className="progress-bar" style={{ width: `${duration ? (time / duration) * 100 : 0}%` }} />
+              {analysis?.detections?.map((d, i) => (
+                <span key={i} style={{ position: "absolute", top: 5, left: `${duration ? (d.timestamp / duration) * 100 : 0}%`, width: 2, height: 8, background: "var(--text-dim)", opacity: 0.5, pointerEvents: "none" }} />
+              ))}
+              <div style={{ position: "absolute", left: 0, right: 0, height: 6, borderRadius: 999, background: "var(--bg)" }}>
+                <div style={{ height: "100%", borderRadius: 999, width: `${duration ? (time / duration) * 100 : 0}%`, background: "linear-gradient(90deg,var(--primary-dim),var(--primary))" }} />
+              </div>
+              <span style={{ position: "absolute", left: `${duration ? (time / duration) * 100 : 0}%`, width: 13, height: 13, borderRadius: "50%", background: "var(--primary)", transform: "translateX(-50%)", boxShadow: "0 0 0 3px rgba(163,230,53,0.2)", pointerEvents: "none" }} />
+              {bookmarks.map((b) => (
+                <span key={b.id} title={b.label || ""} onClick={(e) => { e.stopPropagation(); seek(b.t); }} style={{ position: "absolute", top: -11, left: `${duration ? (b.t / duration) * 100 : 0}%`, transform: "translateX(-50%)", color: "var(--primary)", fontSize: 13, cursor: "pointer" }}>★</span>
+              ))}
             </div>
-            {bookmarks.map((b) => (
-              <span key={b.id} title={b.label || ""} onClick={() => seek(b.t)} style={{ position: "absolute", top: -2, left: `${duration ? (b.t / duration) * 100 : 0}%`, transform: "translateX(-50%)", color: "var(--primary)", fontSize: 13, cursor: "pointer" }}>★</span>
-            ))}
+            <div style={{ display: "flex", justifyContent: "space-between", marginTop: 7, gap: 10 }}>
+              <span className="dim" style={{ fontSize: 11.5, fontFamily: "monospace" }}>{fmt(time)} / {fmt(duration)}</span>
+              <span className="dim" style={{ fontSize: 11 }}>{analysis ? `${analysis.detections.length} ball detections` : "space play · ←/→ seek · , . frame-step"}</span>
+            </div>
           </div>
 
           {/* controls — playback (left) split from tools (right) */}
