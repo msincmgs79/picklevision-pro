@@ -44,7 +44,9 @@ export default function Sidebar() {
   return (
     <aside className="sidebar">
       <Link href="/" className="brand">
-        <div className="brand-logo">🥒</div>
+        <div className="brand-logo" style={{ background: "transparent", overflow: "hidden" }}>
+          <img src="/logo.png" alt="PickleVision" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
+        </div>
         <div className="brand-name">
           Pickle<span>Vision</span>
         </div>
