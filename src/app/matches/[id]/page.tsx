@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { isSupabaseConfigured, VIDEO_BUCKET } from "../../../lib/supabase/config";
+import { isSupabaseConfigured } from "../../../lib/supabase/config";
 import { createClient } from "../../../lib/supabase/server";
+import { signedReadUrl } from "../../../lib/storage/server";
 import MatchPlayer from "../../../components/MatchPlayer";
 
 export const dynamic = "force-dynamic";
@@ -34,8 +35,7 @@ export default async function MatchPage({ params }: { params: { id: string } }) 
 
   let videoUrl: string | null = null;
   if (match.video_path) {
-    const { data } = await supabase.storage.from(VIDEO_BUCKET).createSignedUrl(match.video_path, 60 * 60);
-    videoUrl = data?.signedUrl ?? null;
+    videoUrl = await signedReadUrl(supabase, match.video_path, 60 * 60);
   }
 
   const { data: bookmarks } = await supabase

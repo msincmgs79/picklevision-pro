@@ -6,7 +6,7 @@ import Link from "next/link";
 import { createClient } from "../../../lib/supabase/client";
 import { isSupabaseConfigured } from "../../../lib/supabase/config";
 import { getPlanState, consumeVideo, MAX_VIDEO_BYTES, PLAN_LABEL, type PlanState } from "../../../lib/plan";
-import { resumableUpload } from "../../../lib/upload";
+import { uploadVideo } from "../../../lib/upload";
 
 type Stage = "form" | "uploading" | "saving" | "done" | "error";
 
@@ -108,7 +108,7 @@ export default function NewMatchPage() {
       const ext = (file.name.split(".").pop() || "mp4").toLowerCase();
       const path = `${user.id}/${inserted.id}.${ext}`;
       try {
-        await resumableUpload(supabase, file, path, setUploadPct);
+        await uploadVideo(supabase, file, path, setUploadPct);
       } catch (upErr) {
         await supabase.from("matches").delete().eq("id", inserted.id);
         throw upErr;

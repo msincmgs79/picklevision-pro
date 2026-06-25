@@ -1,5 +1,6 @@
 import { createClient } from "./supabase/server";
-import { isSupabaseConfigured, VIDEO_BUCKET } from "./supabase/config";
+import { isSupabaseConfigured } from "./supabase/config";
+import { signedReadUrl } from "./storage/server";
 import type { InferenceResult, ShotAnalysisResult, LatestAnalysis, ReviewData } from "./analysis";
 
 // Loads the signed-in user's most recent match that has any analysis.
@@ -60,10 +61,7 @@ export async function loadLatestReview(matchId?: string): Promise<ReviewData | n
 
   let videoUrl: string | null = null;
   if (data.video_path) {
-    const { data: signed } = await supabase.storage
-      .from(VIDEO_BUCKET)
-      .createSignedUrl(data.video_path, 60 * 60);
-    videoUrl = signed?.signedUrl ?? null;
+    videoUrl = await signedReadUrl(supabase, data.video_path, 60 * 60);
   }
 
   const { data: bms } = await supabase

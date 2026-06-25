@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "../lib/supabase/client";
-import { VIDEO_BUCKET } from "../lib/supabase/config";
+import { clientReadUrl, clientDelete } from "../lib/storage/client";
 import {
   inferEndpointPublic,
   shotEndpointPublic,
@@ -230,7 +230,7 @@ export default function MatchPlayer({
   async function deleteMatch() {
     if (!confirm("Delete this match and its video? This cannot be undone.")) return;
     setDeleting(true);
-    if (match.video_path) await supabase.storage.from(VIDEO_BUCKET).remove([match.video_path]);
+    if (match.video_path) await clientDelete(supabase, match.video_path);
     await supabase.from("matches").delete().eq("id", match.id);
     router.push("/matches");
     router.refresh();
@@ -244,17 +244,14 @@ export default function MatchPlayer({
       if (!endpoint) throw new Error("Inference service URL is not configured.");
       if (!match.video_path) throw new Error("This match has no uploaded video.");
 
-      // Sign the private video URL in the browser, then call the service directly.
-      const { data: signed, error: sErr } = await supabase.storage
-        .from(VIDEO_BUCKET)
-        .createSignedUrl(match.video_path, 600);
-      if (sErr || !signed?.signedUrl) throw new Error("Could not sign the video URL.");
+      // Sign the private video URL, then call the service directly.
+      const videoUrl = await clientReadUrl(supabase, match.video_path, 600);
 
       const res = await fetch(endpoint, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          videoUrl: signed.signedUrl,
+          videoUrl,
           corners: corners.length === 4 ? corners : undefined,
         }),
       });
@@ -281,15 +278,12 @@ export default function MatchPlayer({
       const endpoint = shotEndpointPublic();
       if (!endpoint) throw new Error("Shot-analysis URL is not configured.");
       if (!match.video_path) throw new Error("This match has no uploaded video.");
-      const { data: signed, error: sErr } = await supabase.storage
-        .from(VIDEO_BUCKET)
-        .createSignedUrl(match.video_path, 600);
-      if (sErr || !signed?.signedUrl) throw new Error("Could not sign the video URL.");
+      const videoUrl = await clientReadUrl(supabase, match.video_path, 600);
 
       const res = await fetch(endpoint, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ videoUrl: signed.signedUrl }),
+        body: JSON.stringify({ videoUrl }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.detail || data?.error || `Analysis failed (${res.status}).`);
@@ -312,16 +306,13 @@ export default function MatchPlayer({
       const endpoint = trackEndpointPublic();
       if (!endpoint) throw new Error("Tracking service URL is not configured.");
       if (!match.video_path) throw new Error("This match has no uploaded video.");
-      const { data: signed, error: sErr } = await supabase.storage
-        .from(VIDEO_BUCKET)
-        .createSignedUrl(match.video_path, 900);
-      if (sErr || !signed?.signedUrl) throw new Error("Could not sign the video URL.");
+      const videoUrl = await clientReadUrl(supabase, match.video_path, 900);
 
       const res = await fetch(endpoint, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          videoUrl: signed.signedUrl,
+          videoUrl,
           corners: corners.length === 4 ? corners : undefined,
           startSec: full ? 0 : Math.floor(time),
           windowSec: 20,

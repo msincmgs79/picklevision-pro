@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "../../../lib/supabase/server";
-import { isSupabaseConfigured, VIDEO_BUCKET } from "../../../lib/supabase/config";
+import { isSupabaseConfigured } from "../../../lib/supabase/config";
+import { signedReadUrl } from "../../../lib/storage/server";
 import { inferEndpoint } from "../../../lib/analysis";
 
 export const dynamic = "force-dynamic";
@@ -42,17 +43,15 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "This match has no uploaded video." }, { status: 400 });
 
   // Short-lived signed URL the Railway service can download from
-  const { data: signed } = await supabase.storage
-    .from(VIDEO_BUCKET)
-    .createSignedUrl(match.video_path, 600);
-  if (!signed?.signedUrl)
+  const videoUrl = await signedReadUrl(supabase, match.video_path, 600);
+  if (!videoUrl)
     return NextResponse.json({ error: "Could not sign the video URL." }, { status: 500 });
 
   try {
     const res = await fetch(endpoint, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ videoUrl: signed.signedUrl }),
+      body: JSON.stringify({ videoUrl }),
       // never cache an inference run
       cache: "no-store",
     });

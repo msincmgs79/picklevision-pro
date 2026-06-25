@@ -44,12 +44,13 @@ Today, **video files live in Supabase Storage**. At go-live they move to **Cloud
 - **Why:** Supabase egress is **$0.09/GB** — every analysis download and every re-watch of a (up to 1 GB) video costs money, and it scales linearly with users. **R2 has zero egress fees** ($0.015/GB-month storage only), so analysis pulls and unlimited re-watching are free. This is the difference between ~$0.45/video and ~$0.09/video, and keeps paid-tier margins ~90%.
 - **What stays:** Supabase keeps **login + database**. Vercel, Railway, Roboflow and Gemini are unchanged.
 - **Migration work (contained):** create an R2 bucket; switch uploads + signed-URL generation from Supabase Storage to R2 (S3 API); point the backend's `download_video` at R2; migrate existing videos.
+  - **Status: code-complete (2026-06-25).** The whole app branches Supabase↔R2 on one env var (`NEXT_PUBLIC_STORAGE_BACKEND=r2`); uploads use a presigned PUT, reads use presigned GET via `/api/storage`, and Railway is unchanged (it just downloads whatever signed URL it's handed). Activation = the Cloudflare bucket + API token + Vercel env vars in `docs/r2-setup.md`.
 
 ## Bundled go-live changes (per the billing plan)
 
 These are deferred to be done together when payments are wired up:
 
-1. **Cloudflare R2** storage migration (above).
+1. ~~**Cloudflare R2** storage migration~~ — **built early (2026-06-25)**, see decision log + `docs/r2-setup.md`. Just needs the bucket/keys to switch on.
 2. **Stripe** checkout + webhooks (chosen for lowest fees) — wires into the existing `profiles` / `consume_video()` credit model.
 3. **Self-host the Roboflow model** on Railway — drops ball-detection cost ~70× (from ~$3.60/video hosted to ~$0.02 in compute).
 
@@ -58,4 +59,7 @@ See `supabase/profiles.sql` for the billing data model.
 ## Decision log
 
 **2026-06-25 — Stay best-of-breed; don't consolidate onto Cloudflare.**
-Keep **Supabase** for auth + Postgres/RLS (Cloudflare has no turnkey consumer auth, and D1 is SQLite with no RLS/`plpgsql` — moving would be a downgrade + rewrite for no cost benefit, since auth/DB aren't egress-heavy). Use **Cloudflare** only for **R2 video storage** (the egress win) and, optionally, **DNS/CDN at the edge**. **Cloudflare work is deferred** — not started yet; it lands with the go-live batch (R2 + Stripe + self-hosted model).
+Keep **Supabase** for auth + Postgres/RLS (Cloudflare has no turnkey consumer auth, and D1 is SQLite with no RLS/`plpgsql` — moving would be a downgrade + rewrite for no cost benefit, since auth/DB aren't egress-heavy). Use **Cloudflare** only for **R2 video storage** (the egress win) and, optionally, **DNS/CDN at the edge**.
+
+**2026-06-25 — R2 migration pulled forward (built, behind a flag).**
+Originally deferred to the go-live batch, but the Supabase Storage **50 MB upload cap** (Free plan, can't be raised) blocked uploading full-court footage needed to test court calibration. Rather than pay for Supabase Pro just for storage, we built the R2 integration now. It's **gated behind `NEXT_PUBLIC_STORAGE_BACKEND`** so it's inert until the Cloudflare bucket + keys exist — no risk to the live app. Single presigned-PUT upload (≤5 GB) for now; resumable S3-multipart is a possible follow-up. Auth, DB and Railway are untouched. Setup: `docs/r2-setup.md`.
