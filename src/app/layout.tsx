@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import Sidebar from "../components/Sidebar";
 import MobileNav from "../components/MobileNav";
+import MobileTopBar from "../components/MobileTopBar";
 
 export const metadata: Metadata = {
   title: "PickleVision Pro — AI Pickleball Analysis",
@@ -33,6 +34,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
+        <MobileTopBar />
         <div className="app">
           <Sidebar />
           <main className="main">{children}</main>

@@ -487,6 +487,9 @@ tbody tr:hover {
 .mobile-nav {
   display: none;
 }
+.mobile-topbar {
+  display: none;
+}
 .mnav-link {
   display: flex;
   flex-direction: column;
@@ -525,6 +528,19 @@ tbody tr:hover {
 @media (max-width: 860px) {
   .sidebar {
     display: none;
+  }
+  .mobile-topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 16px;
+    padding-top: calc(10px + env(safe-area-inset-top));
+    background: rgba(15, 22, 38, 0.96);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    z-index: 40;
   }
   .main {
     padding: 20px 16px calc(86px + env(safe-area-inset-bottom));
