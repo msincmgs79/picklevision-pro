@@ -15,6 +15,7 @@ import {
 } from "../lib/analysis";
 import TrajectoryMap3D from "./TrajectoryMap3D";
 import { enablePush, isPushEnabled, notify, pushSupported } from "../lib/push";
+import { analyzeRallies } from "../lib/rallies";
 
 interface Bookmark {
   id: string;
@@ -62,7 +63,7 @@ export default function MatchPlayer({
   const [trackView, setTrackView] = useState<"3d" | "top" | "side">("3d");
   const [isPlaying, setIsPlaying] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<"insights" | "shots" | "trajectories" | "bookmarks">("insights");
+  const [activeTab, setActiveTab] = useState<"insights" | "shots" | "trajectories" | "rallies" | "bookmarks">("insights");
   const [editing, setEditing] = useState(false);
   const [metaTitle, setMetaTitle] = useState(match.title || "");
   const [metaTeam, setMetaTeam] = useState(match.team || "");
@@ -510,7 +511,7 @@ export default function MatchPlayer({
       )}
 
       <div className="tabs" style={{ marginTop: 18, display: "inline-flex", flexWrap: "wrap" }}>
-        {([["insights", "Insights"], ["shots", "Shots"], ["trajectories", "Trajectories"], ["bookmarks", "Bookmarks"]] as const).map(([k, label]) => (
+        {([["insights", "Insights"], ["shots", "Shots"], ["trajectories", "Trajectories"], ["rallies", "Rallies"], ["bookmarks", "Bookmarks"]] as const).map(([k, label]) => (
           <button key={k} className={"tab" + (activeTab === k ? " active" : "")} onClick={() => setActiveTab(k)}>{label}</button>
         ))}
       </div>
@@ -788,6 +789,65 @@ export default function MatchPlayer({
             </p>
           </div>
         )}
+          </div>
+        )}
+
+        {activeTab === "rallies" && (
+          <div className="card">
+            <div className="section-title">Rallies &amp; highlights</div>
+            <div className="muted" style={{ fontSize: 13, marginTop: 2 }}>
+              Auto-detected from your full-match ball tracking — jump straight to the action and skip dead time.
+            </div>
+            {!(track && track.fullVideo) ? (
+              <div style={{ marginTop: 14 }}>
+                <div className="dim" style={{ fontSize: 13, marginBottom: 10 }}>
+                  Run <b>Track full video</b> first (in the Trajectories tab) — rallies are detected from the full-match ball map.
+                </div>
+                <button className="btn btn-primary btn-sm" disabled={tracking || !videoUrl} onClick={() => { setActiveTab("trajectories"); runTracking(true); }}>
+                  {tracking ? "Tracking…" : "▶ Track full video"}
+                </button>
+              </div>
+            ) : (() => {
+              const ra = analyzeRallies(track);
+              return (
+                <div style={{ marginTop: 14 }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0,1fr))", gap: 8 }}>
+                    <Metric label="Rallies" value={String(ra.count)} />
+                    <Metric label="Longest" value={`${ra.longest.toFixed(0)}s`} />
+                    <Metric label="Avg length" value={`${ra.avgDuration.toFixed(1)}s`} />
+                    <Metric label="Active play" value={`${Math.round(ra.activeSec)}s`} />
+                  </div>
+                  {ra.highlightIdx.length > 0 && (
+                    <>
+                      <div className="dim" style={{ fontSize: 12, margin: "16px 0 8px", textTransform: "uppercase", letterSpacing: 0.5 }}>Highlights</div>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                        {ra.highlightIdx.map((idx) => {
+                          const r = ra.rallies[idx];
+                          return (
+                            <button key={idx} className="btn btn-sm" onClick={() => seek(r.start)} style={{ borderColor: "var(--primary)" }}>
+                              ▶ Rally {idx + 1} · {r.duration.toFixed(0)}s · ~{r.shots} shots
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </>
+                  )}
+                  <div className="dim" style={{ fontSize: 12, margin: "16px 0 8px", textTransform: "uppercase", letterSpacing: 0.5 }}>All rallies</div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 340, overflowY: "auto" }}>
+                    {ra.rallies.map((r) => (
+                      <div key={r.index} style={{ display: "flex", alignItems: "center", gap: 10, border: "1px solid var(--border)", borderRadius: 9, padding: "8px 10px" }}>
+                        <button onClick={() => seek(r.start)} style={{ background: "none", border: "none", color: "var(--primary)", cursor: "pointer", fontWeight: 700, fontSize: 13 }}>▶ {fmt(r.start)}</button>
+                        <span className="muted" style={{ flex: 1, fontSize: 13 }}>Rally {r.index + 1} · {r.duration.toFixed(0)}s · ~{r.shots} shots</span>
+                        {r.inOut && <span className={"badge " + (r.inOut === "in" ? "badge-excellent" : "badge-poor")} style={{ fontSize: 10 }}>{r.inOut}</span>}
+                      </div>
+                    ))}
+                  </div>
+                  <p className="dim" style={{ fontSize: 11, marginTop: 10, lineHeight: 1.5 }}>
+                    Rally boundaries &amp; shot counts are approximate (from ball tracking). ~{Math.round(ra.deadSec)}s of dead time detected between points.
+                  </p>
+                </div>
+              );
+            })()}
           </div>
         )}
       </div>
