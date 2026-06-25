@@ -123,7 +123,7 @@ export default function TrajectoryMap3D({
         const end = pathPts[pathPts.length - 1];
         return (
           <g key={ti} opacity={0.85}>
-            <path d={d} fill="none" stroke={col} strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" />
+            <path d={d} fill="none" stroke={col} strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" strokeDasharray={tr.inOut === "out" ? "6 4" : undefined} />
             {end && <circle cx={end[0]} cy={end[1]} r={2.6} fill={col} />}
           </g>
         );

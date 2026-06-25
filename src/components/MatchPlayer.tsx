@@ -59,6 +59,8 @@ export default function MatchPlayer({
   const [track, setTrack] = useState<TrackResult | null>(null);
   const [trackError, setTrackError] = useState<string | null>(null);
   const [trackView, setTrackView] = useState<"3d" | "top" | "side">("3d");
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   const supabase = createClient();
   const fmt = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
@@ -80,17 +82,29 @@ export default function MatchPlayer({
       setDuration(v.duration || duration);
       if (v.videoWidth) setVdims({ w: v.videoWidth, h: v.videoHeight });
     };
+    const onPlay = () => setIsPlaying(true);
+    const onPause = () => setIsPlaying(false);
     v.addEventListener("timeupdate", onTime);
     v.addEventListener("loadedmetadata", onMeta);
+    v.addEventListener("play", onPlay);
+    v.addEventListener("pause", onPause);
     return () => {
       v.removeEventListener("timeupdate", onTime);
       v.removeEventListener("loadedmetadata", onMeta);
+      v.removeEventListener("play", onPlay);
+      v.removeEventListener("pause", onPause);
     };
   }, [duration]);
 
   function seek(t: number) {
     if (videoRef.current) videoRef.current.currentTime = t;
     setTime(t);
+  }
+  function togglePlay() {
+    const v = videoRef.current;
+    if (!v) return;
+    if (v.paused) v.play();
+    else v.pause();
   }
 
   // ---- drawing ----
@@ -295,9 +309,19 @@ export default function MatchPlayer({
             {match.recorded_at ? ` · ${match.recorded_at}` : ""}
           </p>
         </div>
-        <button className="btn btn-sm btn-ghost" onClick={deleteMatch} disabled={deleting} style={{ color: "var(--poor)" }}>
-          {deleting ? "Deleting…" : "Delete match"}
-        </button>
+        <div style={{ position: "relative" }}>
+          <button className="iconbtn" onClick={() => setMenuOpen((o) => !o)} aria-label="Match options" title="Options">⋯</button>
+          {menuOpen && (
+            <>
+              <div onClick={() => setMenuOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 30 }} />
+              <div className="menu">
+                <button className="menu-item" onClick={() => { setMenuOpen(false); deleteMatch(); }} disabled={deleting} style={{ color: "var(--poor)" }}>
+                  <span aria-hidden="true">🗑</span> {deleting ? "Deleting…" : "Delete match"}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
       </div>
 
       <div className="grid" style={{ gridTemplateColumns: "1.6fr 1fr", marginTop: 22, alignItems: "start" }}>
@@ -375,15 +399,15 @@ export default function MatchPlayer({
             ))}
           </div>
 
-          {/* controls */}
-          <div style={{ display: "flex", gap: 9, marginTop: 12, flexWrap: "wrap", alignItems: "center" }}>
-            <button className="btn btn-primary btn-sm" onClick={() => (videoRef.current?.paused ? videoRef.current?.play() : videoRef.current?.pause())}>▶ / ❚❚</button>
-            <button className="btn btn-sm" onClick={() => seek(Math.max(0, time - 5))}>« 5s</button>
-            <button className="btn btn-sm" onClick={() => seek(Math.min(duration, time + 5))}>5s »</button>
+          {/* controls — playback (left) split from tools (right) */}
+          <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap", alignItems: "center" }}>
+            <button className="iconbtn" onClick={togglePlay} title={isPlaying ? "Pause" : "Play"} aria-label={isPlaying ? "Pause" : "Play"}>{isPlaying ? "❚❚" : "▶"}</button>
+            <button className="iconbtn" onClick={() => seek(Math.max(0, time - 5))} title="Back 5 seconds" aria-label="Back 5 seconds" style={{ width: "auto", padding: "0 10px", fontSize: 12 }}>«5s</button>
+            <button className="iconbtn" onClick={() => seek(Math.min(duration, time + 5))} title="Forward 5 seconds" aria-label="Forward 5 seconds" style={{ width: "auto", padding: "0 10px", fontSize: 12 }}>5s»</button>
             <span style={{ flex: 1 }} />
-            <button className={"btn btn-sm" + (drawMode ? " btn-indigo" : "")} onClick={() => setDrawMode((d) => !d)}>✎ Draw</button>
-            <button className="btn btn-sm btn-ghost" onClick={clearDraw}>Clear</button>
-            <button className="btn btn-sm" onClick={addBookmark}>★ Bookmark</button>
+            <button className={"iconbtn" + (drawMode ? " on" : "")} onClick={() => setDrawMode((d) => !d)} title="Draw on the frame" aria-label="Draw on the frame">✎</button>
+            {drawMode && <button className="iconbtn" onClick={clearDraw} title="Clear drawing" aria-label="Clear drawing">⌫</button>}
+            <button className="iconbtn" onClick={addBookmark} title="Bookmark this moment" aria-label="Bookmark this moment">★</button>
             <button
               className={"btn btn-sm" + (calibrating ? " btn-indigo" : "")}
               onClick={calibrating ? () => setCalibrating(false) : startCalibration}
@@ -405,7 +429,7 @@ export default function MatchPlayer({
             <div className="section-title" style={{ marginBottom: 4 }}>Bookmarks</div>
             <div className="muted" style={{ fontSize: 13, marginBottom: 12 }}>Saved moments — click to jump.</div>
             {bookmarks.length === 0 ? (
-              <div className="dim" style={{ fontSize: 13 }}>No bookmarks yet. Hit ★ Bookmark while watching.</div>
+              <div className="dim" style={{ fontSize: 13 }}>No bookmarks yet — tap ★ during a rally to mark the moment.</div>
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                 {bookmarks.map((b) => (
@@ -425,7 +449,7 @@ export default function MatchPlayer({
               <span className="badge badge-average" style={{ fontSize: 11 }}>beta</span>
             </div>
             <p className="muted" style={{ fontSize: 13, lineHeight: 1.5, marginTop: 4 }}>
-              Runs real computer-vision ball detection on this video via the inference service.
+              Finds and maps every ball position on the court using AI.
             </p>
             <button
               className="btn btn-primary btn-sm"
@@ -433,38 +457,52 @@ export default function MatchPlayer({
               onClick={runAnalysis}
               disabled={analyzing || !videoUrl}
             >
-              {analyzing ? "Analyzing… (up to a minute)" : analysis ? "↻ Re-run detection" : "▶ Run ball detection"}
+              {analyzing ? "Analyzing… (up to a minute)" : analysis ? "↻ Re-analyze" : "▶ Analyze ball positions"}
             </button>
 
             {analysisError && (
               <div style={{ marginTop: 10, fontSize: 12.5, color: "var(--poor)" }}>{analysisError}</div>
             )}
 
-            {analysis && (
-              <div style={{ marginTop: 14 }}>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                  <Metric label="Ball hits found" value={String(analysis.detectionsFound)} />
-                  <Metric label="Video length" value={`${analysis.duration.toFixed(1)}s`} />
-                  <Metric label="Frames scanned" value={String(analysis.totalFrames)} />
-                  <Metric label="Source FPS" value={analysis.fps.toFixed(0)} />
-                </div>
-                {analysis.detections.some((d) => d.inOut) && (
-                  <div style={{ display: "flex", gap: 16, marginTop: 12, fontSize: 13 }}>
-                    <span><b style={{ color: "var(--excellent)" }}>{analysis.detections.filter((d) => d.inOut === "in").length}</b> in</span>
-                    <span><b style={{ color: "var(--poor)" }}>{analysis.detections.filter((d) => d.inOut === "out").length}</b> out</span>
+            {analysis && (() => {
+              const inN = analysis.detections.filter((d) => d.inOut === "in").length;
+              const outN = analysis.detections.filter((d) => d.inOut === "out").length;
+              const calibd = inN + outN > 0;
+              const inPct = calibd ? Math.round((100 * inN) / (inN + outN)) : 0;
+              return (
+                <div style={{ marginTop: 14 }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                    <Metric label="Balls tracked" value={String(analysis.detectionsFound)} />
+                    {calibd
+                      ? <Metric label="In bounds" value={`${inPct}%`} />
+                      : <Metric label="Video length" value={`${analysis.duration.toFixed(1)}s`} />}
                   </div>
-                )}
-                <div className="dim" style={{ fontSize: 11.5, margin: "12px 0 6px" }}>
-                  Detected ball positions{analysis.detections.some((d) => d.inOut) ? " · green = in, red = out" : " on the court"}
+                  {calibd && (
+                    <div style={{ display: "flex", gap: 18, marginTop: 12, fontSize: 13, alignItems: "center" }}>
+                      <span style={{ display: "flex", alignItems: "center", gap: 7 }}><span style={{ width: 16, borderTop: "2px solid var(--excellent)" }} /><b style={{ color: "var(--excellent)" }}>{inN}</b> in</span>
+                      <span style={{ display: "flex", alignItems: "center", gap: 7 }}><span style={{ width: 16, borderTop: "2px dashed var(--poor)" }} /><b style={{ color: "var(--poor)" }}>{outN}</b> out</span>
+                    </div>
+                  )}
+                  <div className="dim" style={{ fontSize: 11.5, margin: "12px 0 6px" }}>
+                    Where the ball went on the court
+                  </div>
+                  <CourtScatter detections={analysis.detections} />
+                  <p className="dim" style={{ fontSize: 11, marginTop: 8, lineHeight: 1.5 }}>
+                    {corners.length === 4
+                      ? "In/out uses your court calibration."
+                      : "Tip: use “⊹ Calibrate court”, then re-analyze for accurate in/out."}
+                  </p>
+                  <details style={{ marginTop: 10 }}>
+                    <summary style={{ cursor: "pointer", fontSize: 12, color: "var(--text-dim)", fontWeight: 600 }}>Detection details</summary>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 8 }}>
+                      <Metric label="Video length" value={`${analysis.duration.toFixed(1)}s`} />
+                      <Metric label="Frames scanned" value={String(analysis.totalFrames)} />
+                      <Metric label="Source FPS" value={analysis.fps.toFixed(0)} />
+                    </div>
+                  </details>
                 </div>
-                <CourtScatter detections={analysis.detections} />
-                <p className="dim" style={{ fontSize: 11, marginTop: 8, lineHeight: 1.5 }}>
-                  {corners.length === 4
-                    ? "In/out uses your court calibration. Heights & smooth arcs come in later phases."
-                    : "Tip: use “⊹ Calibrate court”, then re-run for accurate in/out."}
-                </p>
-              </div>
-            )}
+              );
+            })()}
           </div>
         </div>
       </div>
@@ -641,6 +679,11 @@ export default function MatchPlayer({
               </span>
             </div>
             <TrajectoryMap3D trajectories={track.trajectories} view={trackView} />
+            <div style={{ display: "flex", gap: 18, marginTop: 10, fontSize: 12, flexWrap: "wrap" }}>
+              <span style={{ display: "flex", alignItems: "center", gap: 7 }}><span style={{ width: 18, borderTop: "2px solid var(--excellent)" }} /><span className="muted">in</span></span>
+              <span style={{ display: "flex", alignItems: "center", gap: 7 }}><span style={{ width: 18, borderTop: "2px dashed var(--poor)" }} /><span className="muted">out</span></span>
+              <span style={{ display: "flex", alignItems: "center", gap: 7 }}><span style={{ width: 18, borderTop: "2px solid #94a3b8" }} /><span className="muted">not calibrated</span></span>
+            </div>
             <p className="dim" style={{ fontSize: 11, marginTop: 8, lineHeight: 1.5 }}>
               Detector: <b>{track.detector === "roboflow" ? "Roboflow trained model" : "color (blob)"}</b>.{" "}
               {track.calibrated ? "In/out uses your court calibration. " : "Calibrate the court for accurate in/out. "}
