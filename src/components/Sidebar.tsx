@@ -64,6 +64,9 @@ export default function Sidebar() {
       )}
 
       <div style={{ marginTop: "auto", padding: "12px 6px 4px" }}>
+        <Link href="/upgrade" className="btn btn-primary" style={{ width: "100%", justifyContent: "center", fontSize: 13, marginBottom: 10 }}>
+          ✦ Upgrade plan
+        </Link>
         {email ? (
           <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12, padding: 14 }}>
             <div style={{ fontWeight: 700, fontSize: 13, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
