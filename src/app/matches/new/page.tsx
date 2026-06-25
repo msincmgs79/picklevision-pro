@@ -4,8 +4,9 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "../../../lib/supabase/client";
-import { isSupabaseConfigured, VIDEO_BUCKET } from "../../../lib/supabase/config";
+import { isSupabaseConfigured } from "../../../lib/supabase/config";
 import { getPlanState, consumeVideo, MAX_VIDEO_BYTES, PLAN_LABEL, type PlanState } from "../../../lib/plan";
+import { resumableUpload } from "../../../lib/upload";
 
 type Stage = "form" | "uploading" | "saving" | "done" | "error";
 
@@ -22,6 +23,7 @@ export default function NewMatchPage() {
   const [stage, setStage] = useState<Stage>("form");
   const [error, setError] = useState<string | null>(null);
   const [planState, setPlanState] = useState<PlanState | null>(null);
+  const [uploadPct, setUploadPct] = useState(0);
   const previewRef = useRef<HTMLVideoElement | null>(null);
 
   useEffect(() => {
@@ -100,14 +102,14 @@ export default function NewMatchPage() {
         .single();
       if (insErr) throw insErr;
 
-      // 2) upload the video under <user_id>/<match_id>.<ext>
+      // 2) upload the video (resumable / chunked) under <user_id>/<match_id>.<ext>
       setStage("uploading");
+      setUploadPct(0);
       const ext = (file.name.split(".").pop() || "mp4").toLowerCase();
       const path = `${user.id}/${inserted.id}.${ext}`;
-      const { error: upErr } = await supabase.storage
-        .from(VIDEO_BUCKET)
-        .upload(path, file, { contentType: file.type || "video/mp4", upsert: true });
-      if (upErr) {
+      try {
+        await resumableUpload(supabase, file, path, setUploadPct);
+      } catch (upErr) {
         await supabase.from("matches").delete().eq("id", inserted.id);
         throw upErr;
       }
@@ -230,8 +232,13 @@ export default function NewMatchPage() {
               )}
             </div>
           )}
+          {stage === "uploading" && (
+            <div className="progress" style={{ height: 8 }}>
+              <div className="progress-bar" style={{ width: `${uploadPct}%` }} />
+            </div>
+          )}
           <button className="btn btn-primary" disabled={!file || busy} style={{ justifyContent: "center", opacity: !file || busy ? 0.6 : 1 }}>
-            {stage === "uploading" ? "Uploading…" : stage === "saving" ? "Saving…" : stage === "done" ? "Done ✓" : "⤴ Upload match"}
+            {stage === "uploading" ? `Uploading… ${uploadPct}%` : stage === "saving" ? "Saving…" : stage === "done" ? "Done ✓" : "⤴ Upload match"}
           </button>
           <p className="dim" style={{ fontSize: 12 }}>
             Your video is stored privately — only you can view it. AI analysis is a later step; for now you can watch, draw and bookmark.
