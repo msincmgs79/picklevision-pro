@@ -3,6 +3,8 @@ import "./globals.css";
 import Sidebar from "../components/Sidebar";
 import MobileNav from "../components/MobileNav";
 import MobileTopBar from "../components/MobileTopBar";
+import ServiceWorkerRegister from "../components/ServiceWorkerRegister";
+import InstallPrompt from "../components/InstallPrompt";
 
 export const metadata: Metadata = {
   title: "PickleVision Pro — AI Pickleball Analysis",
@@ -40,6 +42,8 @@ export default function RootLayout({
           <main className="main">{children}</main>
         </div>
         <MobileNav />
+        <ServiceWorkerRegister />
+        <InstallPrompt />
       </body>
     </html>
   );

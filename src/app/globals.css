@@ -490,6 +490,30 @@ tbody tr:hover {
 .mobile-topbar {
   display: none;
 }
+
+/* PWA install prompt banner */
+.install-banner {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 20px;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: calc(100% - 32px);
+  max-width: 420px;
+  background: var(--surface-2);
+  border: 1px solid var(--border-light);
+  border-radius: 12px;
+  padding: 12px 14px;
+  box-shadow: var(--shadow);
+}
+@media (max-width: 860px) {
+  .install-banner {
+    bottom: calc(84px + env(safe-area-inset-bottom));
+  }
+}
 .mnav-link {
   display: flex;
   flex-direction: column;
