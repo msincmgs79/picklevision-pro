@@ -1,6 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { createClient } from "../../lib/supabase/client";
+import { isSupabaseConfigured } from "../../lib/supabase/config";
+import { getPlanState, PLAN_LABEL, type PlanState, type Plan } from "../../lib/plan";
 
 const tiers = [
   {
@@ -51,8 +54,14 @@ const packs = [
 ];
 
 export default function UpgradePage() {
-  const [currentPlan] = useState<"free" | "premium" | "ultra">("free");
+  const [planState, setPlanState] = useState<PlanState | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const currentPlan: Plan = planState?.plan ?? "free";
+
+  useEffect(() => {
+    if (!isSupabaseConfigured) return;
+    getPlanState(createClient()).then(setPlanState);
+  }, []);
 
   function comingSoon(what: string) {
     setNotice(`${what} — payments launch soon. We'll let you know the moment you can check out.`);
@@ -65,6 +74,11 @@ export default function UpgradePage() {
       <p className="page-sub">
         One video = one full AI analysis (shot breakdown + ball map). Do more each month, or top up with credits anytime.
       </p>
+      {planState && (
+        <div className="muted" style={{ fontSize: 13, marginTop: 8 }}>
+          You&apos;re on the <b style={{ color: "var(--primary)" }}>{PLAN_LABEL[planState.plan]}</b> plan · {planState.remaining} video{planState.remaining === 1 ? "" : "s"} left this month{planState.credits > 0 ? ` (incl. ${planState.credits} credits)` : ""}.
+        </div>
+      )}
 
       {notice && (
         <div className="card" style={{ marginTop: 18, borderColor: "rgba(163,230,53,0.4)", background: "rgba(163,230,53,0.07)" }}>

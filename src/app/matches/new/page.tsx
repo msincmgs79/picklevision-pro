@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "../../../lib/supabase/client";
 import { isSupabaseConfigured, VIDEO_BUCKET } from "../../../lib/supabase/config";
+import { getPlanState, consumeVideo, MAX_VIDEO_BYTES, PLAN_LABEL, type PlanState } from "../../../lib/plan";
 
 type Stage = "form" | "uploading" | "saving" | "done" | "error";
 
@@ -20,6 +21,7 @@ export default function NewMatchPage() {
   const [recordedAt, setRecordedAt] = useState("");
   const [stage, setStage] = useState<Stage>("form");
   const [error, setError] = useState<string | null>(null);
+  const [planState, setPlanState] = useState<PlanState | null>(null);
   const previewRef = useRef<HTMLVideoElement | null>(null);
 
   useEffect(() => {
@@ -27,12 +29,18 @@ export default function NewMatchPage() {
       setAuthed(false);
       return;
     }
-    createClient()
-      .auth.getUser()
-      .then(({ data }) => setAuthed(Boolean(data.user)));
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data }) => setAuthed(Boolean(data.user)));
+    getPlanState(supabase).then(setPlanState);
   }, []);
 
   function onPickFile(f: File | null) {
+    if (f && f.size > MAX_VIDEO_BYTES) {
+      setError("Videos are capped at 1 GB. Please trim or compress the clip and try again.");
+      setFile(null);
+      return;
+    }
+    setError(null);
     setFile(f);
     setDuration(null);
     if (f) {
@@ -59,6 +67,18 @@ export default function NewMatchPage() {
     if (!user) {
       setError("Your session expired — please sign in again.");
       setStage("error");
+      return;
+    }
+
+    if (file.size > MAX_VIDEO_BYTES) {
+      setError("Videos are capped at 1 GB. Please trim or compress the clip and try again.");
+      setStage("error");
+      return;
+    }
+
+    const allowance = await getPlanState(supabase);
+    if (allowance.remaining <= 0) {
+      router.push("/upgrade");
       return;
     }
 
@@ -100,6 +120,7 @@ export default function NewMatchPage() {
         .eq("id", inserted.id);
       if (updErr) throw updErr;
 
+      await consumeVideo(supabase);
       setStage("done");
       router.push(`/matches/${inserted.id}`);
     } catch (err: any) {
@@ -166,7 +187,7 @@ export default function NewMatchPage() {
                 <div style={{ fontSize: 40 }}>⤴</div>
                 <div style={{ fontWeight: 700, marginTop: 8 }}>Choose a video to upload</div>
                 <div className="muted" style={{ fontSize: 13, marginTop: 4 }}>
-                  MP4, MOV or WebM. Tip: keep under your Supabase bucket file-size limit.
+                  MP4, MOV or WebM · up to 1 GB.
                 </div>
               </>
             )}
@@ -200,6 +221,15 @@ export default function NewMatchPage() {
             </div>
           )}
 
+          {planState && (
+            <div className="muted" style={{ fontSize: 12.5 }}>
+              {planState.remaining > 0 ? (
+                <>{planState.remaining} video{planState.remaining === 1 ? "" : "s"} left this month{planState.credits > 0 ? ` · ${planState.credits} credits` : ""} · {PLAN_LABEL[planState.plan]} plan</>
+              ) : (
+                <>You&apos;re out of videos this month — <Link href="/upgrade" style={{ color: "var(--primary)" }}>upgrade or buy credits</Link>.</>
+              )}
+            </div>
+          )}
           <button className="btn btn-primary" disabled={!file || busy} style={{ justifyContent: "center", opacity: !file || busy ? 0.6 : 1 }}>
             {stage === "uploading" ? "Uploading…" : stage === "saving" ? "Saving…" : stage === "done" ? "Done ✓" : "⤴ Upload match"}
           </button>
