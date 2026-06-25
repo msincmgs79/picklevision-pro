@@ -489,6 +489,19 @@ export default function MatchPlayer({
         </div>
       </div>
 
+      {!analysis && !shot && !track && (
+        <div className="card" style={{ marginTop: 18, borderColor: "rgba(163,230,53,0.3)", display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap" }}>
+          <div style={{ flex: 1, minWidth: 200 }}>
+            <div style={{ fontWeight: 700 }}>🎾 Get started</div>
+            <div className="muted" style={{ fontSize: 13, marginTop: 2 }}>Run the AI tools in the tabs below to get your coaching read, ball map and shot insights.</div>
+          </div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <span className="chip" onClick={() => setActiveTab("insights")} style={{ cursor: "pointer" }}>1 · Analyze shots</span>
+            <span className="chip" onClick={() => setActiveTab("trajectories")} style={{ cursor: "pointer" }}>2 · Map the ball</span>
+          </div>
+        </div>
+      )}
+
       <div className="tabs" style={{ marginTop: 18, display: "inline-flex", flexWrap: "wrap" }}>
         {([["insights", "Insights"], ["shots", "Shots"], ["trajectories", "Trajectories"], ["bookmarks", "Bookmarks"]] as const).map(([k, label]) => (
           <button key={k} className={"tab" + (activeTab === k ? " active" : "")} onClick={() => setActiveTab(k)}>{label}</button>
@@ -722,6 +735,7 @@ export default function MatchPlayer({
 
         {tracking && (
           <div className="muted" style={{ marginTop: 10, fontSize: 13 }}>
+            <span className="ball-spin" style={{ marginRight: 8 }} />
             Tracking… a full match can take ~1–2 minutes — you can keep using the page.
           </div>
         )}

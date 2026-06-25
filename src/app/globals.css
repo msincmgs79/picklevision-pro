@@ -411,6 +411,40 @@ button {
   color: var(--text-dim);
 }
 
+/* pickleball loading spinner */
+@keyframes ballspin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.ball-spin {
+  display: inline-block;
+  vertical-align: -3px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #c4f04a;
+  position: relative;
+  animation: ballspin 0.9s linear infinite;
+}
+.ball-spin::before,
+.ball-spin::after {
+  content: "";
+  position: absolute;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: rgba(20, 40, 0, 0.4);
+}
+.ball-spin::before {
+  top: 3.5px;
+  left: 6.5px;
+}
+.ball-spin::after {
+  bottom: 3.5px;
+  right: 4.5px;
+}
+
 .progress {
   height: 8px;
   background: var(--bg);
