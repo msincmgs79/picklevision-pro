@@ -61,6 +61,11 @@ export default function MatchPlayer({
   const [trackView, setTrackView] = useState<"3d" | "top" | "side">("3d");
   const [isPlaying, setIsPlaying] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<"insights" | "shots" | "trajectories" | "bookmarks">("insights");
+  const [editing, setEditing] = useState(false);
+  const [metaTitle, setMetaTitle] = useState(match.title || "");
+  const [metaTeam, setMetaTeam] = useState(match.team || "");
+  const [metaOpp, setMetaOpp] = useState(match.opponent || "");
 
   const supabase = createClient();
   const fmt = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
@@ -106,6 +111,17 @@ export default function MatchPlayer({
     if (v.paused) v.play();
     else v.pause();
   }
+  async function saveMeta() {
+    setEditing(false);
+    await supabase
+      .from("matches")
+      .update({ title: metaTitle.trim() || "Untitled match", team: metaTeam.trim(), opponent: metaOpp.trim() })
+      .eq("id", match.id);
+  }
+  const metaInput: React.CSSProperties = {
+    background: "var(--surface-2)", border: "1px solid var(--border-light)", borderRadius: 8,
+    padding: "8px 11px", color: "var(--text)", fontSize: 14, fontFamily: "inherit", flex: 1, minWidth: 0,
+  };
 
   // ---- drawing ----
   function pos(e: React.PointerEvent) {
@@ -300,14 +316,34 @@ export default function MatchPlayer({
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12 }}>
-        <div>
+        <div style={{ flex: 1, minWidth: 0 }}>
           <Link href="/matches" className="dim" style={{ fontSize: 13 }}>← My Matches</Link>
-          <h1 className="page-title" style={{ marginTop: 6 }}>{match.title}</h1>
-          <p className="page-sub">
-            {match.team} vs {match.opponent}
-            {match.score ? ` · ${match.score}` : ""}
-            {match.recorded_at ? ` · ${match.recorded_at}` : ""}
-          </p>
+          {editing ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8, maxWidth: 480 }}>
+              <input value={metaTitle} onChange={(e) => setMetaTitle(e.target.value)} placeholder="Match title" style={{ ...metaInput, fontSize: 17, fontWeight: 700 }} />
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <input value={metaTeam} onChange={(e) => setMetaTeam(e.target.value)} placeholder="Your team" style={metaInput} />
+                <span className="dim">vs</span>
+                <input value={metaOpp} onChange={(e) => setMetaOpp(e.target.value)} placeholder="Opponent" style={metaInput} />
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button className="btn btn-primary btn-sm" onClick={saveMeta}>Save</button>
+                <button className="btn btn-sm btn-ghost" onClick={() => { setEditing(false); setMetaTitle(match.title || ""); setMetaTeam(match.team || ""); setMetaOpp(match.opponent || ""); }}>Cancel</button>
+              </div>
+            </div>
+          ) : (
+            <>
+              <h1 className="page-title" style={{ marginTop: 6, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                {metaTitle}
+                <button onClick={() => setEditing(true)} className="iconbtn" style={{ width: 28, height: 28, fontSize: 12 }} aria-label="Edit match details" title="Edit title and teams">✎</button>
+              </h1>
+              <p className="page-sub">
+                {metaTeam} vs {metaOpp}
+                {match.score ? ` · ${match.score}` : ""}
+                {match.recorded_at ? ` · ${match.recorded_at}` : ""}
+              </p>
+            </>
+          )}
         </div>
         <div style={{ position: "relative" }}>
           <button className="iconbtn" onClick={() => setMenuOpen((o) => !o)} aria-label="Match options" title="Options">⋯</button>
@@ -324,7 +360,7 @@ export default function MatchPlayer({
         </div>
       </div>
 
-      <div className="grid" style={{ gridTemplateColumns: "1.6fr 1fr", marginTop: 22, alignItems: "start" }}>
+      <div style={{ maxWidth: 920, marginTop: 22 }}>
         {/* player */}
         <div className="card" style={{ padding: 14 }}>
           <div style={{ position: "relative", borderRadius: 12, overflow: "hidden", background: "#05080f", aspectRatio: "16 / 9" }}>
@@ -422,9 +458,16 @@ export default function MatchPlayer({
             </div>
           )}
         </div>
+      </div>
 
-        {/* side */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <div className="tabs" style={{ marginTop: 18, display: "inline-flex", flexWrap: "wrap" }}>
+        {([["insights", "Insights"], ["shots", "Shots"], ["trajectories", "Trajectories"], ["bookmarks", "Bookmarks"]] as const).map(([k, label]) => (
+          <button key={k} className={"tab" + (activeTab === k ? " active" : "")} onClick={() => setActiveTab(k)}>{label}</button>
+        ))}
+      </div>
+
+      <div style={{ marginTop: 14 }}>
+        {activeTab === "bookmarks" && (
           <div className="card">
             <div className="section-title" style={{ marginBottom: 4 }}>Bookmarks</div>
             <div className="muted" style={{ fontSize: 13, marginBottom: 12 }}>Saved moments — click to jump.</div>
@@ -442,7 +485,8 @@ export default function MatchPlayer({
               </div>
             )}
           </div>
-
+        )}
+        {activeTab === "shots" && (
           <div className="card" style={{ borderColor: "rgba(163,230,53,0.35)" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <div className="section-title">Ball detection</div>
@@ -504,11 +548,9 @@ export default function MatchPlayer({
               );
             })()}
           </div>
-        </div>
-      </div>
-
-      {/* AI Shot Breakdown (Gemini) */}
-      <div className="card" style={{ marginTop: 18, borderColor: "rgba(129,140,248,0.4)" }}>
+        )}
+        {activeTab === "insights" && (
+          <div className="card" style={{ borderColor: "rgba(129,140,248,0.4)" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
           <div>
             <div className="section-title">AI Shot Breakdown</div>
@@ -626,10 +668,10 @@ export default function MatchPlayer({
             </p>
           </div>
         )}
-      </div>
-
-      {/* Ball Trajectories (3D) — Phase 2 */}
-      <div className="card" style={{ marginTop: 18, borderColor: "rgba(163,230,53,0.35)" }}>
+          </div>
+        )}
+        {activeTab === "trajectories" && (
+          <div className="card" style={{ borderColor: "rgba(163,230,53,0.35)" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
           <div>
             <div className="section-title">Ball Trajectories (3D)</div>
@@ -689,6 +731,8 @@ export default function MatchPlayer({
               {track.calibrated ? "In/out uses your court calibration. " : "Calibrate the court for accurate in/out. "}
               Arc heights are physics-estimated — a single camera can&apos;t measure true 3D.
             </p>
+          </div>
+        )}
           </div>
         )}
       </div>
