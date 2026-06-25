@@ -471,6 +471,22 @@ tbody tr:hover {
   font-size: 17px;
   line-height: 1;
 }
+.mnav-fab {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 54px;
+  height: 54px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--primary);
+  color: #0a1300;
+  font-size: 26px;
+  font-weight: 700;
+  margin-top: -22px;
+  border: 4px solid var(--bg-2);
+  box-shadow: 0 6px 18px rgba(163, 230, 53, 0.4);
+}
 
 @media (max-width: 860px) {
   .sidebar {
@@ -515,5 +531,19 @@ tbody tr:hover {
   }
   .tabs {
     overflow-x: auto;
+  }
+  /* bigger touch targets on phones (44px tap area) */
+  .iconbtn {
+    width: 42px;
+    height: 42px;
+    font-size: 16px;
+  }
+  .tab {
+    padding: 10px 15px;
+    font-size: 14px;
+  }
+  .btn-sm {
+    padding: 10px 15px;
+    font-size: 14px;
   }
 }
