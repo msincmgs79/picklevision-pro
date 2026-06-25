@@ -14,6 +14,7 @@ import {
   type TrackResult,
 } from "../lib/analysis";
 import TrajectoryMap3D from "./TrajectoryMap3D";
+import { enablePush, isPushEnabled, notify, pushSupported } from "../lib/push";
 
 interface Bookmark {
   id: string;
@@ -66,6 +67,7 @@ export default function MatchPlayer({
   const [metaTitle, setMetaTitle] = useState(match.title || "");
   const [metaTeam, setMetaTeam] = useState(match.team || "");
   const [metaOpp, setMetaOpp] = useState(match.opponent || "");
+  const [pushOn, setPushOn] = useState(false);
 
   const supabase = createClient();
   const fmt = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
@@ -78,6 +80,10 @@ export default function MatchPlayer({
       if (cached) setTrack(JSON.parse(cached));
     } catch {}
   }, [match.id]);
+
+  useEffect(() => {
+    isPushEnabled().then(setPushOn);
+  }, []);
 
   useEffect(() => {
     const v = videoRef.current;
@@ -327,6 +333,7 @@ export default function MatchPlayer({
       // Cache full-video results so re-opening the match doesn't re-spend credits.
       if (full) {
         try { localStorage.setItem(`pv_track_${match.id}`, JSON.stringify(data)); } catch {}
+        if (pushOn) notify("Ball map ready 🎾", "Your full-match ball trajectories are ready to view.", `/matches/${match.id}`);
       }
     } catch (e: any) {
       setTrackError(e?.message || "Tracking failed.");
@@ -730,6 +737,11 @@ export default function MatchPlayer({
             <button className="btn btn-primary btn-sm" onClick={() => runTracking(true)} disabled={tracking || !videoUrl} style={{ opacity: tracking || !videoUrl ? 0.6 : 1 }}>
               {tracking ? "Tracking…" : "▶ Track full video"}
             </button>
+            {pushSupported() && (
+              <button className="btn btn-sm" title="Get a notification when a full-match analysis finishes" onClick={async () => { if (!pushOn) setPushOn(await enablePush(supabase)); }}>
+                {pushOn ? "🔔 Alerts on" : "🔔 Notify me"}
+              </button>
+            )}
           </div>
         </div>
 
