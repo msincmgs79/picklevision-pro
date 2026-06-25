@@ -54,3 +54,8 @@ These are deferred to be done together when payments are wired up:
 3. **Self-host the Roboflow model** on Railway — drops ball-detection cost ~70× (from ~$3.60/video hosted to ~$0.02 in compute).
 
 See `supabase/profiles.sql` for the billing data model.
+
+## Decision log
+
+**2026-06-25 — Stay best-of-breed; don't consolidate onto Cloudflare.**
+Keep **Supabase** for auth + Postgres/RLS (Cloudflare has no turnkey consumer auth, and D1 is SQLite with no RLS/`plpgsql` — moving would be a downgrade + rewrite for no cost benefit, since auth/DB aren't egress-heavy). Use **Cloudflare** only for **R2 video storage** (the egress win) and, optionally, **DNS/CDN at the edge**. **Cloudflare work is deferred** — not started yet; it lands with the go-live batch (R2 + Stripe + self-hosted model).
