@@ -105,18 +105,18 @@ export async function buildShareCard(d: ShareCardData): Promise<Blob> {
   ctx.fillStyle = WHITE;
   ctx.font = "800 76px system-ui, sans-serif";
   const titleLines = wrap(ctx, d.title || "Match", S - pad * 2, 2);
-  let ty = pad + 230;
+  let ty = pad + 200;
   for (const l of titleLines) {
     ctx.fillText(l, pad, ty);
-    ty += 88;
+    ty += 80;
   }
   ctx.fillStyle = MUTED;
   ctx.font = "500 40px system-ui, sans-serif";
   ctx.fillText(d.teams || "", pad, ty + 6);
 
   // two rating blocks
-  const blockY = ty + 70;
-  const blockH = 280;
+  const blockY = ty + 56;
+  const blockH = 238;
   const gap = 36;
   const hasCareer = d.careerRating != null && isFinite(d.careerRating as number);
   const blockW = hasCareer ? (S - pad * 2 - gap) / 2 : S - pad * 2;
@@ -132,13 +132,13 @@ export async function buildShareCard(d: ShareCardData): Promise<Blob> {
     ctx.textAlign = "center";
     ctx.fillStyle = MUTED;
     ctx.font = "700 30px system-ui, sans-serif";
-    ctx.fillText(label.toUpperCase(), x + w / 2, blockY + 64);
+    ctx.fillText(label.toUpperCase(), x + w / 2, blockY + 54);
     ctx.fillStyle = LIME;
-    ctx.font = "800 150px system-ui, sans-serif";
-    ctx.fillText(value.toFixed(1), x + w / 2, blockY + 196);
+    ctx.font = "800 128px system-ui, sans-serif";
+    ctx.fillText(value.toFixed(1), x + w / 2, blockY + 172);
     ctx.fillStyle = MUTED;
     ctx.font = "500 26px system-ui, sans-serif";
-    ctx.fillText("AI DUPR estimate", x + w / 2, blockY + 240);
+    ctx.fillText("AI DUPR estimate", x + w / 2, blockY + 212);
     ctx.textAlign = "left";
   }
 
@@ -150,7 +150,7 @@ export async function buildShareCard(d: ShareCardData): Promise<Blob> {
   }
 
   // coach tip / top skill strip
-  let fy = blockY + blockH + 80;
+  let fy = blockY + blockH + 66;
   if (d.topSkill) {
     ctx.fillStyle = WHITE;
     ctx.font = "700 34px system-ui, sans-serif";
