@@ -60,7 +60,7 @@ export default function MatchPlayer({
   const [tracking, setTracking] = useState(false);
   const [track, setTrack] = useState<TrackResult | null>(null);
   const [trackError, setTrackError] = useState<string | null>(null);
-  const [trackView, setTrackView] = useState<"3d" | "top" | "side">("3d");
+  const [trackView, setTrackView] = useState<"3d" | "top" | "side">("top");
   const [isPlaying, setIsPlaying] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<"insights" | "shots" | "trajectories" | "rallies" | "bookmarks">("insights");
@@ -769,14 +769,16 @@ export default function MatchPlayer({
             </div>
             <TrajectoryMap3D trajectories={track.trajectories} view={trackView} />
             <div style={{ display: "flex", gap: 18, marginTop: 10, fontSize: 12, flexWrap: "wrap" }}>
-              <span style={{ display: "flex", alignItems: "center", gap: 7 }}><span style={{ width: 18, borderTop: "2px solid var(--excellent)" }} /><span className="muted">in</span></span>
-              <span style={{ display: "flex", alignItems: "center", gap: 7 }}><span style={{ width: 18, borderTop: "2px dashed var(--poor)" }} /><span className="muted">out</span></span>
-              <span style={{ display: "flex", alignItems: "center", gap: 7 }}><span style={{ width: 18, borderTop: "2px solid #94a3b8" }} /><span className="muted">not calibrated</span></span>
+              <span style={{ display: "flex", alignItems: "center", gap: 7 }}><span style={{ width: 11, height: 11, borderRadius: "50%", background: "var(--excellent)" }} /><span className="muted">landed in</span></span>
+              <span style={{ display: "flex", alignItems: "center", gap: 7 }}><span style={{ width: 11, height: 11, borderRadius: "50%", background: "var(--poor)" }} /><span className="muted">landed out</span></span>
+              <span style={{ display: "flex", alignItems: "center", gap: 7 }}><span style={{ width: 11, height: 11, borderRadius: "50%", background: "#94a3b8" }} /><span className="muted">not calibrated</span></span>
             </div>
             <p className="dim" style={{ fontSize: 11, marginTop: 8, lineHeight: 1.5 }}>
               Detector: <b>{track.detector === "roboflow" ? "Roboflow trained model" : "color (blob)"}</b>.{" "}
-              {track.calibrated ? "In/out uses your court calibration. " : "Calibrate the court for accurate in/out. "}
-              Arc heights are physics-estimated — a single camera can&apos;t measure true 3D.
+              Each <b>dot</b> is roughly where a rally&apos;s ball was most on-court (its in/out landing); faint lines trace ball flight.{" "}
+              {track.calibrated
+                ? "At this detection rate it's an approximate read, not a line judge."
+                : "Calibrate the court for in/out."}
             </p>
           </div>
         )}

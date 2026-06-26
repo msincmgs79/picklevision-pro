@@ -10,6 +10,14 @@ function colorFor(io?: string | null) {
   return io === "in" ? "var(--excellent)" : io === "out" ? "var(--poor)" : "#94a3b8";
 }
 
+// How far (ft) a point lies outside the 20x44 court; 0 if inside. The smallest
+// value in a rally is its most-grounded point — the meaningful in/out landing.
+function distOutside(p: TrajPoint): number {
+  const dx = Math.max(0, 0 - p.courtX, p.courtX - 20);
+  const dy = Math.max(0, 0 - p.courtY, p.courtY - 44);
+  return Math.hypot(dx, dy);
+}
+
 // Synthesized arc height (we don't measure true Z) — parabola scaled by shot length.
 function heights(pts: TrajPoint[]): number[] {
   let L = 0;
@@ -112,19 +120,34 @@ export default function TrajectoryMap3D({
     <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ maxWidth: W, background: "transparent" }}>
       {court}
       {trajectories.map((tr, ti) => {
-        const hs = heights(tr.points);
-        const pathPts = tr.points.map((pt, i) => {
+        if (!tr.points.length) return null;
+        const col = colorFor(tr.inOut);
+        // Faint flight backdrop: clip the wilder airborne points so the path
+        // doesn't sprawl across the whole frame.
+        const near = tr.points.filter((p) => distOutside(p) <= 8);
+        const hs = heights(near);
+        const pathPts = near.map((pt, i) => {
           if (view === "top") return (proj as any)(pt.courtX, pt.courtY);
           if (view === "side") return (proj as any)(pt.courtY, hs[i]);
           return (proj as any)(pt.courtX, pt.courtY, hs[i]);
         });
         const d = pathPts.map((q, i) => `${i === 0 ? "M" : "L"} ${q[0].toFixed(1)} ${q[1].toFixed(1)}`).join(" ");
-        const col = colorFor(tr.inOut);
-        const end = pathPts[pathPts.length - 1];
+        // Landing = the most-grounded point (least outside the court). Drawn on
+        // the floor (height 0) as the prominent, readable in/out marker.
+        let landing = tr.points[0];
+        for (const p of tr.points) if (distOutside(p) < distOutside(landing)) landing = p;
+        const lp =
+          view === "top"
+            ? (proj as any)(landing.courtX, landing.courtY)
+            : view === "side"
+            ? (proj as any)(landing.courtY, 0)
+            : (proj as any)(landing.courtX, landing.courtY, 0);
         return (
-          <g key={ti} opacity={0.85}>
-            <path d={d} fill="none" stroke={col} strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" strokeDasharray={tr.inOut === "out" ? "6 4" : undefined} />
-            {end && <circle cx={end[0]} cy={end[1]} r={2.6} fill={col} />}
+          <g key={ti}>
+            {pathPts.length > 1 && (
+              <path d={d} fill="none" stroke={col} strokeWidth={1} opacity={0.16} strokeLinecap="round" strokeLinejoin="round" />
+            )}
+            <circle cx={lp[0]} cy={lp[1]} r={3.4} fill={col} opacity={0.95} stroke="#0a0e1a" strokeWidth={0.8} />
           </g>
         );
       })}
