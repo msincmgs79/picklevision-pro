@@ -10,9 +10,11 @@ import {
   inferEndpointPublic,
   shotEndpointPublic,
   trackEndpointPublic,
+  playersEndpointPublic,
   type InferenceResult,
   type ShotAnalysisResult,
   type TrackResult,
+  type PlayerCoverage,
 } from "../lib/analysis";
 import TrajectoryMap3D from "./TrajectoryMap3D";
 import { enablePush, isPushEnabled, notify, pushSupported } from "../lib/push";
@@ -62,9 +64,12 @@ export default function MatchPlayer({
   const [track, setTrack] = useState<TrackResult | null>(null);
   const [trackError, setTrackError] = useState<string | null>(null);
   const [trackView, setTrackView] = useState<"3d" | "top" | "side">("top");
+  const [players, setPlayers] = useState<PlayerCoverage | null>(null);
+  const [playersBusy, setPlayersBusy] = useState(false);
+  const [playersErr, setPlayersErr] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<"insights" | "shots" | "trajectories" | "rallies" | "bookmarks">("insights");
+  const [activeTab, setActiveTab] = useState<"insights" | "shots" | "trajectories" | "rallies" | "players" | "bookmarks">("insights");
   const [editing, setEditing] = useState(false);
   const [metaTitle, setMetaTitle] = useState(match.title || "");
   const [metaTeam, setMetaTeam] = useState(match.team || "");
@@ -81,6 +86,8 @@ export default function MatchPlayer({
     try {
       const cached = localStorage.getItem(`pv_track_${match.id}`);
       if (cached) setTrack(JSON.parse(cached));
+      const pc = localStorage.getItem(`pv_players_${match.id}`);
+      if (pc) setPlayers(JSON.parse(pc));
     } catch {}
   }, [match.id]);
 
@@ -336,6 +343,32 @@ export default function MatchPlayer({
     }
   }
 
+  async function runPlayers() {
+    setPlayersBusy(true);
+    setPlayersErr(null);
+    try {
+      const endpoint = playersEndpointPublic();
+      if (!endpoint) throw new Error("Player tracking service URL is not configured.");
+      if (!match.video_path) throw new Error("This match has no uploaded video.");
+      if (corners.length !== 4) throw new Error("Calibrate the court first — player coverage needs the 4 court corners.");
+      const videoUrl = await clientReadUrl(supabase, match.video_path, 900);
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ videoUrl, corners }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.detail || data?.error || `Player tracking failed (${res.status}).`);
+      setPlayers(data);
+      try { localStorage.setItem(`pv_players_${match.id}`, JSON.stringify(data)); } catch {}
+      if (pushOn) notify("Player coverage ready 🏃", "Your court-coverage map is ready to view.", `/matches/${match.id}`);
+    } catch (e: any) {
+      setPlayersErr(e?.message || "Player tracking failed.");
+    } finally {
+      setPlayersBusy(false);
+    }
+  }
+
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12 }}>
@@ -522,7 +555,7 @@ export default function MatchPlayer({
       )}
 
       <div className="tabs" style={{ marginTop: 18, display: "inline-flex", flexWrap: "wrap" }}>
-        {([["insights", "Insights"], ["shots", "Shots"], ["trajectories", "Trajectories"], ["rallies", "Rallies"], ["bookmarks", "Bookmarks"]] as const).map(([k, label]) => (
+        {([["insights", "Insights"], ["shots", "Shots"], ["trajectories", "Trajectories"], ["rallies", "Rallies"], ["players", "Players"], ["bookmarks", "Bookmarks"]] as const).map(([k, label]) => (
           <button key={k} className={"tab" + (activeTab === k ? " active" : "")} onClick={() => setActiveTab(k)}>{label}</button>
         ))}
       </div>
@@ -809,6 +842,53 @@ export default function MatchPlayer({
           </div>
         )}
 
+        {activeTab === "players" && (
+          <div className="card" style={{ borderColor: "rgba(163,230,53,0.35)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
+              <div>
+                <div className="section-title">Player court coverage</div>
+                <div className="muted" style={{ fontSize: 13, marginTop: 2 }}>
+                  Where players moved on the court, from AI person detection. Needs court calibration (~1–2 min, uses Roboflow credits; result is saved).
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                <span className="badge badge-average" style={{ fontSize: 11 }}>beta</span>
+                <button className="btn btn-primary btn-sm" onClick={runPlayers} disabled={playersBusy || !videoUrl} style={{ opacity: playersBusy || !videoUrl ? 0.6 : 1 }}>
+                  {playersBusy ? "Tracking players…" : players ? "↻ Re-run" : "▶ Track players"}
+                </button>
+              </div>
+            </div>
+            {playersBusy && (
+              <div className="muted" style={{ marginTop: 10, fontSize: 13 }}>
+                <span className="ball-spin" style={{ marginRight: 8 }} />
+                Detecting and mapping players… this can take ~1–2 minutes.
+              </div>
+            )}
+            {playersErr && <div style={{ marginTop: 10, fontSize: 13, color: "var(--poor)" }}>{playersErr}</div>}
+            {players && (
+              <div style={{ marginTop: 14 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, marginBottom: 12 }}>
+                  <Metric label="Player positions" value={String(players.detections)} />
+                  <Metric label="Near side · at net" value={`${players.near.netPct}%`} />
+                  <Metric label="Far side · at net" value={`${players.far.netPct}%`} />
+                </div>
+                <div className="dim" style={{ fontSize: 11.5, margin: "4px 0 6px" }}>Court coverage — where players spent time</div>
+                <CourtCoverage grid={players.grid} gw={players.gw} gh={players.gh} />
+                <p className="dim" style={{ fontSize: 11, marginTop: 8, lineHeight: 1.5 }}>
+                  Brighter = more time there. &quot;At net&quot; = share of a side&apos;s positions inside the kitchen (NVZ). Near/far is inferred from on-screen size. Per-individual tracking (distance, speed) is a later step.
+                </p>
+              </div>
+            )}
+            {!players && !playersBusy && (
+              <div className="muted" style={{ marginTop: 12, fontSize: 13 }}>
+                {corners.length === 4
+                  ? "Tap “Track players” to map court coverage."
+                  : "Calibrate the court first (the ⊹ Calibrate button on the video), then track players."}
+              </div>
+            )}
+          </div>
+        )}
+
         {activeTab === "rallies" && (
           <div className="card">
             <div className="section-title">Rallies &amp; highlights</div>
@@ -918,6 +998,41 @@ function CourtScatter({
       {detections.length === 0 && (
         <text x={w / 2} y={h / 2} textAnchor="middle" fontSize={11} fill="var(--text-dim)">No balls detected</text>
       )}
+    </svg>
+  );
+}
+
+// Top-down court heatmap of where players spent time (foot-position density).
+function CourtCoverage({ grid, gw, gh }: { grid: number[][]; gw: number; gh: number }) {
+  const w = 220;
+  const h = 380;
+  const m = 14;
+  const cw = (w - m * 2) / gw;
+  const ch = (h - m * 2) / gh;
+  const span = h - m * 2;
+  let max = 1;
+  for (const row of grid) for (const v of row) if (v > max) max = v;
+  return (
+    <svg viewBox={`0 0 ${w} ${h}`} width="100%" style={{ maxWidth: w }}>
+      <rect x={m} y={m} width={w - m * 2} height={span} fill="#0d1830" stroke="rgba(255,255,255,0.5)" strokeWidth={2} />
+      {grid.map((row, gy) =>
+        row.map((v, gx) =>
+          v ? (
+            <rect
+              key={`${gx}-${gy}`}
+              x={m + gx * cw}
+              y={m + gy * ch}
+              width={cw + 0.6}
+              height={ch + 0.6}
+              fill="var(--primary)"
+              opacity={0.12 + 0.78 * (v / max)}
+            />
+          ) : null
+        )
+      )}
+      <line x1={m} y1={h / 2} x2={w - m} y2={h / 2} stroke="#fff" strokeWidth={2} />
+      <line x1={m} y1={m + (15 / 44) * span} x2={w - m} y2={m + (15 / 44) * span} stroke="rgba(255,255,255,0.4)" strokeDasharray="5 4" />
+      <line x1={m} y1={m + (29 / 44) * span} x2={w - m} y2={m + (29 / 44) * span} stroke="rgba(255,255,255,0.4)" strokeDasharray="5 4" />
     </svg>
   );
 }

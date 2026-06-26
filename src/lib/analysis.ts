@@ -149,3 +149,27 @@ export function trackEndpointPublic(): string | null {
   const b = baseUrl(process.env.NEXT_PUBLIC_RAILWAY_INFERENCE_URL || "");
   return b ? `${b}/track` : null;
 }
+
+export function playersEndpointPublic(): string | null {
+  const b = baseUrl(process.env.NEXT_PUBLIC_RAILWAY_INFERENCE_URL || "");
+  return b ? `${b}/players` : null;
+}
+
+// Player court-coverage (Phase A): per-side net presence + a coverage heatmap grid.
+export interface CoverageSide {
+  samples: number;
+  netPct: number; // % of this side's detections within the kitchen (NVZ)
+  avgNetDist: number; // avg ft from the net
+}
+export interface PlayerCoverage {
+  success: boolean;
+  framesScanned: number;
+  detections: number;
+  grid: number[][]; // gh rows x gw cols, foot-position counts
+  gw: number;
+  gh: number;
+  near: CoverageSide;
+  far: CoverageSide;
+  netPct: number;
+  detector: string;
+}
