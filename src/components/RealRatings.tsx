@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { RadarChart, HBars, RatingTrend } from "./charts";
 import MatchSwitcher from "./MatchSwitcher";
+import ShareButton from "./ShareButton";
 import type { LatestAnalysis, RatingsRollup } from "../lib/analysis";
 
 export default function RealRatings({ real, rollup }: { real: LatestAnalysis; rollup?: RatingsRollup | null }) {
@@ -18,6 +19,7 @@ export default function RealRatings({ real, rollup }: { real: LatestAnalysis; ro
     { label: "Consistency", value: num(a.ratings?.consistency) },
   ];
   const overall = ratingData.reduce((s, r) => s + r.value, 0) / ratingData.length;
+  const topSkill = ratingData.reduce((b, r) => (r.value > b.value ? r : b), ratingData[0]);
   const exportText = buildExport(real);
 
   async function copyExport() {
@@ -46,6 +48,18 @@ export default function RealRatings({ real, rollup }: { real: LatestAnalysis; ro
         </div>
         <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
           <MatchSwitcher current={real.matchId} />
+          <ShareButton
+            className="btn btn-sm btn-primary"
+            data={{
+              title: real.title,
+              teams: `${real.team} vs ${real.opponent}`,
+              careerRating: rollup?.overall ?? null,
+              matchRating: overall,
+              topSkill: topSkill ? { label: topSkill.label, value: topSkill.value } : null,
+              coachTip: a.coachTip || null,
+              date: real.recordedAt,
+            }}
+          />
           <Link href={`/matches/${real.matchId}`} className="btn btn-sm btn-ghost">Open match →</Link>
         </div>
       </div>
