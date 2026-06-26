@@ -18,18 +18,34 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "R2 storage is not enabled." }, { status: 400 });
   }
 
-  const { r2Configured, r2PresignGet, r2PresignPut, r2Delete } = await import("../../../lib/storage/r2");
+  const {
+    r2Configured,
+    r2PresignGet,
+    r2PresignPut,
+    r2Delete,
+    r2CreateMultipart,
+    r2PresignUploadPart,
+    r2CompleteMultipart,
+    r2AbortMultipart,
+  } = await import("../../../lib/storage/r2");
   if (!r2Configured) {
     return NextResponse.json({ error: "R2 storage is not configured." }, { status: 503 });
   }
 
-  let body: { op?: string; path?: string; contentType?: string };
+  let body: {
+    op?: string;
+    path?: string;
+    contentType?: string;
+    uploadId?: string;
+    partNumber?: number;
+    parts?: { PartNumber: number; ETag: string }[];
+  };
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ error: "Invalid request body." }, { status: 400 });
   }
-  const { op, path, contentType } = body;
+  const { op, path, contentType, uploadId, partNumber, parts } = body;
   if (!op || !path) return NextResponse.json({ error: "op and path are required." }, { status: 400 });
 
   const supabase = createClient();
@@ -54,6 +70,25 @@ export async function POST(req: Request) {
     }
     if (op === "delete") {
       await r2Delete(path);
+      return NextResponse.json({ ok: true });
+    }
+    if (op === "create-multipart") {
+      return NextResponse.json({ uploadId: await r2CreateMultipart(path, contentType || "video/mp4") });
+    }
+    if (op === "sign-part") {
+      if (!uploadId || !partNumber)
+        return NextResponse.json({ error: "uploadId and partNumber are required." }, { status: 400 });
+      return NextResponse.json({ url: await r2PresignUploadPart(path, uploadId, partNumber) });
+    }
+    if (op === "complete-multipart") {
+      if (!uploadId || !parts?.length)
+        return NextResponse.json({ error: "uploadId and parts are required." }, { status: 400 });
+      await r2CompleteMultipart(path, uploadId, parts);
+      return NextResponse.json({ ok: true });
+    }
+    if (op === "abort-multipart") {
+      if (!uploadId) return NextResponse.json({ error: "uploadId is required." }, { status: 400 });
+      await r2AbortMultipart(path, uploadId);
       return NextResponse.json({ ok: true });
     }
     return NextResponse.json({ error: "Unknown op." }, { status: 400 });

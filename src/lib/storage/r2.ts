@@ -6,6 +6,10 @@ import {
   GetObjectCommand,
   PutObjectCommand,
   DeleteObjectCommand,
+  CreateMultipartUploadCommand,
+  UploadPartCommand,
+  CompleteMultipartUploadCommand,
+  AbortMultipartUploadCommand,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
@@ -55,4 +59,51 @@ export function r2PresignPut(key: string, contentType: string, expiresIn = 3600)
 
 export async function r2Delete(key: string): Promise<void> {
   await client().send(new DeleteObjectCommand({ Bucket: BUCKET, Key: key }));
+}
+
+// ---- Multipart upload (for large videos) ----
+// A single PUT of a 100 MB+ file is fragile — one connection blip kills the
+// whole transfer. Multipart splits it into small, independently-retryable
+// parts, which the browser uploads via per-part presigned URLs.
+
+export async function r2CreateMultipart(key: string, contentType: string): Promise<string> {
+  const out = await client().send(
+    new CreateMultipartUploadCommand({ Bucket: BUCKET, Key: key, ContentType: contentType })
+  );
+  if (!out.UploadId) throw new Error("R2 did not return an upload id.");
+  return out.UploadId;
+}
+
+export function r2PresignUploadPart(
+  key: string,
+  uploadId: string,
+  partNumber: number,
+  expiresIn = 3600
+): Promise<string> {
+  return getSignedUrl(
+    client(),
+    new UploadPartCommand({ Bucket: BUCKET, Key: key, UploadId: uploadId, PartNumber: partNumber }),
+    { expiresIn }
+  );
+}
+
+export async function r2CompleteMultipart(
+  key: string,
+  uploadId: string,
+  parts: { PartNumber: number; ETag: string }[]
+): Promise<void> {
+  await client().send(
+    new CompleteMultipartUploadCommand({
+      Bucket: BUCKET,
+      Key: key,
+      UploadId: uploadId,
+      MultipartUpload: { Parts: parts },
+    })
+  );
+}
+
+export async function r2AbortMultipart(key: string, uploadId: string): Promise<void> {
+  await client().send(
+    new AbortMultipartUploadCommand({ Bucket: BUCKET, Key: key, UploadId: uploadId })
+  );
 }

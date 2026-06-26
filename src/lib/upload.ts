@@ -17,32 +17,89 @@ export async function uploadVideo(
   return resumableUpload(supabase, file, path, onProgress);
 }
 
-// Presigned single-PUT to R2. The presigned URL is fetched from /api/storage,
-// which signs it for the file's content-type — we must send the same type.
-async function r2Upload(file: File, path: string, onProgress: (pct: number) => void): Promise<void> {
-  const contentType = file.type || "video/mp4";
+const PART_SIZE = 10 * 1024 * 1024; // 10 MB parts
+const PART_RETRIES = 3;
+
+async function storageApi(body: Record<string, unknown>): Promise<any> {
   const res = await fetch("/api/storage", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ op: "put", path, contentType }),
+    body: JSON.stringify(body),
   });
   const json = await res.json().catch(() => ({}));
-  if (!res.ok || !json?.url) throw new Error(json?.error || "Could not start the upload.");
+  if (!res.ok) throw new Error(json?.error || "Storage request failed.");
+  return json;
+}
 
-  await new Promise<void>((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    xhr.open("PUT", json.url);
-    xhr.setRequestHeader("Content-Type", contentType);
-    xhr.upload.onprogress = (e) => {
-      if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100));
-    };
-    xhr.onload = () =>
-      xhr.status >= 200 && xhr.status < 300
-        ? resolve()
-        : reject(new Error(`Upload failed (${xhr.status}).`));
-    xhr.onerror = () => reject(new Error("Network error during upload."));
-    xhr.send(file);
-  });
+// Chunked multipart upload to R2. Each part is a small, independently-retryable
+// presigned PUT, so a single network blip no longer dooms a 100 MB+ transfer
+// (a single one-shot PUT of a large file silently drops mid-stream).
+async function r2Upload(file: File, path: string, onProgress: (pct: number) => void): Promise<void> {
+  const contentType = file.type || "video/mp4";
+  const { uploadId } = await storageApi({ op: "create-multipart", path, contentType });
+  if (!uploadId) throw new Error("Could not start the upload.");
+
+  const total = file.size;
+  const partCount = Math.max(1, Math.ceil(total / PART_SIZE));
+  const parts: { PartNumber: number; ETag: string }[] = [];
+  let uploadedBytes = 0;
+
+  try {
+    for (let i = 0; i < partCount; i++) {
+      const start = i * PART_SIZE;
+      const end = Math.min(start + PART_SIZE, total);
+      const chunk = file.slice(start, end);
+      const partNumber = i + 1;
+      const { url } = await storageApi({ op: "sign-part", path, uploadId, partNumber });
+      const etag = await putPart(url, chunk, (sent) =>
+        onProgress(Math.min(99, Math.round(((uploadedBytes + sent) / total) * 100)))
+      );
+      uploadedBytes += end - start;
+      onProgress(Math.min(99, Math.round((uploadedBytes / total) * 100)));
+      parts.push({ PartNumber: partNumber, ETag: etag });
+    }
+    await storageApi({ op: "complete-multipart", path, uploadId, parts });
+    onProgress(100);
+  } catch (err) {
+    // Best-effort cleanup so abandoned parts don't linger.
+    try { await storageApi({ op: "abort-multipart", path, uploadId }); } catch {}
+    throw err;
+  }
+}
+
+// PUT one part and return its ETag (required to complete the upload). Retries a
+// few times on transient network failures before giving up.
+async function putPart(
+  url: string,
+  chunk: Blob,
+  onPartProgress: (sent: number) => void,
+  attempt = 0
+): Promise<string> {
+  try {
+    return await new Promise<string>((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open("PUT", url);
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) onPartProgress(e.loaded);
+      };
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          const etag = xhr.getResponseHeader("ETag");
+          etag ? resolve(etag) : reject(new Error("Upload part missing ETag."));
+        } else {
+          reject(new Error(`Upload failed (${xhr.status}).`));
+        }
+      };
+      xhr.onerror = () => reject(new Error("Network error during upload."));
+      xhr.send(chunk);
+    });
+  } catch (err) {
+    if (attempt < PART_RETRIES) {
+      await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)));
+      return putPart(url, chunk, onPartProgress, attempt + 1);
+    }
+    throw err;
+  }
 }
 
 // Resumable (TUS) upload to Supabase Storage. Auto-retries dropped chunks and
