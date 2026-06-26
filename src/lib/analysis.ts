@@ -92,6 +92,32 @@ export interface ReviewData extends LatestAnalysis {
   bookmarks: ReviewBookmark[];
 }
 
+export interface SkillRatings {
+  serve: number;
+  return: number;
+  offense: number;
+  defense: number;
+  consistency: number;
+}
+
+// One analyzed game's rating, for the career rollup + trend.
+export interface RatedGame {
+  matchId: string;
+  title: string;
+  date: string | null; // recorded_at, else created_at
+  overall: number; // mean of the 5 skill ratings for this game
+  ratings: SkillRatings;
+}
+
+// Player's rating across all analyzed games. `overall`/`ratings` are
+// recency-weighted (newer games count more); `games` is oldest -> newest.
+export interface RatingsRollup {
+  overall: number;
+  ratings: SkillRatings;
+  games: RatedGame[];
+  count: number;
+}
+
 // Base URL of the Railway service, with any trailing slash or /infer stripped.
 function baseUrl(raw: string): string | null {
   const b = raw.trim().replace(/\/+$/, "").replace(/\/infer$/, "");

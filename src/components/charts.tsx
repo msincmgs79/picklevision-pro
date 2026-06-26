@@ -336,3 +336,39 @@ export function HBars({
     </div>
   );
 }
+
+// Rating-over-time line chart for the career trend (y fixed to the DUPR 2-8 band).
+export function RatingTrend({ points }: { points: { label: string; value: number }[] }) {
+  const W = 640;
+  const H = 150;
+  const padL = 26;
+  const padR = 12;
+  const padT = 12;
+  const padB = 22;
+  const lo = 2;
+  const hi = 8;
+  const n = points.length;
+  const x = (i: number) =>
+    padL + (n <= 1 ? (W - padL - padR) / 2 : (i / (n - 1)) * (W - padL - padR));
+  const y = (v: number) =>
+    padT + (1 - (Math.max(lo, Math.min(hi, v)) - lo) / (hi - lo)) * (H - padT - padB);
+  const line = points
+    .map((p, i) => `${i === 0 ? "M" : "L"} ${x(i).toFixed(1)} ${y(p.value).toFixed(1)}`)
+    .join(" ");
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ maxWidth: "100%" }}>
+      {[2, 4, 6, 8].map((g) => (
+        <g key={g}>
+          <line x1={padL} y1={y(g)} x2={W - padR} y2={y(g)} stroke="rgba(255,255,255,0.08)" strokeWidth={1} />
+          <text x={padL - 5} y={y(g) + 3} textAnchor="end" fontSize={9} fill="var(--text-dim)">{g}</text>
+        </g>
+      ))}
+      {n > 1 && (
+        <path d={line} fill="none" stroke="var(--primary)" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+      )}
+      {points.map((p, i) => (
+        <circle key={i} cx={x(i)} cy={y(p.value)} r={3.5} fill="var(--primary)" stroke="#0a0e1a" strokeWidth={1} />
+      ))}
+    </svg>
+  );
+}

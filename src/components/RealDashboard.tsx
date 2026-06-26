@@ -1,9 +1,9 @@
 import Link from "next/link";
 import { HBars } from "./charts";
 import MatchSwitcher from "./MatchSwitcher";
-import type { LatestAnalysis } from "../lib/analysis";
+import type { LatestAnalysis, RatingsRollup } from "../lib/analysis";
 
-export default function RealDashboard({ real }: { real: LatestAnalysis }) {
+export default function RealDashboard({ real, rollup }: { real: LatestAnalysis; rollup?: RatingsRollup | null }) {
   const a = real.shot?.analysis;
   const ratings = a
     ? [
@@ -33,7 +33,17 @@ export default function RealDashboard({ real }: { real: LatestAnalysis }) {
 
       {/* real stat tiles */}
       <div className="grid" style={{ gridTemplateColumns: "repeat(4, 1fr)", marginTop: 26 }}>
-        <Stat label="Overall Rating" value={overall != null ? overall.toFixed(1) : "—"} sub={a ? "AI estimate · DUPR scale" : "run shot breakdown"} />
+        <Stat
+          label="Overall Rating"
+          value={rollup ? rollup.overall.toFixed(1) : overall != null ? overall.toFixed(1) : "—"}
+          sub={
+            rollup
+              ? `career avg · ${rollup.count} game${rollup.count === 1 ? "" : "s"}`
+              : a
+              ? "AI estimate · DUPR scale"
+              : "run shot breakdown"
+          }
+        />
         <Stat label="Ball Positions" value={real.ball ? String(real.ball.detectionsFound) : "—"} sub={real.ball ? "detected on court" : "run ball detection"} />
         <Stat label="Footage Analyzed" value={real.ball ? `${Math.round(real.ball.duration)}s` : "—"} sub={real.ball ? `${real.ball.totalFrames} frames` : ""} />
         <Stat label="Shots Observed" value={a ? String(a.shotsObserved?.length ?? 0) : "—"} sub={a ? "by AI from keyframes" : ""} />

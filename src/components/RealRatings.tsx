@@ -2,11 +2,11 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { RadarChart, HBars } from "./charts";
+import { RadarChart, HBars, RatingTrend } from "./charts";
 import MatchSwitcher from "./MatchSwitcher";
-import type { LatestAnalysis } from "../lib/analysis";
+import type { LatestAnalysis, RatingsRollup } from "../lib/analysis";
 
-export default function RealRatings({ real }: { real: LatestAnalysis }) {
+export default function RealRatings({ real, rollup }: { real: LatestAnalysis; rollup?: RatingsRollup | null }) {
   const [copied, setCopied] = useState(false);
   const a = real.shot!.analysis;
 
@@ -50,7 +50,47 @@ export default function RealRatings({ real }: { real: LatestAnalysis }) {
         </div>
       </div>
 
-      <div className="grid" style={{ gridTemplateColumns: "1fr 1fr", marginTop: 22, alignItems: "start" }}>
+      {/* career rating across all analyzed games (recency-weighted) */}
+      {rollup && rollup.count > 0 && (
+        <div className="card" style={{ marginTop: 22 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12 }}>
+            <div>
+              <div className="section-title">Career rating</div>
+              <div className="dim" style={{ fontSize: 11.5, marginTop: 2 }}>
+                Recency-weighted across {rollup.count} analyzed game{rollup.count === 1 ? "" : "s"} · DUPR scale
+              </div>
+            </div>
+            <div style={{ textAlign: "right" }}>
+              <div style={{ fontSize: 34, fontWeight: 800, color: "var(--primary)", lineHeight: 1 }}>{rollup.overall.toFixed(1)}</div>
+              <div className="dim" style={{ fontSize: 11.5 }}>AI DUPR est.</div>
+            </div>
+          </div>
+          {rollup.count >= 2 ? (
+            <div style={{ marginTop: 14 }}>
+              <RatingTrend points={rollup.games.map((g) => ({ label: g.date || g.title, value: g.overall }))} />
+            </div>
+          ) : (
+            <p className="dim" style={{ fontSize: 12, marginTop: 10 }}>Analyze another game to start your trend line.</p>
+          )}
+          <div style={{ marginTop: 10 }}>
+            {rollup.games.slice().reverse().map((g) => (
+              <Link
+                key={g.matchId}
+                href={`/ratings?match=${g.matchId}`}
+                style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "9px 4px", borderTop: "1px solid var(--border)", fontSize: 13, textDecoration: "none", color: "inherit" }}
+              >
+                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginRight: 12 }}>
+                  {g.matchId === real.matchId && <span style={{ color: "var(--primary)", marginRight: 6 }}>●</span>}
+                  {g.title}{g.date ? ` · ${g.date}` : ""}
+                </span>
+                <b style={{ color: "var(--primary)" }}>{g.overall.toFixed(1)}</b>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="grid" style={{ gridTemplateColumns: "1fr 1fr", marginTop: 18, alignItems: "start" }}>
         {/* radar */}
         <div className="card" style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
           <div style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -60,7 +100,7 @@ export default function RealRatings({ real }: { real: LatestAnalysis }) {
             </div>
             <div style={{ textAlign: "right" }}>
               <div style={{ fontSize: 30, fontWeight: 800, color: "var(--primary)", lineHeight: 1 }}>{overall.toFixed(1)}</div>
-              <div className="dim" style={{ fontSize: 11.5 }}>AI DUPR est.</div>
+              <div className="dim" style={{ fontSize: 11.5 }}>this match</div>
             </div>
           </div>
           <RadarChart data={ratingData} max={8} />
@@ -124,8 +164,8 @@ export default function RealRatings({ real }: { real: LatestAnalysis }) {
           <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
             <div className="stat" style={{ minWidth: 150 }}>
               <div className="stat-label">AI estimate</div>
-              <div className="stat-value" style={{ fontSize: 24 }}>{overall.toFixed(1)}</div>
-              <div className="dim" style={{ fontSize: 11 }}>DUPR scale · not official</div>
+              <div className="stat-value" style={{ fontSize: 24 }}>{(rollup?.overall ?? overall).toFixed(1)}</div>
+              <div className="dim" style={{ fontSize: 11 }}>{rollup && rollup.count > 1 ? `career avg · ${rollup.count} games` : "DUPR scale · not official"}</div>
             </div>
             <a className="btn btn-indigo btn-sm" href="https://dupr.com" target="_blank" rel="noreferrer">Open DUPR ↗</a>
           </div>
