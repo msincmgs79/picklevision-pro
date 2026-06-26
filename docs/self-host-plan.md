@@ -42,8 +42,9 @@ Browser → Vercel → Railway /track,/players,/infer  (samples frames, unchange
 ```
 
 ## Build steps (when triggered)
-1. **Owner:** create a Modal account, `pip install modal`, `modal token new` to get
-   a token. (Modal gives monthly free credits to start.)
+1. **Owner:** ✅ Modal account created (`mgsinclair1979` — apps:
+   https://modal.com/apps/mgsinclair1979/main). When building: `pip install modal`,
+   `modal token new` to get a token. (Modal gives monthly free credits to start.)
 2. **Get model weights:** export the trained `picklevision-pro/2` (RF-DETR) weights
    from Roboflow (Roboflow lets you download model weights / use the `inference`
    package with a key). For players, bundle a standard COCO model (person class).
