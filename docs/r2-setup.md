@@ -94,9 +94,21 @@ vars you must redeploy: Vercel → **Deployments → ⋯ on the latest → Redep
 - **To roll back:** remove `NEXT_PUBLIC_STORAGE_BACKEND` (or set it to
   `supabase`) and redeploy — instantly back on Supabase.
 
-## Known limitation (fine for now)
+## How uploads work
 
-R2 uploads use a single presigned PUT (supports files up to 5 GB), so a dropped
-connection restarts the upload rather than resuming mid-file. The resumable
-(chunked) path still exists for Supabase. If resumable R2 uploads become
-important, the upgrade is S3 multipart — a follow-up, not needed to go live.
+R2 uploads use **S3 multipart**: the browser splits the file into 10 MB parts,
+each uploaded via its own short-lived presigned PUT (with automatic retry), then
+the parts are stitched together server-side. This is robust for large videos — a
+single 100 MB+ PUT silently dropped mid-stream, which multipart avoids.
+
+## Troubleshooting (things we hit, and the fixes — for future reference)
+
+- **`Network error during upload` / `Maximum size exceeded (413)`** before R2 was
+  on → the old Supabase 50 MB cap. Gone once `NEXT_PUBLIC_STORAGE_BACKEND=r2`.
+- **`Credential access key has length 64, should be 32`** → the two R2 keys were
+  **swapped** in Vercel. `R2_ACCESS_KEY_ID` is the **32-char** Access Key ID;
+  `R2_SECRET_ACCESS_KEY` is the **64-char** Secret. Go by length.
+- **`Network error` that climbs to a % then fails** with valid keys → the AWS SDK
+  was injecting checksum headers into presigned PUTs (fixed in `r2.ts` via
+  `requestChecksumCalculation: "WHEN_REQUIRED"`).
+- **Env var changes don't take effect** until you **redeploy**.
