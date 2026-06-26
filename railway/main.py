@@ -360,6 +360,79 @@ def roboflow_infer_safe(frame):
         return None
 
 
+def person_infer(frame):
+    """Detect every PERSON in the frame with a COCO model. Returns each player's
+    foot point (bottom-centre of the box, which sits on the court) + box height
+    (used later to tell the near side from the far side)."""
+    ok, buf = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), 70])
+    b64 = base64.b64encode(buf.tobytes()).decode("ascii")
+    url = f"https://detect.roboflow.com/{ROBOFLOW_PERSON_MODEL}?api_key={ROBOFLOW_API_KEY}"
+    r = requests.post(url, data=b64, headers={"Content-Type": "application/x-www-form-urlencoded"}, timeout=25)
+    if not r.ok:
+        raise HTTPException(status_code=502, detail=f"Roboflow person error {r.status_code}: {r.text[:200]}")
+    out = []
+    for p in r.json().get("predictions", []):
+        if str(p.get("class", "")).lower() != "person":
+            continue
+        if float(p.get("confidence", 0)) < PLAYERS_CONF_MIN:
+            continue
+        # Roboflow boxes: x,y = centre; width/height = full size. Foot = bottom-centre.
+        fx = float(p["x"])
+        fy = float(p["y"]) + float(p["height"]) / 2.0
+        out.append({"fx": fx, "fy": fy, "boxh": float(p["height"]), "conf": float(p["confidence"])})
+    return out
+
+
+def person_infer_safe(frame):
+    try:
+        return person_infer(frame)
+    except HTTPException:
+        raise
+    except Exception:
+        return []
+
+
+def track_players(video_path, H, target_fps, max_frames, workers=FULL_WORKERS):
+    """Memory-bounded sweep collecting every on-court player foot position, mapped
+    to court feet via the homography. Mirrors track_full's streaming (one batch in
+    RAM at a time)."""
+    cap = cv2.VideoCapture(video_path)
+    if not cap.isOpened():
+        raise ValueError("Cannot open video file")
+    fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
+    step = max(1, int(round(fps / max(0.1, target_fps))))
+    samples, scanned, idx, batch = [], 0, 0, []
+    bsize = max(1, workers * 3)
+
+    def flush():
+        if not batch:
+            return
+        with ThreadPoolExecutor(max_workers=workers) as ex:
+            results = list(ex.map(lambda tf: person_infer_safe(tf[1]), batch))
+        for (t, _frame), persons in zip(batch, results):
+            for p in persons:
+                q = cv2.perspectiveTransform(np.array([[[p["fx"], p["fy"]]]], dtype=np.float32), H)[0][0]
+                cx, cy = float(q[0]), float(q[1])
+                if _court_dist_outside(cx, cy) <= PLAYERS_OFFCOURT_MAX:
+                    samples.append({"t": t, "cx": cx, "cy": cy, "boxh": p["boxh"]})
+        batch.clear()
+
+    while scanned < max_frames:
+        if not cap.grab():
+            break
+        if idx % step == 0:
+            ok, frame = cap.retrieve()
+            if ok and frame is not None:
+                batch.append((cap.get(cv2.CAP_PROP_POS_MSEC) / 1000.0, frame))
+                scanned += 1
+                if len(batch) >= bsize:
+                    flush()
+        idx += 1
+    flush()
+    cap.release()
+    return samples, scanned
+
+
 def collect_window_frames(video_path, start_sec, window_sec,
                           target_fps=ROBOFLOW_TARGET_FPS, max_frames=ROBOFLOW_MAX_FRAMES):
     cap = cv2.VideoCapture(video_path)
@@ -468,6 +541,16 @@ def track_full(video_path, infer_fn, target_fps, max_frames, workers=FULL_WORKER
 INOUT_CONF_MIN = 0.20       # drop the weakest detections
 INOUT_OFFCOURT_MAX = 18.0   # ft beyond the lines past which a point is noise/airborne
 INOUT_MARGIN = 1.0          # ft line-call tolerance
+
+# Player tracking (Phase A): person detection via a public COCO model, feet mapped
+# to the court. Players' feet ARE on the ground, so the homography is accurate here
+# (unlike the airborne ball). Configurable so the COCO model/version can be swapped.
+ROBOFLOW_PERSON_MODEL = os.getenv("ROBOFLOW_PERSON_MODEL", "coco/50")  # Microsoft public COCO
+PLAYERS_MAX_FRAMES = 500
+PLAYERS_TARGET_FPS = 1.5
+PLAYERS_OFFCOURT_MAX = 7.0  # ft beyond lines kept as an on-court player (drops spectators/bench)
+PLAYERS_CONF_MIN = 0.35
+NVZ_FT = 7.0                # non-volley zone depth each side of the net (kitchen)
 
 
 def _court_dist_outside(cx: float, cy: float) -> float:
@@ -595,6 +678,91 @@ async def track(request: TrackRequest):
     except Exception as e:
         logger.error(f"[TRACK] FATAL: {type(e).__name__}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Tracking failed: {e}")
+    finally:
+        if video_path:
+            try:
+                os.remove(video_path)
+            except OSError:
+                pass
+
+
+class PlayersRequest(BaseModel):
+    videoUrl: str
+    corners: list | None = None
+
+
+@app.post("/players")
+async def players(request: PlayersRequest):
+    """Player court-coverage: detect people, map feet to court, drop off-court
+    bystanders, and summarise where players spent time (coverage heatmap + net
+    presence per side). Requires court calibration."""
+    if not request.videoUrl:
+        raise HTTPException(status_code=400, detail="videoUrl required")
+    if not request.corners or len(request.corners) != 4:
+        raise HTTPException(status_code=400, detail="Court calibration (4 corners) is required for player coverage.")
+    if not ROBOFLOW_API_KEY:
+        raise HTTPException(status_code=503, detail="Roboflow is not configured.")
+
+    video_path = None
+    try:
+        video_path = download_video(request.videoUrl)
+        try:
+            src = np.array(request.corners, dtype=np.float32)
+            dst = np.array([[0, 0], [20, 0], [20, 44], [0, 44]], dtype=np.float32)
+            H = cv2.getPerspectiveTransform(src, dst)
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Bad corners: {e}")
+
+        dur = video_duration(video_path)
+        t_fps = min(PLAYERS_TARGET_FPS, PLAYERS_MAX_FRAMES / max(1.0, dur))
+        samples, scanned = track_players(video_path, H, t_fps, PLAYERS_MAX_FRAMES)
+
+        # Coverage heatmap: court (20 wide x 44 long) binned into GW x GH cells.
+        GW, GH = 10, 22
+        grid = [[0] * GW for _ in range(GH)]
+        for s in samples:
+            gx = min(GW - 1, max(0, int(s["cx"] / 20.0 * GW)))
+            gy = min(GH - 1, max(0, int(s["cy"] / 44.0 * GH)))
+            grid[gy][gx] += 1
+
+        # Split by net (cy 22). Label which half is "near" by larger avg box height
+        # (players closer to the camera have bigger boxes).
+        side_lo = [s for s in samples if s["cy"] < 22]   # court Y 0..22
+        side_hi = [s for s in samples if s["cy"] >= 22]   # court Y 22..44
+        avg = lambda xs: (sum(xs) / len(xs)) if xs else 0.0
+        near_is_hi = avg([s["boxh"] for s in side_hi]) >= avg([s["boxh"] for s in side_lo])
+
+        def side_stats(side):
+            if not side:
+                return {"samples": 0, "netPct": 0, "avgNetDist": 0.0}
+            at_net = sum(1 for s in side if abs(s["cy"] - 22) <= NVZ_FT)
+            return {
+                "samples": len(side),
+                "netPct": round(100 * at_net / len(side)),
+                "avgNetDist": round(avg([abs(s["cy"] - 22) for s in side]), 1),
+            }
+
+        near = side_stats(side_hi if near_is_hi else side_lo)
+        far = side_stats(side_lo if near_is_hi else side_hi)
+        net_pct = round(100 * sum(1 for s in samples if abs(s["cy"] - 22) <= NVZ_FT) / len(samples)) if samples else 0
+
+        return {
+            "success": True,
+            "framesScanned": scanned,
+            "detections": len(samples),
+            "grid": grid,
+            "gw": GW,
+            "gh": GH,
+            "near": near,
+            "far": far,
+            "netPct": net_pct,
+            "detector": "roboflow-coco",
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"[PLAYERS] FATAL: {type(e).__name__}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Player tracking failed: {e}")
     finally:
         if video_path:
             try:
