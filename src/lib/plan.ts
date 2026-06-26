@@ -24,6 +24,20 @@ const FREE_DEFAULT: PlanState = {
   remaining: PLAN_LIMITS.free,
 };
 
+const ULTRA_DEFAULT: PlanState = {
+  plan: "ultra",
+  credits: 0,
+  videosUsed: 0,
+  limit: PLAN_LIMITS.ultra,
+  remaining: PLAN_LIMITS.ultra,
+};
+
+// TESTING: while billing/payments aren't live, treat signed-in accounts as Ultra
+// so testing isn't capped at the Free 1-video/month limit. Set to false (or run
+// supabase/profiles.sql so real per-user plans apply) before launch.
+const TESTING_FORCE_ULTRA = true;
+const FALLBACK: PlanState = TESTING_FORCE_ULTRA ? ULTRA_DEFAULT : FREE_DEFAULT;
+
 // Reads the signed-in user's plan/usage. Fails OPEN (returns a usable Free
 // state) if the profiles table isn't there yet or anything errors, so billing
 // rollout never blocks uploads before the schema/payments are wired.
@@ -37,7 +51,7 @@ export async function getPlanState(supabase: SupabaseClient): Promise<PlanState>
       .select("plan, credits, videos_used, period_start")
       .eq("id", user.id)
       .single();
-    if (error || !data) return FREE_DEFAULT;
+    if (error || !data) return FALLBACK;
 
     // If the billing period rolled over, monthly usage reads as 0.
     const periodStart = new Date(data.period_start);
@@ -50,7 +64,7 @@ export async function getPlanState(supabase: SupabaseClient): Promise<PlanState>
     const credits = data.credits || 0;
     return { plan, credits, videosUsed: used, limit, remaining: Math.max(0, limit - used) + credits };
   } catch {
-    return FREE_DEFAULT;
+    return FALLBACK;
   }
 }
 
