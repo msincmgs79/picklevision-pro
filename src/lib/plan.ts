@@ -79,3 +79,18 @@ export async function consumeVideo(supabase: SupabaseClient): Promise<"ok" | "de
     return "ok";
   }
 }
+
+// Spends one top-up credit for a re-run / extra analysis (the first run of each
+// analysis is included with the upload; re-runs cost a credit to protect margin).
+// Fails OPEN if the spend_credit RPC isn't deployed yet, so re-runs aren't
+// blocked before billing is live. Returns "denied" only when the RPC is live and
+// the user has no credits left.
+export async function spendCredit(supabase: SupabaseClient): Promise<"ok" | "denied"> {
+  try {
+    const { data, error } = await supabase.rpc("spend_credit");
+    if (error) return "ok";
+    return data === "ok" ? "ok" : "denied";
+  } catch {
+    return "ok";
+  }
+}

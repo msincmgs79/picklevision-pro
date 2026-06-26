@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "../lib/supabase/client";
 import { clientReadUrl, clientDelete } from "../lib/storage/client";
 import { isPlausibleBall } from "../lib/court";
+import { spendCredit } from "../lib/plan";
 import {
   inferEndpointPublic,
   shotEndpointPublic,
@@ -67,6 +68,13 @@ export default function MatchPlayer({
   const [players, setPlayers] = useState<PlayerCoverage | null>(null);
   const [playersBusy, setPlayersBusy] = useState(false);
   const [playersErr, setPlayersErr] = useState<string | null>(null);
+  // Which analyses have used their included (free, first) run for this match.
+  // The first run of each kind comes with the upload; re-runs spend a credit.
+  const [runsUsed, setRunsUsed] = useState<Record<string, boolean>>(() => ({
+    ...(((match as { analysis_runs?: Record<string, boolean> }).analysis_runs) || {}),
+    ...(match.ball_analysis ? { ball: true } : {}),
+    ...(match.shot_analysis ? { shot: true } : {}),
+  }));
   const [isPlaying, setIsPlaying] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<"insights" | "shots" | "trajectories" | "rallies" | "players" | "bookmarks">("insights");
@@ -81,13 +89,13 @@ export default function MatchPlayer({
   const fmt = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
 
   // Restore a previously-computed full-video track so re-opening the match
-  // shows the map instantly without re-spending Roboflow credits.
+  // shows the map instantly without re-spending credits.
   useEffect(() => {
     try {
       const cached = localStorage.getItem(`pv_track_${match.id}`);
-      if (cached) setTrack(JSON.parse(cached));
+      if (cached) { setTrack(JSON.parse(cached)); setRunsUsed((r) => ({ ...r, track: true })); }
       const pc = localStorage.getItem(`pv_players_${match.id}`);
-      if (pc) setPlayers(JSON.parse(pc));
+      if (pc) { setPlayers(JSON.parse(pc)); setRunsUsed((r) => ({ ...r, players: true })); }
     } catch {}
   }, [match.id]);
 
@@ -245,10 +253,28 @@ export default function MatchPlayer({
     router.refresh();
   }
 
+  // The first run of each analysis is included with the upload; re-runs spend a
+  // top-up credit (protects margin). Fails open until billing is live.
+  const OUT_OF_CREDITS =
+    "You're out of credits — the first run of each analysis is included; re-runs use 1 credit. Buy credits or upgrade from the Upgrade page.";
+  async function authorizeRun(kind: string): Promise<boolean> {
+    if (!runsUsed[kind]) return true; // included first run
+    return (await spendCredit(supabase)) === "ok"; // re-run → spend a credit
+  }
+  async function markRunUsed(kind: string) {
+    if (runsUsed[kind]) return;
+    const next = { ...runsUsed, [kind]: true };
+    setRunsUsed(next);
+    try {
+      await supabase.from("matches").update({ analysis_runs: next }).eq("id", match.id);
+    } catch {}
+  }
+
   async function runAnalysis() {
     setAnalyzing(true);
     setAnalysisError(null);
     try {
+      if (!(await authorizeRun("ball"))) { setAnalysisError(OUT_OF_CREDITS); return; }
       const endpoint = inferEndpointPublic();
       if (!endpoint) throw new Error("Inference service URL is not configured.");
       if (!match.video_path) throw new Error("This match has no uploaded video.");
@@ -273,6 +299,7 @@ export default function MatchPlayer({
         .from("matches")
         .update({ ball_analysis: data, ball_analyzed_at: new Date().toISOString() })
         .eq("id", match.id);
+      await markRunUsed("ball");
     } catch (e: any) {
       setAnalysisError(e?.message || "Analysis failed.");
     } finally {
@@ -284,6 +311,7 @@ export default function MatchPlayer({
     setShotBusy(true);
     setShotError(null);
     try {
+      if (!(await authorizeRun("shot"))) { setShotError(OUT_OF_CREDITS); return; }
       const endpoint = shotEndpointPublic();
       if (!endpoint) throw new Error("Shot-analysis URL is not configured.");
       if (!match.video_path) throw new Error("This match has no uploaded video.");
@@ -301,6 +329,7 @@ export default function MatchPlayer({
         .from("matches")
         .update({ shot_analysis: data, shot_analyzed_at: new Date().toISOString() })
         .eq("id", match.id);
+      await markRunUsed("shot");
     } catch (e: any) {
       setShotError(e?.message || "Shot analysis failed.");
     } finally {
@@ -312,6 +341,7 @@ export default function MatchPlayer({
     setTracking(true);
     setTrackError(null);
     try {
+      if (full && !(await authorizeRun("track"))) { setTrackError(OUT_OF_CREDITS); return; }
       const endpoint = trackEndpointPublic();
       if (!endpoint) throw new Error("Tracking service URL is not configured.");
       if (!match.video_path) throw new Error("This match has no uploaded video.");
@@ -335,6 +365,7 @@ export default function MatchPlayer({
       if (full) {
         try { localStorage.setItem(`pv_track_${match.id}`, JSON.stringify(data)); } catch {}
         if (pushOn) notify("Ball map ready 🎾", "Your full-match ball trajectories are ready to view.", `/matches/${match.id}`);
+        await markRunUsed("track");
       }
     } catch (e: any) {
       setTrackError(e?.message || "Tracking failed.");
@@ -347,6 +378,7 @@ export default function MatchPlayer({
     setPlayersBusy(true);
     setPlayersErr(null);
     try {
+      if (!(await authorizeRun("players"))) { setPlayersErr(OUT_OF_CREDITS); return; }
       const endpoint = playersEndpointPublic();
       if (!endpoint) throw new Error("Player tracking service URL is not configured.");
       if (!match.video_path) throw new Error("This match has no uploaded video.");
@@ -362,6 +394,7 @@ export default function MatchPlayer({
       setPlayers(data);
       try { localStorage.setItem(`pv_players_${match.id}`, JSON.stringify(data)); } catch {}
       if (pushOn) notify("Player coverage ready 🏃", "Your court-coverage map is ready to view.", `/matches/${match.id}`);
+      await markRunUsed("players");
     } catch (e: any) {
       setPlayersErr(e?.message || "Player tracking failed.");
     } finally {
@@ -587,7 +620,7 @@ export default function MatchPlayer({
               <span className="badge badge-average" style={{ fontSize: 11 }}>beta</span>
             </div>
             <p className="muted" style={{ fontSize: 13, lineHeight: 1.5, marginTop: 4 }}>
-              Finds and maps every ball position on the court using AI.
+              Finds and maps every ball position on the court using AI. First run included — re-runs use 1 credit.
             </p>
             <button
               className="btn btn-primary btn-sm"
@@ -653,7 +686,7 @@ export default function MatchPlayer({
           <div>
             <div className="section-title">AI Shot Breakdown</div>
             <div className="muted" style={{ fontSize: 13, marginTop: 2 }}>
-              Gemini reviews keyframes from your match and returns a coaching read.
+              Gemini reviews keyframes from your match and returns a coaching read. First run included — re-runs use 1 credit.
             </div>
           </div>
           <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
@@ -775,7 +808,7 @@ export default function MatchPlayer({
             <div className="section-title">Ball Trajectories (3D)</div>
             <div className="muted" style={{ fontSize: 13, marginTop: 2 }}>
               Ball positions mapped onto the court — a quick 20-second window, or the
-              entire match (≈1–2 min, uses ~1 Roboflow credit; result is saved).
+              entire match (≈1–2 min). The first run is included — re-runs use 1 credit; result is saved.
             </div>
           </div>
           <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
@@ -831,7 +864,7 @@ export default function MatchPlayer({
               <span style={{ display: "flex", alignItems: "center", gap: 7 }}><span style={{ width: 11, height: 11, borderRadius: "50%", background: "#94a3b8" }} /><span className="muted">not calibrated</span></span>
             </div>
             <p className="dim" style={{ fontSize: 11, marginTop: 8, lineHeight: 1.5 }}>
-              Detector: <b>{track.detector === "roboflow" ? "Roboflow trained model" : "color (blob)"}</b>.{" "}
+              Detector: <b>{track.detector === "roboflow" ? "trained AI model" : "basic (colour)"}</b>.{" "}
               Each <b>dot</b> is roughly where a rally&apos;s ball was most on-court (its in/out landing); faint lines trace ball flight.{" "}
               {track.calibrated
                 ? "At this detection rate it's an approximate read, not a line judge."
@@ -848,7 +881,7 @@ export default function MatchPlayer({
               <div>
                 <div className="section-title">Player court coverage</div>
                 <div className="muted" style={{ fontSize: 13, marginTop: 2 }}>
-                  Where players moved on the court, from AI person detection. Needs court calibration (~1–2 min, uses Roboflow credits; result is saved).
+                  Where players moved on the court, from AI person detection. Needs court calibration (~1–2 min). First run included — re-runs use 1 credit; result is saved.
                 </div>
               </div>
               <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
