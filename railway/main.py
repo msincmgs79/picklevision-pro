@@ -460,6 +460,23 @@ def track_full(video_path, infer_fn, target_fps, max_frames, workers=FULL_WORKER
     return pts, scanned
 
 
+# In/out cleanup (Phase 1): a flat-ground homography only locates the ball
+# correctly when it is ON the court surface. Airborne balls (and false detections)
+# project far outside the lines, so we (a) drop wild outliers + the weakest
+# detections and (b) judge a rally's in/out at its most-grounded point rather than
+# flipping to "out" the instant any single airborne point reads out.
+INOUT_CONF_MIN = 0.20       # drop the weakest detections
+INOUT_OFFCOURT_MAX = 18.0   # ft beyond the lines past which a point is noise/airborne
+INOUT_MARGIN = 1.0          # ft line-call tolerance
+
+
+def _court_dist_outside(cx: float, cy: float) -> float:
+    """Distance (ft) a court point lies outside the 20x44 court; 0 if inside."""
+    dx = max(0.0, 0.0 - cx, cx - 20.0)
+    dy = max(0.0, 0.0 - cy, cy - 44.0)
+    return (dx * dx + dy * dy) ** 0.5
+
+
 @app.post("/track")
 async def track(request: TrackRequest):
     if not request.videoUrl:
@@ -514,11 +531,19 @@ async def track(request: TrackRequest):
 
         mapped = []
         for p in pts:
+            conf = float(p.get("conf", 0.5))
             if H is not None:
                 q = cv2.perspectiveTransform(np.array([[[p["x"], p["y"]]]], dtype=np.float32), H)[0][0]
                 cx, cy = float(q[0]), float(q[1])
-                io = "in" if (-0.5 <= cx <= 20.5 and -0.5 <= cy <= 44.5) else "out"
+                dist = _court_dist_outside(cx, cy)
+                # Drop low-confidence detections and points thrown far off-court by
+                # airborne parallax / false positives — they aren't real landings.
+                if conf < INOUT_CONF_MIN or dist > INOUT_OFFCOURT_MAX:
+                    continue
+                io = "in" if dist <= INOUT_MARGIN else "out"
             else:
+                if conf < INOUT_CONF_MIN:
+                    continue
                 cx, cy = (p["x"] / p["w"]) * 20.0, (p["y"] / p["h"]) * 44.0
                 io = None
             mapped.append({"t": p["t"], "courtX": cx, "courtY": cy, "inOut": io})
@@ -544,8 +569,11 @@ async def track(request: TrackRequest):
         out = []
         for tr in trajs:
             traj_io = None
-            if H is not None:
-                traj_io = "out" if any(p["inOut"] == "out" for p in tr) else "in"
+            if H is not None and tr:
+                # Judge the rally at its most-grounded point (closest to the court
+                # surface), not "out the moment any airborne point reads out".
+                landing = min(tr, key=lambda q: _court_dist_outside(q["courtX"], q["courtY"]))
+                traj_io = "in" if _court_dist_outside(landing["courtX"], landing["courtY"]) <= INOUT_MARGIN else "out"
             out.append({
                 "inOut": traj_io,
                 "points": [{"t": round(p["t"], 2), "courtX": round(p["courtX"], 2),
