@@ -28,6 +28,12 @@ function client(): S3Client {
     endpoint: `https://${ACCOUNT_ID}.r2.cloudflarestorage.com`,
     credentials: { accessKeyId: ACCESS_KEY_ID, secretAccessKey: SECRET_ACCESS_KEY },
     forcePathStyle: true,
+    // AWS SDK v3 (>=3.729) injects flexible-checksum headers into presigned
+    // PUTs by default. R2 rejects those on browser uploads and the error
+    // response has no CORS headers, so the browser reports a bare "network
+    // error". WHEN_REQUIRED stops the SDK adding them — restoring browser PUTs.
+    requestChecksumCalculation: "WHEN_REQUIRED",
+    responseChecksumValidation: "WHEN_REQUIRED",
   });
   return _client;
 }
