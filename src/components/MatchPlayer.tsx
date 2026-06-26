@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "../lib/supabase/client";
 import { clientReadUrl, clientDelete } from "../lib/storage/client";
+import { isPlausibleBall } from "../lib/court";
 import {
   inferEndpointPublic,
   shotEndpointPublic,
@@ -550,31 +551,35 @@ export default function MatchPlayer({
             )}
 
             {analysis && (() => {
-              const inN = analysis.detections.filter((d) => d.inOut === "in").length;
-              const outN = analysis.detections.filter((d) => d.inOut === "out").length;
-              const calibd = inN + outN > 0;
-              const inPct = calibd ? Math.round((100 * inN) / (inN + outN)) : 0;
+              const calibd = analysis.detections.some((d) => d.inOut === "in" || d.inOut === "out");
+              // Keep only plausible on/near-court detections — airborne parallax and
+              // false positives otherwise pin to the plot edges and read as "out".
+              const dets = calibd
+                ? analysis.detections.filter((d) => isPlausibleBall(d))
+                : analysis.detections.filter((d) => (d.confidence ?? 1) >= 0.2);
+              const inN = dets.filter((d) => d.inOut === "in").length;
+              const outN = dets.filter((d) => d.inOut === "out").length;
               return (
                 <div style={{ marginTop: 14 }}>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                     <Metric label="Balls tracked" value={String(analysis.detectionsFound)} />
                     {calibd
-                      ? <Metric label="In bounds" value={`${inPct}%`} />
+                      ? <Metric label="Mapped on court" value={String(dets.length)} />
                       : <Metric label="Video length" value={`${analysis.duration.toFixed(1)}s`} />}
                   </div>
                   {calibd && (
                     <div style={{ display: "flex", gap: 18, marginTop: 12, fontSize: 13, alignItems: "center" }}>
-                      <span style={{ display: "flex", alignItems: "center", gap: 7 }}><span style={{ width: 16, borderTop: "2px solid var(--excellent)" }} /><b style={{ color: "var(--excellent)" }}>{inN}</b> in</span>
-                      <span style={{ display: "flex", alignItems: "center", gap: 7 }}><span style={{ width: 16, borderTop: "2px dashed var(--poor)" }} /><b style={{ color: "var(--poor)" }}>{outN}</b> out</span>
+                      <span style={{ display: "flex", alignItems: "center", gap: 7 }}><span style={{ width: 11, height: 11, borderRadius: "50%", background: "var(--excellent)" }} /><b style={{ color: "var(--excellent)" }}>{inN}</b> in</span>
+                      <span style={{ display: "flex", alignItems: "center", gap: 7 }}><span style={{ width: 11, height: 11, borderRadius: "50%", background: "var(--poor)" }} /><b style={{ color: "var(--poor)" }}>{outN}</b> out</span>
                     </div>
                   )}
                   <div className="dim" style={{ fontSize: 11.5, margin: "12px 0 6px" }}>
-                    Where the ball went on the court
+                    Where the ball was detected on the court
                   </div>
-                  <CourtScatter detections={analysis.detections} />
+                  <CourtScatter detections={dets} />
                   <p className="dim" style={{ fontSize: 11, marginTop: 8, lineHeight: 1.5 }}>
-                    {corners.length === 4
-                      ? "In/out uses your court calibration."
+                    {calibd
+                      ? `${analysis.detectionsFound - dets.length} airborne/off-court detections filtered out. Approximate read — see the Trajectories tab for per-rally in/out.`
                       : "Tip: use “⊹ Calibrate court”, then re-analyze for accurate in/out."}
                   </p>
                   <details style={{ marginTop: 10 }}>
