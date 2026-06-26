@@ -66,11 +66,21 @@ export async function loadRatingsRollup(): Promise<RatingsRollup | null> {
   if (!user) return null;
 
   // Oldest -> newest so the most recent game gets the heaviest weight.
-  const { data } = await supabase
+  const baseSel = "id,title,recorded_at,created_at,shot_analysis";
+  let res = await supabase
     .from("matches")
-    .select("id,title,recorded_at,created_at,shot_analysis")
+    .select(`${baseSel},result`)
     .not("shot_analysis", "is", null)
     .order("created_at", { ascending: true });
+  if (res.error) {
+    // `result` column may not exist yet — fetch without it.
+    res = (await supabase
+      .from("matches")
+      .select(baseSel)
+      .not("shot_analysis", "is", null)
+      .order("created_at", { ascending: true })) as typeof res;
+  }
+  const data = res.data as Array<Record<string, unknown>> | null;
   if (!data?.length) return null;
 
   const games: RatedGame[] = [];
@@ -85,12 +95,14 @@ export async function loadRatingsRollup(): Promise<RatingsRollup | null> {
       consistency: num(r.consistency),
     };
     const overall = SKILLS.reduce((s, k) => s + ratings[k], 0) / SKILLS.length;
+    const rawResult = (m as { result?: string }).result;
     games.push({
       matchId: m.id as string,
       title: (m.title as string) || "Match",
       date: (m.recorded_at as string) || (m.created_at as string) || null,
       overall,
       ratings,
+      result: rawResult === "win" || rawResult === "loss" ? rawResult : null,
     });
   }
   if (!games.length) return null;
@@ -105,7 +117,10 @@ export async function loadRatingsRollup(): Promise<RatingsRollup | null> {
     return acc;
   }, {} as SkillRatings);
 
-  return { overall, ratings, games, count: games.length };
+  const wins = games.filter((g) => g.result === "win").length;
+  const losses = games.filter((g) => g.result === "loss").length;
+
+  return { overall, ratings, games, count: games.length, wins, losses };
 }
 
 // Latest analyzed match plus its signed video URL and saved bookmarks (for /review).

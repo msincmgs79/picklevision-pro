@@ -19,6 +19,7 @@ export default function NewMatchPage() {
   const [team, setTeam] = useState("My Team");
   const [opponent, setOpponent] = useState("Opponent");
   const [score, setScore] = useState("");
+  const [result, setResult] = useState<string | null>(null);
   const [recordedAt, setRecordedAt] = useState("");
   const [stage, setStage] = useState<Stage>("form");
   const [error, setError] = useState<string | null>(null);
@@ -122,6 +123,9 @@ export default function NewMatchPage() {
         .eq("id", inserted.id);
       if (updErr) throw updErr;
 
+      // Optional W/L — separate update so a missing `result` column can't fail the upload.
+      if (result) await supabase.from("matches").update({ result }).eq("id", inserted.id);
+
       await consumeVideo(supabase);
       setStage("done");
       router.push(`/matches/${inserted.id}`);
@@ -214,6 +218,20 @@ export default function NewMatchPage() {
               <Field label="Score (optional)"><input style={inp} value={score} onChange={(e) => setScore(e.target.value)} placeholder="11–7, 11–9" /></Field>
               <Field label="Date"><input type="date" style={inp} value={recordedAt} onChange={(e) => setRecordedAt(e.target.value)} /></Field>
             </div>
+            <Field label="Result (optional)">
+              <div style={{ display: "flex", gap: 8 }}>
+                {[{ v: "win", label: "Win" }, { v: "loss", label: "Loss" }, { v: null, label: "—" }].map((o) => (
+                  <button
+                    key={o.label}
+                    type="button"
+                    onClick={() => setResult(o.v)}
+                    className={"btn btn-sm " + (result === o.v ? "btn-primary" : "btn-ghost")}
+                  >
+                    {o.label}
+                  </button>
+                ))}
+              </div>
+            </Field>
           </div>
 
           {error && (

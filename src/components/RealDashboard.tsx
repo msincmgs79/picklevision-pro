@@ -38,7 +38,9 @@ export default function RealDashboard({ real, rollup }: { real: LatestAnalysis; 
           value={rollup ? rollup.overall.toFixed(1) : overall != null ? overall.toFixed(1) : "—"}
           sub={
             rollup
-              ? `career avg · ${rollup.count} game${rollup.count === 1 ? "" : "s"}`
+              ? `career avg · ${rollup.count} game${rollup.count === 1 ? "" : "s"}${
+                  rollup.wins + rollup.losses > 0 ? ` · ${rollup.wins}-${rollup.losses}` : ""
+                }`
               : a
               ? "AI estimate · DUPR scale"
               : "run shot breakdown"

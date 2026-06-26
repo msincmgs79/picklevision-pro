@@ -107,6 +107,7 @@ export interface RatedGame {
   date: string | null; // recorded_at, else created_at
   overall: number; // mean of the 5 skill ratings for this game
   ratings: SkillRatings;
+  result?: "win" | "loss" | null;
 }
 
 // Player's rating across all analyzed games. `overall`/`ratings` are
@@ -116,6 +117,8 @@ export interface RatingsRollup {
   ratings: SkillRatings;
   games: RatedGame[];
   count: number;
+  wins: number;
+  losses: number;
 }
 
 // Base URL of the Railway service, with any trailing slash or /infer stripped.

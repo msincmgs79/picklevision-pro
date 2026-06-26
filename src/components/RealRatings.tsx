@@ -73,6 +73,16 @@ export default function RealRatings({ real, rollup }: { real: LatestAnalysis; ro
               <div className="dim" style={{ fontSize: 11.5, marginTop: 2 }}>
                 Recency-weighted across {rollup.count} analyzed game{rollup.count === 1 ? "" : "s"} · DUPR scale
               </div>
+              {rollup.wins + rollup.losses > 0 && (
+                <div style={{ marginTop: 7, fontSize: 14, fontWeight: 800 }}>
+                  <span style={{ color: "var(--excellent)" }}>{rollup.wins}W</span>
+                  <span className="dim" style={{ fontWeight: 600 }}> – </span>
+                  <span style={{ color: "var(--poor)" }}>{rollup.losses}L</span>
+                  <span className="dim" style={{ fontWeight: 500, marginLeft: 8, fontSize: 12 }}>
+                    {Math.round((100 * rollup.wins) / (rollup.wins + rollup.losses))}% win rate
+                  </span>
+                </div>
+              )}
             </div>
             <div style={{ textAlign: "right" }}>
               <div style={{ fontSize: 34, fontWeight: 800, color: "var(--primary)", lineHeight: 1 }}>{rollup.overall.toFixed(1)}</div>
@@ -97,7 +107,14 @@ export default function RealRatings({ real, rollup }: { real: LatestAnalysis; ro
                   {g.matchId === real.matchId && <span style={{ color: "var(--primary)", marginRight: 6 }}>●</span>}
                   {g.title}{g.date ? ` · ${g.date}` : ""}
                 </span>
-                <b style={{ color: "var(--primary)" }}>{g.overall.toFixed(1)}</b>
+                <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  {g.result && (
+                    <span className={"badge " + (g.result === "win" ? "badge-excellent" : "badge-poor")} style={{ fontSize: 9 }}>
+                      {g.result === "win" ? "W" : "L"}
+                    </span>
+                  )}
+                  <b style={{ color: "var(--primary)" }}>{g.overall.toFixed(1)}</b>
+                </span>
               </Link>
             ))}
           </div>

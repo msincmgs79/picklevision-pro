@@ -68,6 +68,7 @@ export default function MatchPlayer({
   const [editing, setEditing] = useState(false);
   const [metaTitle, setMetaTitle] = useState(match.title || "");
   const [metaTeam, setMetaTeam] = useState(match.team || "");
+  const [result, setResult] = useState<string | null>((match as { result?: string }).result ?? null);
   const [metaOpp, setMetaOpp] = useState(match.opponent || "");
   const [pushOn, setPushOn] = useState(false);
 
@@ -143,10 +144,10 @@ export default function MatchPlayer({
   }
   async function saveMeta() {
     setEditing(false);
-    await supabase
-      .from("matches")
-      .update({ title: metaTitle.trim() || "Untitled match", team: metaTeam.trim(), opponent: metaOpp.trim() })
-      .eq("id", match.id);
+    const base = { title: metaTitle.trim() || "Untitled match", team: metaTeam.trim(), opponent: metaOpp.trim() };
+    const { error } = await supabase.from("matches").update({ ...base, result }).eq("id", match.id);
+    // `result` column may not exist yet — still save the rest so editing works.
+    if (error) await supabase.from("matches").update(base).eq("id", match.id);
   }
   const metaInput: React.CSSProperties = {
     background: "var(--surface-2)", border: "1px solid var(--border-light)", borderRadius: 8,
@@ -348,6 +349,19 @@ export default function MatchPlayer({
                 <span className="dim">vs</span>
                 <input value={metaOpp} onChange={(e) => setMetaOpp(e.target.value)} placeholder="Opponent" style={metaInput} />
               </div>
+              <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                <span className="dim" style={{ fontSize: 12.5, marginRight: 2 }}>Result</span>
+                {[{ v: "win", label: "Win" }, { v: "loss", label: "Loss" }, { v: null, label: "—" }].map((o) => (
+                  <button
+                    key={o.label}
+                    type="button"
+                    onClick={() => setResult(o.v)}
+                    className={"btn btn-sm " + (result === o.v ? "btn-primary" : "btn-ghost")}
+                  >
+                    {o.label}
+                  </button>
+                ))}
+              </div>
               <div style={{ display: "flex", gap: 8 }}>
                 <button className="btn btn-primary btn-sm" onClick={saveMeta}>Save</button>
                 <button className="btn btn-sm btn-ghost" onClick={() => { setEditing(false); setMetaTitle(match.title || ""); setMetaTeam(match.team || ""); setMetaOpp(match.opponent || ""); }}>Cancel</button>
@@ -357,6 +371,11 @@ export default function MatchPlayer({
             <>
               <h1 className="page-title" style={{ marginTop: 6, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
                 {metaTitle}
+                {result && (
+                  <span className={"badge " + (result === "win" ? "badge-excellent" : "badge-poor")} style={{ fontSize: 12 }}>
+                    {result === "win" ? "WIN" : "LOSS"}
+                  </span>
+                )}
                 <button onClick={() => setEditing(true)} className="iconbtn" style={{ width: 28, height: 28, fontSize: 12 }} aria-label="Edit match details" title="Edit title and teams">✎</button>
               </h1>
               <p className="page-sub">
