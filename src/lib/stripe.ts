@@ -10,9 +10,17 @@ export const stripeConfigured = !!SECRET;
 // Lazy singleton — the SDK throws on an empty key, and env isn't present during
 // the build, so we must not construct at import time. Routes guard on
 // `stripeConfigured` before calling this; the placeholder just prevents a throw.
+//
+// Use the fetch-based HTTP client: stripe-node defaults to Node's `https` module,
+// which fails with "connection to Stripe" errors on Vercel's serverless runtime.
+// `fetch` is the transport Supabase already uses successfully in the same routes.
 let _stripe: Stripe | null = null;
 export function getStripe(): Stripe {
-  if (!_stripe) _stripe = new Stripe(SECRET || "sk_placeholder_unconfigured");
+  if (!_stripe) {
+    _stripe = new Stripe(SECRET || "sk_placeholder_unconfigured", {
+      httpClient: Stripe.createFetchHttpClient(),
+    });
+  }
   return _stripe;
 }
 

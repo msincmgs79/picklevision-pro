@@ -88,9 +88,11 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ error: "Unknown checkout type." }, { status: 400 });
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error("stripe checkout error:", msg);
+    const e = err as { message?: string; type?: string; code?: string; detail?: { message?: string; code?: string } };
+    const msg = e?.message || String(err);
+    const detail = [e?.type, e?.code, e?.detail?.message || e?.detail?.code].filter(Boolean).join(" | ");
+    console.error("stripe checkout error:", msg, detail);
     // Surface the message to help diagnose setup issues (sandbox/testing).
-    return NextResponse.json({ error: msg }, { status: 500 });
+    return NextResponse.json({ error: msg, detail }, { status: 500 });
   }
 }
