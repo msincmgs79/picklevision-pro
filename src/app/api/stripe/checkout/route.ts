@@ -92,7 +92,6 @@ export async function POST(req: Request) {
     const msg = e?.message || String(err);
     const detail = [e?.type, e?.code, e?.detail?.message || e?.detail?.code].filter(Boolean).join(" | ");
     console.error("stripe checkout error:", msg, detail);
-    // Surface the message to help diagnose setup issues (sandbox/testing).
-    return NextResponse.json({ error: msg, detail }, { status: 500 });
+    return NextResponse.json({ error: "Couldn't start checkout. Please try again." }, { status: 500 });
   }
 }

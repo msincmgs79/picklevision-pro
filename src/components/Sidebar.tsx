@@ -16,6 +16,8 @@ const links = [
   { href: "/review", label: "Video Review", icon: "▷" },
   { section: "Progress" },
   { href: "/ratings", label: "Ratings & Team", icon: "★" },
+  { section: "Account" },
+  { href: "/account", label: "My Account", icon: "◎" },
 ];
 
 export default function Sidebar() {
@@ -71,15 +73,27 @@ export default function Sidebar() {
         </Link>
         {email ? (
           <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12, padding: 14 }}>
-            <div style={{ fontWeight: 700, fontSize: 13, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-              {email}
-            </div>
-            <button
-              onClick={signOut}
-              style={{ marginTop: 8, background: "none", border: "none", color: "var(--text-muted)", fontWeight: 600, fontSize: 12.5, cursor: "pointer", padding: 0 }}
+            <Link
+              href="/account"
+              title="View your account"
+              style={{ display: "block", fontWeight: 700, fontSize: 13, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", color: "var(--text)", textDecoration: "none" }}
             >
-              Sign out →
-            </button>
+              {email}
+            </Link>
+            <div style={{ display: "flex", gap: 12, marginTop: 8 }}>
+              <Link
+                href="/account"
+                style={{ color: "var(--text-muted)", fontWeight: 600, fontSize: 12.5, textDecoration: "none" }}
+              >
+                Account
+              </Link>
+              <button
+                onClick={signOut}
+                style={{ background: "none", border: "none", color: "var(--text-muted)", fontWeight: 600, fontSize: 12.5, cursor: "pointer", padding: 0 }}
+              >
+                Sign out →
+              </button>
+            </div>
           </div>
         ) : (
           <Link

@@ -15,7 +15,10 @@ export default function MobileTopBar() {
           Pickle<span>Vision</span>
         </div>
       </Link>
-      <Link href="/upgrade" className="btn btn-primary btn-sm">✦ Upgrade</Link>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <Link href="/account" className="btn btn-sm" aria-label="My account" style={{ padding: "6px 11px" }}>◎</Link>
+        <Link href="/upgrade" className="btn btn-primary btn-sm">✦ Upgrade</Link>
+      </div>
     </div>
   );
 }
