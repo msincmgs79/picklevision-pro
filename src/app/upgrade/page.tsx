@@ -56,15 +56,67 @@ const packs = [
 export default function UpgradePage() {
   const [planState, setPlanState] = useState<PlanState | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
   const currentPlan: Plan = planState?.plan ?? "free";
 
-  useEffect(() => {
+  function refreshPlan() {
     if (!isSupabaseConfigured) return;
     getPlanState(createClient()).then(setPlanState);
+  }
+
+  useEffect(() => {
+    refreshPlan();
+    // Returning from Stripe Checkout — show the outcome and re-check the plan
+    // (the webhook fulfils asynchronously, so poll a couple of times).
+    const outcome = new URLSearchParams(window.location.search).get("checkout");
+    if (outcome === "success") {
+      setNotice("Payment received 🎉 Your plan/credits will update within a few seconds.");
+      setTimeout(refreshPlan, 3000);
+      setTimeout(refreshPlan, 8000);
+      window.history.replaceState({}, "", "/upgrade");
+    } else if (outcome === "cancel") {
+      setNotice("Checkout canceled — no charge was made.");
+      window.history.replaceState({}, "", "/upgrade");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  function comingSoon(what: string) {
-    setNotice(`${what} — payments launch soon. We'll let you know the moment you can check out.`);
+  async function startCheckout(key: string, payload: Record<string, unknown>) {
+    setBusy(key);
+    setNotice(null);
+    try {
+      const res = await fetch("/api/stripe/checkout", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (data.url) {
+        window.location.href = data.url;
+        return;
+      }
+      setNotice(data.error || "Couldn't start checkout. Please try again.");
+    } catch {
+      setNotice("Network error starting checkout.");
+    }
+    setBusy(null);
+  }
+
+  async function openPortal() {
+    setBusy("portal");
+    setNotice(null);
+    try {
+      const res = await fetch("/api/stripe/portal", { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      if (data.url) {
+        window.location.href = data.url;
+        return;
+      }
+      setNotice(data.error || "Couldn't open billing portal.");
+    } catch {
+      setNotice("Network error opening billing portal.");
+    }
+    setBusy(null);
   }
 
   return (
@@ -124,12 +176,21 @@ export default function UpgradePage() {
               </ul>
               {isCurrent ? (
                 <button className="btn" disabled style={{ opacity: 0.6, cursor: "default" }}>Current plan</button>
+              ) : currentPlan !== "free" ? (
+                // Already subscribed — switch/cancel via the Stripe billing portal
+                // (avoids creating a second subscription).
+                <button className="btn" onClick={openPortal} disabled={busy === "portal"}>
+                  {busy === "portal" ? "Opening…" : "Manage plan"}
+                </button>
+              ) : t.id === "free" ? (
+                <button className="btn" disabled style={{ opacity: 0.6, cursor: "default" }}>Your plan</button>
               ) : (
                 <button
                   className={"btn" + (t.highlight ? " btn-primary" : "")}
-                  onClick={() => comingSoon(`Upgrade to ${t.name}`)}
+                  onClick={() => startCheckout(`tier-${t.id}`, { kind: "subscription", plan: t.id })}
+                  disabled={busy === `tier-${t.id}`}
                 >
-                  Upgrade to {t.name}
+                  {busy === `tier-${t.id}` ? "Starting…" : `Upgrade to ${t.name}`}
                 </button>
               )}
             </div>
@@ -147,8 +208,13 @@ export default function UpgradePage() {
             <div key={p.credits} style={{ border: "1px solid var(--border)", borderRadius: 12, padding: 16, display: "flex", flexDirection: "column", gap: 4 }}>
               <div style={{ fontSize: 22, fontWeight: 800 }}>{p.credits} credits</div>
               <div className="muted" style={{ fontSize: 13 }}>{p.price} · {p.per}</div>
-              <button className="btn btn-sm" style={{ marginTop: 10 }} onClick={() => comingSoon(`Buy ${p.credits} credits`)}>
-                Buy {p.credits}
+              <button
+                className="btn btn-sm"
+                style={{ marginTop: 10 }}
+                onClick={() => startCheckout(`pack-${p.credits}`, { kind: "credits", credits: p.credits })}
+                disabled={busy === `pack-${p.credits}`}
+              >
+                {busy === `pack-${p.credits}` ? "Starting…" : `Buy ${p.credits}`}
               </button>
             </div>
           ))}

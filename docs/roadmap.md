@@ -1,19 +1,17 @@
 # PickleVision — Outstanding work & timeline
 
-_Last updated: 2026-06-26._
+_Last updated: 2026-07-02._
 Legend: **[Owner]** = you do it (dashboards / accounts / payments) · **[Build]** = code work (me) · **[Both]** = you set up an account/keys, I wire it.
 
 ---
 
 ## ✅ Recently shipped (context — already off the list)
-Cloudflare **R2 storage** (multipart uploads, lifts the 50 MB cap) · **in/out** cleanup (landing-based + clean maps) · **career rating + trend** chart · **share card** · **win/loss** tracking · **player court-coverage** (Phase A) · **re-run credit flow** (first run included, re-runs cost a credit).
+Cloudflare **R2 storage** (multipart uploads, lifts the 50 MB cap) · **in/out** cleanup (landing-based + clean maps) · **career rating + trend** chart · **share card** · **win/loss** tracking · **player court-coverage** (Phase A) · **re-run credit flow** (first run included, re-runs cost a credit) · **SEO/GEO landing page** (server-rendered marketing page, JSON-LD, sitemap/robots/llms.txt) · **Railway on paid Hobby plan** (backend no longer expires).
 
 ---
 
 ## 🔴 Time-sensitive — do soon
-| Item | Who | Notes |
-|---|---|---|
-| **Railway paid plan** | [Owner] | Trial **~23 days / $4.67 left** (as of 2026-06-26). When it runs out, the AI-analysis backend (ball detection, tracking, players, shot breakdown) **goes offline**. Put it on the Hobby plan (~$5/mo) before then. |
+_Nothing outstanding — the Railway trial deadline is resolved (moved to paid Hobby plan 2026-07-02)._
 
 ---
 
@@ -22,15 +20,18 @@ Cloudflare **R2 storage** (multipart uploads, lifts the 50 MB cap) · **in/out**
 **Activation (quick, in the Supabase / Vercel dashboards):**
 | Item | Who | Notes |
 |---|---|---|
-| Run `supabase/profiles.sql` | [Owner] | Turns on real plans + monthly video limits + `consume_video`. |
-| Run `supabase/credits.sql` `spend_credit` RPC | [Owner] | Enables the re-run credit deduction (bundle with profiles.sql). |
-| Run `supabase/push_subscriptions.sql` + add VAPID env in Vercel | [Owner] | Switches on "analysis ready" push notifications. |
-| Flip `TESTING_FORCE_ULTRA = false` in `src/lib/plan.ts` | [Build] | Stops everyone defaulting to Ultra; real tiers apply. |
+| ✅ Run `supabase/profiles.sql` | [Done 2026-07-02] | Real plans + monthly limits + `consume_video` **live**. |
+| ✅ Run `supabase/credits.sql` `spend_credit` RPC | [Done 2026-07-02] | Re-run credit deduction **live** (`analysis_runs` col + `spend_credit`). |
+| ✅ Run `supabase/push_subscriptions.sql` | [Done 2026-07-02] | Table created. |
+| ✅ VAPID keys in Vercel | [Done 2026-07-02] | Keypair generated (`.vapid-keys.local.txt`, gitignored) + all 3 env vars deployed. **Verified live:** client key inlined, `/api/push/send` returns ok, SW active. Only per-device opt-in remains (by design). |
+| Flip `TESTING_FORCE_ULTRA = false` in `src/lib/plan.ts` | [Build] | Now that `profiles` exists, real tiers already apply to everyone with a row; this flag only matters on the DB-read-fail fallback. Flip at true launch for correctness. |
+
+> **Owner account** (`martingsinclair@outlook.com`, id `3e375c6e-…64b1`) is pinned to **plan=ultra, credits=100** so testing is unaffected now that real Free caps are on. Re-pin if the profiles row is ever reset.
 
 **Payments:**
 | Item | Who | Notes |
 |---|---|---|
-| **Stripe** checkout + webhooks | [Both] | You create the Stripe account/keys; I wire checkout into the existing plan/credit model (upgrade page + credit packs are already built, currently stubbed "payments launch soon"). |
+| 🟨 **Stripe** checkout + webhooks | [In progress 2026-07-02] | **Code built + deployed:** `stripe` SDK, `src/lib/stripe.ts`, `/api/stripe/{checkout,webhook,portal}`, upgrade page wired to real checkout (subscriptions + credit packs), `supabase/stripe.sql` (customer/subscription cols + `add_credits`). Sandbox account ready. **Remaining:** create 5 prices in Stripe (via Stripe plugin), create webhook endpoint → secret, add env to Vercel (`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `SUPABASE_SERVICE_ROLE_KEY`, 5× `STRIPE_PRICE_*`), run `stripe.sql`, then live-test in sandbox. |
 
 **R2 housekeeping:**
 | Item | Who | Notes |
