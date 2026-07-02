@@ -1,0 +1,23 @@
+# PickleVision
+
+> PickleVision is an AI pickleball analysis web app (PWA). Upload a video of your match and get a shot-by-shot AI coaching breakdown: DUPR-scale skill ratings, ball tracking with 3D trajectories and rally highlights, player court-coverage heatmaps, a career rating that tracks over time, and a win/loss record. Free to start; installable on iPhone, Android and desktop; videos stay private.
+
+## What it does
+- AI shot breakdown: a plain-English coaching summary plus skill ratings (serve, return, offense, defense, consistency) on the DUPR 2–8 scale (an AI estimate, not an official DUPR rating).
+- Ball tracking: detects the ball, maps 3D trajectories onto the court, auto-detects rallies and highlights, and gives approximate in/out calls.
+- Player court coverage: heatmaps of court positioning and how often a player reaches the non-volley zone (kitchen).
+- Progress: a recency-weighted career rating across all analyzed games, a trend line over time, and a win–loss record.
+- Progressive Web App: install on any device, works offline, no app-store download.
+
+## Who it's for
+Recreational and competitive pickleball players who want data-driven feedback and coaching from their own match footage — using just a phone and a tripod.
+
+## Key facts
+- Pricing: free tier (one full analysis per month); paid Premium and Ultra plans; top-up credits for extra/re-run analyses.
+- Recording: a phone on a tripod placed behind the court; a clear view of the full court gives the best results. No special cameras or wearables.
+- Privacy: match videos are stored privately and are visible only to their owner.
+- DUPR: ratings are AI-generated estimates on the DUPR scale and are not affiliated with or endorsed by DUPR.
+
+## Links
+- Home: https://picklevision-clean.vercel.app/
+- Sign up / open the app: https://picklevision-clean.vercel.app/login
