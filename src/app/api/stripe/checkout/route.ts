@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getStripe, stripeConfigured, PLAN_PRICE_IDS, CREDIT_PACKS, supabaseAdmin } from "../../../../lib/stripe";
+import { getStripe, stripeConfigured, serviceRoleConfigured, PLAN_PRICE_IDS, CREDIT_PACKS, supabaseAdmin } from "../../../../lib/stripe";
 import { createClient } from "../../../../lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -10,6 +10,12 @@ export const dynamic = "force-dynamic";
 export async function POST(req: Request) {
   if (!stripeConfigured) {
     return NextResponse.json({ error: "Payments aren't switched on yet." }, { status: 503 });
+  }
+  if (!serviceRoleConfigured) {
+    return NextResponse.json(
+      { error: "Server billing key (SUPABASE_SERVICE_ROLE_KEY) isn't set in the deployment." },
+      { status: 503 }
+    );
   }
   const stripe = getStripe();
 
@@ -23,34 +29,27 @@ export async function POST(req: Request) {
   const success_url = `${origin}/upgrade?checkout=success`;
   const cancel_url = `${origin}/upgrade?checkout=cancel`;
 
-  // Reuse (or create) this user's Stripe customer. Persisted via the service
-  // role because `profiles` has no client UPDATE policy.
-  const admin = supabaseAdmin();
-  let customerId = "";
+  // Everything below (customer lookup/creation + session) is wrapped so a
+  // Stripe/Supabase failure returns a JSON error instead of a blank 500.
   try {
+    // Reuse (or create) this user's Stripe customer. Persisted via the service
+    // role because `profiles` has no client UPDATE policy.
+    const admin = supabaseAdmin();
     const { data: profile } = await admin
       .from("profiles")
       .select("stripe_customer_id")
       .eq("id", user.id)
       .single();
-    customerId = profile?.stripe_customer_id || "";
-  } catch {
-    /* best-effort */
-  }
-  if (!customerId) {
-    const customer = await stripe.customers.create({
-      email: user.email || undefined,
-      metadata: { user_id: user.id },
-    });
-    customerId = customer.id;
-    try {
+    let customerId = profile?.stripe_customer_id || "";
+    if (!customerId) {
+      const customer = await stripe.customers.create({
+        email: user.email || undefined,
+        metadata: { user_id: user.id },
+      });
+      customerId = customer.id;
       await admin.from("profiles").update({ stripe_customer_id: customerId }).eq("id", user.id);
-    } catch {
-      /* best-effort */
     }
-  }
 
-  try {
     if (body.kind === "subscription") {
       const plan = String(body.plan);
       const price = plan === "premium" || plan === "ultra" ? PLAN_PRICE_IDS[plan] : "";
@@ -89,7 +88,9 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ error: "Unknown checkout type." }, { status: 400 });
   } catch (err) {
-    console.error("stripe checkout error", err);
-    return NextResponse.json({ error: "Couldn't start checkout. Please try again." }, { status: 500 });
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("stripe checkout error:", msg);
+    // Surface the message to help diagnose setup issues (sandbox/testing).
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
 }
