@@ -20,6 +20,8 @@ import {
 import TrajectoryMap3D from "./TrajectoryMap3D";
 import { enablePush, isPushEnabled, notify, pushSupported } from "../lib/push";
 import { analyzeRallies } from "../lib/rallies";
+import MatchReport from "./MatchReport";
+import { generateReportPdf } from "../lib/pdfReport";
 
 interface Bookmark {
   id: string;
@@ -84,6 +86,9 @@ export default function MatchPlayer({
   const [result, setResult] = useState<string | null>((match as { result?: string }).result ?? null);
   const [metaOpp, setMetaOpp] = useState(match.opponent || "");
   const [pushOn, setPushOn] = useState(false);
+  const [pdfBusy, setPdfBusy] = useState(false);
+  const [pdfError, setPdfError] = useState<string | null>(null);
+  const reportRef = useRef<HTMLDivElement | null>(null);
 
   const supabase = createClient();
   const fmt = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
@@ -270,6 +275,30 @@ export default function MatchPlayer({
     } catch {}
   }
 
+  // Download a PDF coaching report. First export per match is included; re-exports
+  // spend a credit (same model as the analyses).
+  async function downloadPdf() {
+    setPdfError(null);
+    if (!shot?.analysis && !analysis && !players) {
+      setPdfError("Run the AI shot breakdown or ball map first, then download the report.");
+      return;
+    }
+    setPdfBusy(true);
+    try {
+      if (!(await authorizeRun("pdf"))) { setPdfError(OUT_OF_CREDITS); return; }
+      const el = reportRef.current;
+      if (!el) throw new Error("Report isn't ready — try again in a moment.");
+      await new Promise((r) => requestAnimationFrame(() => r(null)));
+      const safe = (metaTitle || "match").replace(/[^\w\- ]+/g, "").trim().slice(0, 60) || "match";
+      await generateReportPdf(el, `PickleVision - ${safe} - coaching report.pdf`);
+      await markRunUsed("pdf");
+    } catch (e: any) {
+      setPdfError(e?.message || "Couldn't generate the PDF. Please try again.");
+    } finally {
+      setPdfBusy(false);
+    }
+  }
+
   async function runAnalysis() {
     setAnalyzing(true);
     setAnalysisError(null);
@@ -452,20 +481,37 @@ export default function MatchPlayer({
             </>
           )}
         </div>
-        <div style={{ position: "relative" }}>
-          <button className="iconbtn" onClick={() => setMenuOpen((o) => !o)} aria-label="Match options" title="Options">⋯</button>
-          {menuOpen && (
-            <>
-              <div onClick={() => setMenuOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 30 }} />
-              <div className="menu">
-                <button className="menu-item" onClick={() => { setMenuOpen(false); deleteMatch(); }} disabled={deleting} style={{ color: "var(--poor)" }}>
-                  <span aria-hidden="true">🗑</span> {deleting ? "Deleting…" : "Delete match"}
-                </button>
-              </div>
-            </>
-          )}
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <button
+            className="btn btn-sm"
+            onClick={downloadPdf}
+            disabled={pdfBusy}
+            title="Download a PDF coaching report (first is included; re-exports use 1 credit)"
+          >
+            {pdfBusy ? "Generating…" : "⬇ PDF report"}
+          </button>
+          <div style={{ position: "relative" }}>
+            <button className="iconbtn" onClick={() => setMenuOpen((o) => !o)} aria-label="Match options" title="Options">⋯</button>
+            {menuOpen && (
+              <>
+                <div onClick={() => setMenuOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 30 }} />
+                <div className="menu">
+                  <button className="menu-item" onClick={() => { setMenuOpen(false); deleteMatch(); }} disabled={deleting} style={{ color: "var(--poor)" }}>
+                    <span aria-hidden="true">🗑</span> {deleting ? "Deleting…" : "Delete match"}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </div>
+
+      {pdfError && (
+        <div className="card" style={{ marginTop: 12, borderColor: "rgba(248,113,113,0.4)", display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center" }}>
+          <span style={{ fontSize: 13, color: "var(--poor)" }}>{pdfError}</span>
+          <button className="iconbtn" onClick={() => setPdfError(null)} aria-label="Dismiss" style={{ width: 24, height: 24 }}>✕</button>
+        </div>
+      )}
 
       <div style={{ maxWidth: 920, marginTop: 22 }}>
         {/* player */}
@@ -980,6 +1026,11 @@ export default function MatchPlayer({
             })()}
           </div>
         )}
+      </div>
+
+      {/* Off-screen report, captured to build the downloadable PDF. */}
+      <div ref={reportRef} aria-hidden="true" style={{ position: "fixed", left: -99999, top: 0, pointerEvents: "none" }}>
+        <MatchReport match={match} shot={shot} analysis={analysis} players={players} track={track} />
       </div>
     </div>
   );

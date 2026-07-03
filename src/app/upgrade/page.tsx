@@ -13,6 +13,7 @@ const tiers = [
     per: "forever",
     features: [
       "1 video / month",
+      "1 PDF coaching report",
       "Keep your latest 2 videos",
       "AI shot breakdown & ball map",
       "Buy credits for more videos",
@@ -26,6 +27,7 @@ const tiers = [
     per: "/ month",
     features: [
       "3 videos / month",
+      "3 PDF coaching reports",
       "25 GB storage · 3-month history",
       "Everything in Free",
       "Discounted top-up credits",
@@ -39,6 +41,7 @@ const tiers = [
     per: "/ month",
     features: [
       "7 videos / month",
+      "7 PDF coaching reports",
       "50 GB storage · 6-month history",
       "Everything in Premium",
       "Better top-up credit rates",
@@ -52,6 +55,7 @@ const tiers = [
     per: "/ month",
     features: [
       "15 videos / month",
+      "15 PDF coaching reports",
       "250 GB storage · 12-month history",
       "Everything in Premium Plus",
       "Best top-up credit rates",
