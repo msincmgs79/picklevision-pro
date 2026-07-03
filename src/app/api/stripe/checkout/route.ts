@@ -52,7 +52,8 @@ export async function POST(req: Request) {
 
     if (body.kind === "subscription") {
       const plan = String(body.plan);
-      const price = plan === "premium" || plan === "ultra" ? PLAN_PRICE_IDS[plan] : "";
+      const price =
+        plan === "premium" || plan === "premiumplus" || plan === "ultra" ? PLAN_PRICE_IDS[plan] : "";
       if (!price) return NextResponse.json({ error: "That plan isn't available yet." }, { status: 400 });
       const session = await stripe.checkout.sessions.create({
         mode: "subscription",

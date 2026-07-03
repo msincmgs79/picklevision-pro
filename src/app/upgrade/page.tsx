@@ -22,15 +22,28 @@ const tiers = [
   {
     id: "premium",
     name: "Premium",
-    price: "$19.99",
+    price: "$12.99",
     per: "/ month",
     features: [
-      "5 videos / month",
-      "50 GB storage · 6-month history",
+      "3 videos / month",
+      "25 GB storage · 3-month history",
       "Everything in Free",
       "Discounted top-up credits",
     ],
     highlight: true,
+  },
+  {
+    id: "premiumplus",
+    name: "Premium Plus",
+    price: "$24.99",
+    per: "/ month",
+    features: [
+      "5 videos / month",
+      "50 GB storage · 6-month history",
+      "Everything in Premium",
+      "Better top-up credit rates",
+    ],
+    highlight: false,
   },
   {
     id: "ultra",
@@ -40,7 +53,7 @@ const tiers = [
     features: [
       "15 videos / month",
       "250 GB storage · 12-month history",
-      "Everything in Premium",
+      "Everything in Premium Plus",
       "Best top-up credit rates",
     ],
     highlight: false,
@@ -141,7 +154,7 @@ export default function UpgradePage() {
         </div>
       )}
 
-      <div className="grid" style={{ gridTemplateColumns: "repeat(3, 1fr)", marginTop: 22, alignItems: "stretch" }}>
+      <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(215px, 1fr))", marginTop: 22, alignItems: "stretch" }}>
         {tiers.map((t) => {
           const isCurrent = t.id === currentPlan;
           return (

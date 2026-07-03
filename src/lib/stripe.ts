@@ -27,6 +27,7 @@ export function getStripe(): Stripe {
 // Price IDs are created in Stripe (via the Stripe plugin) and wired in via env.
 export const PLAN_PRICE_IDS: Record<Exclude<Plan, "free">, string> = {
   premium: process.env.STRIPE_PRICE_PREMIUM || "",
+  premiumplus: process.env.STRIPE_PRICE_PREMIUMPLUS || "",
   ultra: process.env.STRIPE_PRICE_ULTRA || "",
 };
 
@@ -41,6 +42,7 @@ export const CREDIT_PACKS: { credits: number; envVar: string; priceId: string }[
 // by metadata that a client could tamper with).
 export function planForPriceId(priceId: string): Plan | null {
   if (priceId && priceId === PLAN_PRICE_IDS.premium) return "premium";
+  if (priceId && priceId === PLAN_PRICE_IDS.premiumplus) return "premiumplus";
   if (priceId && priceId === PLAN_PRICE_IDS.ultra) return "ultra";
   return null;
 }

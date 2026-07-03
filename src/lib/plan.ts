@@ -2,8 +2,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 // Monthly video allowance per plan. A "video" = one full AI analysis of an
 // uploaded match. Beyond the monthly allowance, users spend top-up credits.
-export const PLAN_LIMITS = { free: 1, premium: 5, ultra: 15 } as const;
-export const PLAN_LABEL = { free: "Free", premium: "Premium", ultra: "Ultra" } as const;
+export const PLAN_LIMITS = { free: 1, premium: 3, premiumplus: 5, ultra: 15 } as const;
+export const PLAN_LABEL = { free: "Free", premium: "Premium", premiumplus: "Premium Plus", ultra: "Ultra" } as const;
 export const MAX_VIDEO_BYTES = 1024 * 1024 * 1024; // 1 GB hard cap per upload
 
 export type Plan = keyof typeof PLAN_LIMITS;
