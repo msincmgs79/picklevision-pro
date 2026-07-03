@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { isSupabaseConfigured } from "../../../lib/supabase/config";
 import { createClient } from "../../../lib/supabase/server";
 import { signedReadUrl } from "../../../lib/storage/server";
+import { loadRatingsRollup } from "../../../lib/realAnalysis";
 import MatchPlayer from "../../../components/MatchPlayer";
 
 export const dynamic = "force-dynamic";
@@ -44,5 +45,8 @@ export default async function MatchPage({ params }: { params: { id: string } }) 
     .eq("match_id", params.id)
     .order("t", { ascending: true });
 
-  return <MatchPlayer match={match} videoUrl={videoUrl} initialBookmarks={bookmarks || []} />;
+  // Career ratings/record rollup (for the PDF report's progress section).
+  const rollup = await loadRatingsRollup();
+
+  return <MatchPlayer match={match} videoUrl={videoUrl} initialBookmarks={bookmarks || []} rollup={rollup} />;
 }

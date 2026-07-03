@@ -2,7 +2,12 @@
 
 import { isPlausibleBall } from "../lib/court";
 import { analyzeRallies } from "../lib/rallies";
-import type { InferenceResult, ShotAnalysisResult, TrackResult, PlayerCoverage } from "../lib/analysis";
+import type { InferenceResult, ShotAnalysisResult, TrackResult, PlayerCoverage, RatingsRollup } from "../lib/analysis";
+
+function num(v: unknown): number {
+  const n = Number(v);
+  return isFinite(n) ? n : 0;
+}
 
 // Self-contained, print-oriented coaching report. Rendered off-screen and
 // captured to PDF (html2canvas + jsPDF). Uses explicit hex colors — not CSS
@@ -100,18 +105,65 @@ function ReportCoverage({ grid, gw, gh }: { grid: number[][]; gw: number; gh: nu
   );
 }
 
+// Career skill radar (serve/return/offense/defense/consistency on the DUPR 2–8 scale).
+function Radar({ ratings }: { ratings: unknown }) {
+  const r = (ratings || {}) as Record<string, unknown>;
+  const skills = [
+    { k: "serve", label: "Serve" },
+    { k: "return", label: "Return" },
+    { k: "offense", label: "Offense" },
+    { k: "defense", label: "Defense" },
+    { k: "consistency", label: "Consist." },
+  ];
+  const size = 210, cx = 105, cy = 105, R = 62, max = 8;
+  const pt = (i: number, rad: number): [number, number] => {
+    const ang = -Math.PI / 2 + (i * 2 * Math.PI) / 5;
+    return [cx + Math.cos(ang) * rad, cy + Math.sin(ang) * rad];
+  };
+  const rings = [0.25, 0.5, 0.75, 1].map((f) => skills.map((_, i) => pt(i, R * f).join(",")).join(" "));
+  const dataPts = skills.map((s, i) => pt(i, R * (Math.max(0, Math.min(max, num(r[s.k]))) / max)));
+  return (
+    <svg viewBox={`0 0 ${size} ${size}`} width={size} height={size}>
+      {rings.map((g, i) => <polygon key={i} points={g} fill="none" stroke="rgba(255,255,255,0.10)" strokeWidth={1} />)}
+      {skills.map((_, i) => { const [x, y] = pt(i, R); return <line key={i} x1={cx} y1={cy} x2={x} y2={y} stroke="rgba(255,255,255,0.10)" strokeWidth={1} />; })}
+      <polygon points={dataPts.map((p) => p.join(",")).join(" ")} fill="rgba(163,230,53,0.22)" stroke={C.primary} strokeWidth={2} />
+      {dataPts.map((p, i) => <circle key={i} cx={p[0]} cy={p[1]} r={2.6} fill={C.primary} />)}
+      {skills.map((s, i) => { const [x, y] = pt(i, R + 16); return <text key={i} x={x} y={y} fill={C.muted} fontSize={9.5} textAnchor="middle" dominantBaseline="middle">{s.label}</text>; })}
+    </svg>
+  );
+}
+
+// Overall-rating trend across analyzed games.
+function TrendLine({ games }: { games: { overall: number; date?: string | null; title: string }[] }) {
+  const w = 300, h = 90, pad = 16;
+  const vals = games.map((g) => g.overall);
+  const min = Math.min(...vals), max = Math.max(...vals);
+  const range = max - min || 1;
+  const x = (i: number) => pad + (games.length > 1 ? i / (games.length - 1) : 0.5) * (w - pad * 2);
+  const y = (v: number) => h - pad - ((v - min) / range) * (h - pad * 2);
+  const pts = games.map((g, i) => [x(i), y(g.overall)] as [number, number]);
+  return (
+    <svg viewBox={`0 0 ${w} ${h}`} width={w} height={h}>
+      <polyline points={pts.map((p) => p.join(",")).join(" ")} fill="none" stroke={C.primary} strokeWidth={2} />
+      {pts.map((p, i) => <circle key={i} cx={p[0]} cy={p[1]} r={3} fill={C.primary} />)}
+    </svg>
+  );
+}
+
 export default function MatchReport({
   match,
   shot,
   analysis,
   players,
   track,
+  rollup,
 }: {
   match: any;
   shot: ShotAnalysisResult | null;
   analysis: InferenceResult | null;
   players: PlayerCoverage | null;
   track: TrackResult | null;
+  rollup?: RatingsRollup | null;
 }) {
   const a = shot?.analysis;
   const dateStr = new Date(match.recorded_at || match.created_at || Date.now()).toLocaleDateString(undefined, {
@@ -164,6 +216,52 @@ export default function MatchReport({
           <div style={{ color: C.dim, fontSize: 12, marginTop: 3 }}>{dateStr}</div>
         </div>
       </div>
+
+      {/* Career ratings & record (the "Ratings & Team" data) */}
+      {rollup && rollup.count > 0 && (
+        <Section title="Career ratings & record" accent="rgba(163,230,53,0.35)">
+          <div style={{ display: "flex", gap: 20, alignItems: "flex-start", flexWrap: "wrap" }}>
+            <div style={{ textAlign: "center", minWidth: 92 }}>
+              <div style={{ fontSize: 40, fontWeight: 800, color: C.primary, lineHeight: 1 }}>{rollup.overall.toFixed(1)}</div>
+              <div style={{ color: C.dim, fontSize: 10, marginTop: 4 }}>AI DUPR est · {rollup.count} game{rollup.count === 1 ? "" : "s"}</div>
+              {rollup.wins + rollup.losses > 0 && (
+                <div style={{ marginTop: 10 }}>
+                  <div style={{ fontSize: 15, fontWeight: 800 }}>
+                    <span style={{ color: C.excellent }}>{rollup.wins}W</span>
+                    <span style={{ color: C.dim, margin: "0 4px" }}>–</span>
+                    <span style={{ color: C.poor }}>{rollup.losses}L</span>
+                  </div>
+                  <div style={{ color: C.dim, fontSize: 11, marginTop: 2 }}>
+                    {Math.round((100 * rollup.wins) / (rollup.wins + rollup.losses))}% win rate
+                  </div>
+                </div>
+              )}
+            </div>
+            <Radar ratings={rollup.ratings} />
+            <div style={{ flex: 1, minWidth: 200 }}>
+              <div style={{ color: C.dim, fontSize: 10.5, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 6 }}>Rating trend</div>
+              {rollup.count >= 2 ? (
+                <TrendLine games={rollup.games} />
+              ) : (
+                <div style={{ color: C.dim, fontSize: 12 }}>Analyze another game to start your trend line.</div>
+              )}
+              <div style={{ marginTop: 8 }}>
+                {rollup.games.slice().reverse().slice(0, 6).map((g) => (
+                  <div key={g.matchId} style={{ display: "flex", justifyContent: "space-between", fontSize: 11.5, padding: "4px 0", borderTop: `1px solid ${C.border}`, color: C.muted }}>
+                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginRight: 10 }}>
+                      {g.title}{g.date ? ` · ${g.date}` : ""}
+                    </span>
+                    <span>
+                      <b style={{ color: C.primary }}>{g.overall.toFixed(1)}</b>
+                      {g.result ? <span style={{ color: g.result === "win" ? C.excellent : C.poor, marginLeft: 6 }}>{g.result === "win" ? "W" : "L"}</span> : null}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </Section>
+      )}
 
       {/* AI Shot Breakdown */}
       {a && (

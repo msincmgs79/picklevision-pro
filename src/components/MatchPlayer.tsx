@@ -16,6 +16,7 @@ import {
   type ShotAnalysisResult,
   type TrackResult,
   type PlayerCoverage,
+  type RatingsRollup,
 } from "../lib/analysis";
 import TrajectoryMap3D from "./TrajectoryMap3D";
 import { enablePush, isPushEnabled, notify, pushSupported } from "../lib/push";
@@ -33,10 +34,12 @@ export default function MatchPlayer({
   match,
   videoUrl,
   initialBookmarks,
+  rollup,
 }: {
   match: any;
   videoUrl: string | null;
   initialBookmarks: Bookmark[];
+  rollup?: RatingsRollup | null;
 }) {
   const router = useRouter();
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -1037,7 +1040,7 @@ export default function MatchPlayer({
           (after mount) to avoid SSR/locale hydration mismatches. */}
       {mounted && (
         <div ref={reportRef} aria-hidden="true" style={{ position: "fixed", left: -99999, top: 0, pointerEvents: "none" }}>
-          <MatchReport match={match} shot={shot} analysis={analysis} players={players} track={track} />
+          <MatchReport match={match} shot={shot} analysis={analysis} players={players} track={track} rollup={rollup} />
         </div>
       )}
     </div>
