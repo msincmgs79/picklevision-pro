@@ -89,6 +89,7 @@ export default function MatchPlayer({
   const [pdfBusy, setPdfBusy] = useState(false);
   const [pdfError, setPdfError] = useState<string | null>(null);
   const reportRef = useRef<HTMLDivElement | null>(null);
+  const [mounted, setMounted] = useState(false);
 
   const supabase = createClient();
   const fmt = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
@@ -107,6 +108,10 @@ export default function MatchPlayer({
   useEffect(() => {
     isPushEnabled().then(setPushOn);
   }, []);
+
+  // Render the off-screen PDF report only after mount — it uses locale/date
+  // formatting that would otherwise cause SSR hydration mismatches.
+  useEffect(() => setMounted(true), []);
 
   useEffect(() => {
     const v = videoRef.current;
@@ -1028,10 +1033,13 @@ export default function MatchPlayer({
         )}
       </div>
 
-      {/* Off-screen report, captured to build the downloadable PDF. */}
-      <div ref={reportRef} aria-hidden="true" style={{ position: "fixed", left: -99999, top: 0, pointerEvents: "none" }}>
-        <MatchReport match={match} shot={shot} analysis={analysis} players={players} track={track} />
-      </div>
+      {/* Off-screen report, captured to build the downloadable PDF. Client-only
+          (after mount) to avoid SSR/locale hydration mismatches. */}
+      {mounted && (
+        <div ref={reportRef} aria-hidden="true" style={{ position: "fixed", left: -99999, top: 0, pointerEvents: "none" }}>
+          <MatchReport match={match} shot={shot} analysis={analysis} players={players} track={track} />
+        </div>
+      )}
     </div>
   );
 }
