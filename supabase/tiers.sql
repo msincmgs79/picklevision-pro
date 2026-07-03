@@ -1,5 +1,5 @@
 -- Tier restructure (2026-07): add the Premium Plus tier and reprice.
--- Free = 1 video/mo, Premium = 3, Premium Plus = 5, Ultra = 15.
+-- Free = 1 video/mo, Premium = 3, Premium Plus = 7, Ultra = 15.
 -- Run once in the Supabase SQL editor.
 
 -- 1) Allow the new 'premiumplus' plan value.
@@ -25,7 +25,7 @@ begin
 
   lim := case p.plan
     when 'ultra' then 15
-    when 'premiumplus' then 5
+    when 'premiumplus' then 7
     when 'premium' then 3
     else 1
   end;

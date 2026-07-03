@@ -38,7 +38,7 @@ const tiers = [
     price: "$24.99",
     per: "/ month",
     features: [
-      "5 videos / month",
+      "7 videos / month",
       "50 GB storage · 6-month history",
       "Everything in Premium",
       "Better top-up credit rates",
