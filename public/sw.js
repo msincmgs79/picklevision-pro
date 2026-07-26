@@ -2,7 +2,7 @@
 // Navigations are network-first (always fresh, falls back to an offline page);
 // hashed static assets are cache-first; everything else (Supabase, Railway,
 // RSC, videos) passes straight through to the network untouched.
-const CACHE = "pv-shell-v1";
+const CACHE = "pv-shell-v2";
 const PRECACHE = ["/offline", "/manifest.webmanifest", "/logo.png"];
 
 self.addEventListener("install", (event) => {
