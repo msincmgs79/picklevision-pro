@@ -14,6 +14,7 @@ export interface Student {
   email: string | null;
   notes: string | null;
   linked_user_id: string | null;
+  invite_token: string | null;
   status: "managed" | "invited" | "active";
   created_at: string;
 }

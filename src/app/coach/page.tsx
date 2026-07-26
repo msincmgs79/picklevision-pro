@@ -37,23 +37,39 @@ export default function CoachPage() {
       setLoading(false);
       return;
     }
-    const [{ data: students }, { data: matches }] = await Promise.all([
-      supabase.from("students").select("*").eq("coach_id", id).order("created_at", { ascending: true }),
-      supabase
-        .from("matches")
-        .select("id,title,student_id,recorded_at,created_at,result,shot_analysis")
-        .not("student_id", "is", null)
-        .order("created_at", { ascending: true }),
-    ]);
+    const studentsRes = await supabase.from("students").select("*").eq("coach_id", id).order("created_at", { ascending: true });
+    const students = (studentsRes.data as Student[]) || [];
+
+    const { data: tagged } = await supabase
+      .from("matches")
+      .select("id,title,student_id,user_id,recorded_at,created_at,result,shot_analysis")
+      .not("student_id", "is", null)
+      .order("created_at", { ascending: true });
 
     const byStudent = new Map<string, StudentMatchRow[]>();
-    for (const m of (matches as (StudentMatchRow & { student_id: string })[]) || []) {
-      const arr = byStudent.get(m.student_id) || [];
-      arr.push(m);
-      byStudent.set(m.student_id, arr);
+    const push = (sid: string, m: StudentMatchRow) => {
+      const arr = byStudent.get(sid) || [];
+      if (!arr.some((x) => x.id === m.id)) arr.push(m);
+      byStudent.set(sid, arr);
+    };
+    for (const m of (tagged as (StudentMatchRow & { student_id: string })[]) || []) push(m.student_id, m);
+
+    // Active linked students: also include the matches they analyzed themselves.
+    const linked = students.filter((s) => s.status === "active" && s.linked_user_id);
+    if (linked.length) {
+      const userToStudent = new Map(linked.map((s) => [s.linked_user_id as string, s.id]));
+      const { data: own } = await supabase
+        .from("matches")
+        .select("id,title,student_id,user_id,recorded_at,created_at,result,shot_analysis")
+        .in("user_id", linked.map((s) => s.linked_user_id as string))
+        .order("created_at", { ascending: true });
+      for (const m of (own as (StudentMatchRow & { user_id: string })[]) || []) {
+        const sid = userToStudent.get(m.user_id);
+        if (sid) push(sid, m);
+      }
     }
 
-    const entries: RosterEntry[] = ((students as Student[]) || []).map((s) => {
+    const entries: RosterEntry[] = students.map((s) => {
       const rows = byStudent.get(s.id) || [];
       const roll = rollupFromRows(rows);
       return {
@@ -154,9 +170,16 @@ export default function CoachPage() {
               {roster.map((r) => (
                 <div key={r.student.id} className="card" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
-                    <Link href={`/coach/${r.student.id}`} style={{ fontWeight: 800, fontSize: 16, color: "var(--text)", textDecoration: "none" }}>
-                      {r.student.name}
-                    </Link>
+                    <div style={{ minWidth: 0 }}>
+                      <Link href={`/coach/${r.student.id}`} style={{ fontWeight: 800, fontSize: 16, color: "var(--text)", textDecoration: "none" }}>
+                        {r.student.name}
+                      </Link>
+                      {r.student.status === "active" ? (
+                        <span className="badge badge-excellent" style={{ fontSize: 10, marginLeft: 8 }}>LINKED</span>
+                      ) : r.student.status === "invited" ? (
+                        <span className="badge" style={{ fontSize: 10, marginLeft: 8, background: "rgba(251,191,36,0.15)", color: "#fbbf24" }}>INVITED</span>
+                      ) : null}
+                    </div>
                     <button
                       className="iconbtn"
                       onClick={() => removeStudent(r.student.id, r.student.name)}
