@@ -43,12 +43,25 @@ Every shared match becomes a marketing surface. **No raw video is ever exposed.*
 - Reuses the **service-role key already in Vercel** (from Stripe) — nothing new for you.
 - Verified: `tsc` + `next build` clean; prod server renders `/s/<token>` (200) and the API guard fires.
 
-### Phase 2 — AI Coach Chat
-Per-match "Ask your AI coach" — chat grounded in that match's real analysis data
-(ratings, shots, coverage) that answers questions and prescribes drills.
-- [Both] `ANTHROPIC_API_KEY` in Vercel (you paste it) — Claude API, pay-per-use.
-- [Build] `/api/coach` streaming route (data-grounded system prompt, no hallucinated stats).
-- [Build] Chat UI on the match page; metered like analyses (first free / credits after).
+### ✅ Phase 2 — AI Coach Chat  _(built 2026-07-21 — needs `GEMINI_API_KEY` in Vercel + push)_
+Per-match "🎓 AI Coach" — a chat grounded in that match's real analysis data
+(ratings, shots, kitchen control, strengths/improvements) that answers questions
+and prescribes drills. Streams the reply live; never claims official DUPR.
+**Uses Gemini (`gemini-2.5-flash`) — the same provider/key as the AI breakdown**
+(one provider, one bill, far cheaper than a second AI). _(Originally prototyped on
+Claude, then switched to Gemini at the owner's call.)_
+- [x] `src/lib/gemini.ts` — `geminiConfigured` guard + `COACH_MODEL` constant (one-line to tune).
+- [x] `src/app/api/coach/route.ts` — streaming Gemini SSE, data-grounded system prompt (no
+  hallucinated stats), RLS ownership check, `maxOutputTokens` capped, thinking off (cheap),
+  graceful "not switched on" 503.
+- [x] `src/components/CoachChat.tsx` + "🎓 AI Coach" panel in `MatchPlayer` (starter questions,
+  live-streamed replies, needs shot analysis first).
+- **Metering:** included per analyzed match — first message unlocks it (recorded as `coach`
+  in the run ledger), then chat freely. Cost bounded by `maxOutputTokens` + Gemini Flash pricing.
+  (Easy to switch to per-message/session credits later if usage warrants.)
+- **To go live:** [Both] ensure `GEMINI_API_KEY` is set in Vercel (you already use it — same key
+  as the breakdown; it may already be there), then push. No new provider, no new bill.
+- Verified: `tsc` + `next build` clean; prod route returns the 503 config guard correctly.
 
 ### Phase 3 — Coach & Club accounts
 A coach invites students, sees their matches + rating trends, assigns drills.

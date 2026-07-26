@@ -22,6 +22,7 @@ import TrajectoryMap3D from "./TrajectoryMap3D";
 import { enablePush, isPushEnabled, notify, pushSupported } from "../lib/push";
 import { analyzeRallies } from "../lib/rallies";
 import MatchReport from "./MatchReport";
+import CoachChat from "./CoachChat";
 import { generateReportPdf } from "../lib/pdfReport";
 
 interface Bookmark {
@@ -99,6 +100,7 @@ export default function MatchPlayer({
   const [shared, setShared] = useState<boolean>(!!(match as { shared?: boolean }).shared);
   const [shareToken, setShareToken] = useState<string | null>((match as { share_token?: string }).share_token ?? null);
   const [shareCopied, setShareCopied] = useState(false);
+  const [coachOpen, setCoachOpen] = useState(false);
 
   const supabase = createClient();
   const fmt = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
@@ -528,6 +530,13 @@ export default function MatchPlayer({
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", justifyContent: "flex-end" }}>
           <button
+            className={"btn btn-sm" + (coachOpen ? " btn-primary" : "")}
+            onClick={() => setCoachOpen((o) => !o)}
+            title="Chat with an AI coach about this match"
+          >
+            🎓 AI Coach
+          </button>
+          <button
             className={"btn btn-sm" + (shared ? " btn-primary" : "")}
             onClick={() => setShareOpen((o) => !o)}
             title="Create a public link to this match's AI summary"
@@ -610,6 +619,17 @@ export default function MatchPlayer({
             </button>
           )}
           {shareErr && <span style={{ fontSize: 12.5, color: "var(--poor)" }}>{shareErr}</span>}
+        </div>
+      )}
+
+      {coachOpen && (
+        <div style={{ marginTop: 12, maxWidth: 920 }}>
+          <CoachChat
+            matchId={match.id}
+            hasAnalysis={!!shot?.analysis}
+            alreadyUsed={!!runsUsed.coach}
+            onUsed={() => { markRunUsed("coach"); }}
+          />
         </div>
       )}
 
