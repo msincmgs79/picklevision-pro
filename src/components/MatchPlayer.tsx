@@ -101,6 +101,8 @@ export default function MatchPlayer({
   const [shareToken, setShareToken] = useState<string | null>((match as { share_token?: string }).share_token ?? null);
   const [shareCopied, setShareCopied] = useState(false);
   const [coachOpen, setCoachOpen] = useState(false);
+  const [roster, setRoster] = useState<{ id: string; name: string }[]>([]);
+  const [studentId, setStudentId] = useState<string | null>((match as { student_id?: string }).student_id ?? null);
 
   const supabase = createClient();
   const fmt = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
@@ -123,6 +125,22 @@ export default function MatchPlayer({
   // Render the off-screen PDF report only after mount — it uses locale/date
   // formatting that would otherwise cause SSR hydration mismatches.
   useEffect(() => setMounted(true), []);
+
+  // Load the signed-in coach's roster so they can tag this match to a student.
+  // Non-coaches (no roster) simply see no control.
+  useEffect(() => {
+    (async () => {
+      const { data: auth } = await supabase.auth.getUser();
+      if (!auth.user) return;
+      const { data } = await supabase
+        .from("students")
+        .select("id,name")
+        .eq("coach_id", auth.user.id)
+        .order("created_at", { ascending: true });
+      if (data) setRoster(data as { id: string; name: string }[]);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     const v = videoRef.current;
@@ -346,6 +364,16 @@ export default function MatchPlayer({
     } catch {}
   }
 
+  // Tag this match to a roster student (or clear it). Owner can update their own match.
+  async function assignStudent(id: string | null) {
+    setStudentId(id);
+    try {
+      await supabase.from("matches").update({ student_id: id }).eq("id", match.id);
+    } catch {
+      /* non-fatal — the select reflects the attempted value */
+    }
+  }
+
   async function runAnalysis() {
     setAnalyzing(true);
     setAnalysisError(null);
@@ -529,6 +557,28 @@ export default function MatchPlayer({
           )}
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", justifyContent: "flex-end" }}>
+          {roster.length > 0 && (
+            <select
+              value={studentId ?? ""}
+              onChange={(e) => assignStudent(e.target.value || null)}
+              title="Assign this match to a student on your roster"
+              style={{
+                padding: "7px 10px",
+                borderRadius: 8,
+                border: "1px solid " + (studentId ? "var(--primary)" : "var(--border)"),
+                background: "var(--surface)",
+                color: "var(--text)",
+                fontSize: 13,
+                fontWeight: 600,
+                maxWidth: 190,
+              }}
+            >
+              <option value="">Assign to student…</option>
+              {roster.map((s) => (
+                <option key={s.id} value={s.id}>{s.name}</option>
+              ))}
+            </select>
+          )}
           <button
             className={"btn btn-sm" + (coachOpen ? " btn-primary" : "")}
             onClick={() => setCoachOpen((o) => !o)}

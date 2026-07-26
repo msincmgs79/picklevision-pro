@@ -63,11 +63,25 @@ Claude, then switched to Gemini at the owner's call.)_
   as the breakdown; it may already be there), then push. No new provider, no new bill.
 - Verified: `tsc` + `next build` clean; prod route returns the 503 config guard correctly.
 
-### Phase 3 — Coach & Club accounts
-A coach invites students, sees their matches + rating trends, assigns drills.
-- [Build] `orgs` / `memberships` schema + RLS; invite flow.
-- [Build] Coach dashboard (roster, per-student progress); drill library content model.
-- New tier surface ("Coach" plan) — pricing decision is [Owner].
+### Phase 3 — Coach & Club accounts _(hybrid: coach-managed students + invited real users)_
+
+**✅ 3a — Roster + managed students + match tagging** _(built 2026-07-21 — needs `coach.sql` + push)_
+- [x] `supabase/coach.sql` — `students` table (managed/invited/active; invite+linked-user cols
+  included so 3b needs no re-migration) + RLS (coach CRUD own roster; linked user sees own row);
+  `matches.student_id` tag column. **You run it.**
+- [x] `src/lib/coach.ts` — `Student` type + pure per-student `rollupFromRows` (recency-weighted).
+- [x] `src/app/coach/page.tsx` — dashboard: add students, roster cards with rating/record.
+- [x] `src/app/coach/[studentId]/page.tsx` — per-student rating, skill breakdown, match list.
+- [x] `MatchPlayer` "Assign to student" dropdown (shown only if you have a roster) +
+  "Coach dashboard" in the sidebar. All CRUD is client-side via RLS (no new API routes).
+- Verified: `tsc` + `next build` clean; prod `/coach` + `/coach/[id]` render (200).
+
+**3b — Invites + linked real users** _(next)_ — generate invite link, accept page, and an
+RLS grant so a coach can read an accepted student's own matches.
+
+**3c — Drill library + assignments** — `drills` + `drill_assignments` tables + UI.
+
+**Coach pricing tier** — [Owner]. Plumbed tier-agnostic; anyone signed in can use /coach for now.
 
 ### Phase 4 — Deeper analytics & community
 Uses data we already have; no new infra.

@@ -16,6 +16,8 @@ const links = [
   { href: "/review", label: "Video Review", icon: "▷" },
   { section: "Progress" },
   { href: "/ratings", label: "Ratings & Team", icon: "★" },
+  { section: "Coaching" },
+  { href: "/coach", label: "Coach dashboard", icon: "◈" },
   { section: "Account" },
   { href: "/account", label: "My Account", icon: "◎" },
 ];
