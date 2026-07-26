@@ -76,22 +76,38 @@ Claude, then switched to Gemini at the owner's call.)_
   "Coach dashboard" in the sidebar. All CRUD is client-side via RLS (no new API routes).
 - Verified: `tsc` + `next build` clean; prod `/coach` + `/coach/[id]` render (200).
 
-**3b — Invites + linked real users** _(next)_ — generate invite link, accept page, and an
-RLS grant so a coach can read an accepted student's own matches.
+**✅ 3b — Invites + linked real users** _(built + LIVE 2026-07-26)_
+- [x] `supabase/coach_invites.sql` — matches SELECT policy so a coach reads an active linked
+  student's own matches (OR-combined with the owner-only policy). **Ran on prod.**
+- [x] `/api/coach/accept` — GET invite validity; POST links the signed-in user (service role).
+- [x] `/coach/join/[token]` — accept page (signed-out / valid / already-used / accepted).
+- [x] Per-student page: "Create invite link" + copy; merges the linked user's own matches with
+  coach-tagged ones. Dashboard: LINKED/INVITED badges + counts linked students' own matches.
 
-**3c — Drill library + assignments** — `drills` + `drill_assignments` tables + UI.
+**✅ 3c — Drill library + assignments** _(built + LIVE 2026-07-26)_
+- [x] `supabase/drills.sql` — `drills` (coach library) + `drill_assignments` (snapshotted
+  title/description; RLS so a linked student reads + ticks off only their own). **Ran on prod.**
+- [x] `/coach/drills` library (create/list/delete), assign-a-drill on the per-student page,
+  `/drills` student view (mark done), sidebar Drill library + My Drills links.
 
 **Coach pricing tier** — [Owner]. Plumbed tier-agnostic; anyone signed in can use /coach for now.
 
 ### Phase 4 — Deeper analytics & community
-Uses data we already have; no new infra.
-- [Build] Progress page (rating over time, per-skill deltas, streaks).
-- [Build] Leaderboards (opt-in) + doubles/partner analytics.
-- [Both] DUPR integration — gated on DUPR API access [Owner].
+- **✅ 4a — Trends & Matchups** _(built + LIVE 2026-07-26, `67c96f3`)_ — `/trends`: record/win%,
+  streak, recent form, rating momentum, breakdown by opponent + by team. Pure frontend over
+  existing matches; no migration.
+- **4b — Leaderboard (opt-in)** _(needs a decision)_ — ranking players by AI rating. Requires an
+  opt-in flag + a stored per-user rating + display name (privacy: opt-in only). [Owner] decision:
+  should it exist, and public or friends-only?
+- **4c — DUPR integration** _(gated)_ — [Owner] needs DUPR API access first.
 
 ### Phase 5 — Auto highlight reels
-- [Build] **Now:** auto chapter-markers + jump-to "moments" on the review player (client-side).
-- [Build] **Later:** true clipped video reels — needs backend ffmpeg (bundle with Track B backend work).
+- **✅ 5a — Highlight reel playback** _(built + LIVE 2026-07-26, `e41cf58`)_ — on the Rallies tab,
+  "🎬 Play highlight reel" (top moments) + "▶ Play all rallies" (skips dead time), hands-free
+  sequential playback over the existing video with Stop + a moment counter. Reuses `analyzeRallies`.
+  Needs a full-video track first (Trajectories → Track full video).
+- **5b — True clipped video reels** _(later)_ — downloadable/shareable clipped reels; needs
+  backend ffmpeg (bundle with Track B backend work).
 
 ---
 
