@@ -102,6 +102,9 @@ export default function MatchPlayer({
   const [shareCopied, setShareCopied] = useState(false);
   const [roster, setRoster] = useState<{ id: string; name: string }[]>([]);
   const [studentId, setStudentId] = useState<string | null>((match as { student_id?: string }).student_id ?? null);
+  const [reelActive, setReelActive] = useState(false);
+  const [reelQueue, setReelQueue] = useState<{ start: number; end: number }[]>([]);
+  const [reelIdx, setReelIdx] = useState(0);
 
   const supabase = createClient();
   const fmt = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
@@ -190,6 +193,36 @@ export default function MatchPlayer({
     if (v.paused) v.play();
     else v.pause();
   }
+  // Highlight reel — play a sequence of moments back-to-back, hands-free.
+  function playReel(segments: { start: number; end: number }[]) {
+    if (segments.length === 0) return;
+    setReelQueue(segments);
+    setReelIdx(0);
+    setReelActive(true);
+    seek(segments[0].start);
+    videoRef.current?.play();
+  }
+  function stopReel() {
+    setReelActive(false);
+    videoRef.current?.pause();
+  }
+  // Advance the reel when the current segment finishes.
+  useEffect(() => {
+    if (!reelActive || reelQueue.length === 0) return;
+    const seg = reelQueue[reelIdx];
+    if (!seg) return;
+    if (time >= seg.end) {
+      const next = reelIdx + 1;
+      if (next < reelQueue.length) {
+        setReelIdx(next);
+        seek(reelQueue[next].start);
+      } else {
+        setReelActive(false);
+        videoRef.current?.pause();
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [time, reelActive, reelIdx, reelQueue]);
   function scrubAt(e: React.PointerEvent) {
     const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
     const frac = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
@@ -1153,6 +1186,34 @@ export default function MatchPlayer({
                     <Metric label="Avg length" value={`${ra.avgDuration.toFixed(1)}s`} />
                     <Metric label="Active play" value={`${Math.round(ra.activeSec)}s`} />
                   </div>
+
+                  {/* Highlight reel — hands-free sequential playback */}
+                  <div style={{ display: "flex", gap: 8, marginTop: 14, flexWrap: "wrap", alignItems: "center" }}>
+                    {reelActive ? (
+                      <button className="btn btn-primary btn-sm" onClick={stopReel}>
+                        ⏹ Stop reel · moment {reelIdx + 1}/{reelQueue.length}
+                      </button>
+                    ) : (
+                      <>
+                        <button
+                          className="btn btn-primary btn-sm"
+                          disabled={ra.highlightIdx.length === 0 || !videoUrl}
+                          onClick={() => playReel(reelSegs(ra.highlightIdx.map((i) => ra.rallies[i])))}
+                          title="Play the top moments back-to-back"
+                        >
+                          🎬 Play highlight reel
+                        </button>
+                        <button
+                          className="btn btn-sm"
+                          disabled={ra.rallies.length === 0 || !videoUrl}
+                          onClick={() => playReel(reelSegs(ra.rallies))}
+                          title="Play every rally, skipping the dead time"
+                        >
+                          ▶ Play all rallies
+                        </button>
+                      </>
+                    )}
+                  </div>
                   {ra.highlightIdx.length > 0 && (
                     <>
                       <div className="dim" style={{ fontSize: 12, margin: "16px 0 8px", textTransform: "uppercase", letterSpacing: 0.5 }}>Highlights</div>
@@ -1197,6 +1258,14 @@ export default function MatchPlayer({
       )}
     </div>
   );
+}
+
+// Turn rallies into reel segments: chronological, with a short lead-in and a
+// minimum ~3s so each moment is watchable.
+function reelSegs(rallies: { start: number; end: number }[]): { start: number; end: number }[] {
+  return rallies
+    .map((r) => ({ start: Math.max(0, r.start - 0.5), end: Math.max(r.start + 3, r.end + 0.5) }))
+    .sort((a, b) => a.start - b.start);
 }
 
 function emphasisColor(e: string): string {
