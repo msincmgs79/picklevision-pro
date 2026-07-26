@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { createClient } from "../../../lib/supabase/client";
 import { isSupabaseConfigured } from "../../../lib/supabase/config";
-import { rollupFromRows, type Student, type StudentMatchRow } from "../../../lib/coach";
+import { rollupFromRows, type Student, type StudentMatchRow, type Drill, type DrillAssignment } from "../../../lib/coach";
 import type { RatingsRollup, SkillRatings } from "../../../lib/analysis";
 
 const SKILL_LABELS: Record<keyof SkillRatings, string> = {
@@ -53,6 +53,12 @@ export default function StudentProgressPage() {
   const [inviteToken, setInviteToken] = useState<string | null>(null);
   const [inviteBusy, setInviteBusy] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [uid, setUid] = useState<string | null>(null);
+  const [drills, setDrills] = useState<Drill[]>([]);
+  const [assignments, setAssignments] = useState<DrillAssignment[]>([]);
+  const [selectedDrill, setSelectedDrill] = useState("");
+  const [assignNote, setAssignNote] = useState("");
+  const [assignBusy, setAssignBusy] = useState(false);
 
   useEffect(() => {
     if (!isSupabaseConfigured || !studentId) {
@@ -67,6 +73,9 @@ export default function StudentProgressPage() {
         setLoading(false);
         return;
       }
+      setUid(auth.user.id);
+      const { data: dr } = await supabase.from("drills").select("*").eq("coach_id", auth.user.id).order("created_at", { ascending: false });
+      setDrills((dr as Drill[]) || []);
       const { data: s } = await supabase.from("students").select("*").eq("id", studentId).maybeSingle();
       const stu = (s as Student) ?? null;
       setStudent(stu);
@@ -97,10 +106,60 @@ export default function StudentProgressPage() {
         }
         setRows(list);
         setRollup(rollupFromRows(list));
+
+        const { data: asg } = await supabase
+          .from("drill_assignments")
+          .select("*")
+          .eq("student_id", studentId)
+          .order("created_at", { ascending: false });
+        setAssignments((asg as DrillAssignment[]) || []);
       }
       setLoading(false);
     })();
   }, [studentId]);
+
+  async function reloadAssignments() {
+    if (!studentId) return;
+    const supabase = createClient();
+    const { data } = await supabase
+      .from("drill_assignments")
+      .select("*")
+      .eq("student_id", studentId)
+      .order("created_at", { ascending: false });
+    setAssignments((data as DrillAssignment[]) || []);
+  }
+
+  async function assignDrill() {
+    if (!uid || !student || !selectedDrill || assignBusy) return;
+    const drill = drills.find((d) => d.id === selectedDrill);
+    if (!drill) return;
+    setAssignBusy(true);
+    const supabase = createClient();
+    await supabase.from("drill_assignments").insert({
+      coach_id: uid,
+      student_id: student.id,
+      drill_id: drill.id,
+      title: drill.title,
+      description: drill.description,
+      note: assignNote.trim() || null,
+    });
+    setSelectedDrill("");
+    setAssignNote("");
+    await reloadAssignments();
+    setAssignBusy(false);
+  }
+
+  async function toggleAssignment(a: DrillAssignment) {
+    const supabase = createClient();
+    setAssignments((list) => list.map((x) => (x.id === a.id ? { ...x, done: !x.done } : x)));
+    await supabase.from("drill_assignments").update({ done: !a.done }).eq("id", a.id);
+  }
+
+  async function removeAssignment(id: string) {
+    const supabase = createClient();
+    setAssignments((list) => list.filter((x) => x.id !== id));
+    await supabase.from("drill_assignments").delete().eq("id", id);
+  }
 
   async function createInvite() {
     if (!student || inviteBusy) return;
@@ -199,6 +258,63 @@ export default function StudentProgressPage() {
                 {inviteBusy ? "Creating…" : "Create invite link"}
               </button>
             )}
+          </div>
+        )}
+      </div>
+
+      {/* Drills */}
+      <div className="card" style={{ marginTop: 16 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
+          <div className="section-title">Drills</div>
+          <Link href="/coach/drills" className="btn btn-sm">Manage drill library →</Link>
+        </div>
+
+        {drills.length === 0 ? (
+          <p className="muted" style={{ fontSize: 13, marginTop: 10, marginBottom: 0 }}>
+            Add drills to your <Link href="/coach/drills" style={{ color: "var(--primary)" }}>library</Link> first, then assign them here.
+          </p>
+        ) : (
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginTop: 12 }}>
+            <select
+              value={selectedDrill}
+              onChange={(e) => setSelectedDrill(e.target.value)}
+              style={{ padding: "8px 10px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)", fontSize: 13, maxWidth: 220 }}
+            >
+              <option value="">Choose a drill…</option>
+              {drills.map((d) => (
+                <option key={d.id} value={d.id}>{d.title}</option>
+              ))}
+            </select>
+            <input
+              value={assignNote}
+              onChange={(e) => setAssignNote(e.target.value)}
+              placeholder="Note for this student (optional)"
+              style={{ flex: "1 1 180px", padding: "8px 10px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--text)", fontSize: 13 }}
+            />
+            <button className="btn btn-primary btn-sm" onClick={assignDrill} disabled={assignBusy || !selectedDrill}>
+              {assignBusy ? "Assigning…" : "Assign"}
+            </button>
+          </div>
+        )}
+
+        {assignments.length > 0 && (
+          <div style={{ marginTop: 14 }}>
+            {assignments.map((a) => (
+              <div key={a.id} style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: "9px 0", borderBottom: "1px solid var(--border)" }}>
+                <button
+                  onClick={() => toggleAssignment(a)}
+                  aria-label={a.done ? "Mark not done" : "Mark done"}
+                  style={{ flexShrink: 0, width: 22, height: 22, borderRadius: 6, border: "1px solid " + (a.done ? "var(--primary)" : "var(--border)"), background: a.done ? "var(--primary)" : "transparent", color: "#0a0e1a", cursor: "pointer", fontWeight: 800, fontSize: 12, marginTop: 1 }}
+                >
+                  {a.done ? "✓" : ""}
+                </button>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 600, fontSize: 14, textDecoration: a.done ? "line-through" : "none" }}>{a.title}</div>
+                  {a.note && <div className="muted" style={{ fontSize: 12.5 }}>{a.note}</div>}
+                </div>
+                <button className="iconbtn" onClick={() => removeAssignment(a.id)} aria-label="Remove drill" style={{ width: 24, height: 24, fontSize: 11 }}>✕</button>
+              </div>
+            ))}
           </div>
         )}
       </div>

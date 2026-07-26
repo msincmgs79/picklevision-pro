@@ -18,6 +18,8 @@ const links = [
   { href: "/ratings", label: "Ratings & Team", icon: "★" },
   { section: "Coaching" },
   { href: "/coach", label: "Coach dashboard", icon: "◈" },
+  { href: "/coach/drills", label: "Drill library", icon: "◆" },
+  { href: "/drills", label: "My Drills", icon: "✎" },
   { section: "Account" },
   { href: "/account", label: "My Account", icon: "◎" },
 ];

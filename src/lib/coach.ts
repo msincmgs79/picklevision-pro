@@ -19,6 +19,30 @@ export interface Student {
   created_at: string;
 }
 
+// A reusable drill in a coach's library.
+export interface Drill {
+  id: string;
+  coach_id: string;
+  title: string;
+  description: string | null;
+  category: string | null;
+  video_url: string | null;
+  created_at: string;
+}
+
+// A drill assigned to a student (title/description snapshotted from the drill).
+export interface DrillAssignment {
+  id: string;
+  coach_id: string;
+  student_id: string;
+  drill_id: string | null;
+  title: string;
+  description: string | null;
+  note: string | null;
+  done: boolean;
+  created_at: string;
+}
+
 // One match row as fetched for a student's rollup.
 export interface StudentMatchRow {
   id: string;
