@@ -93,6 +93,12 @@ export default function MatchPlayer({
   const [pdfError, setPdfError] = useState<string | null>(null);
   const reportRef = useRef<HTMLDivElement | null>(null);
   const [mounted, setMounted] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [shareBusy, setShareBusy] = useState(false);
+  const [shareErr, setShareErr] = useState<string | null>(null);
+  const [shared, setShared] = useState<boolean>(!!(match as { shared?: boolean }).shared);
+  const [shareToken, setShareToken] = useState<string | null>((match as { share_token?: string }).share_token ?? null);
+  const [shareCopied, setShareCopied] = useState(false);
 
   const supabase = createClient();
   const fmt = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
@@ -307,6 +313,37 @@ export default function MatchPlayer({
     }
   }
 
+  // Public share link: turn a live, no-login /s/<token> page on or off for this
+  // match. The page shows only the AI summary — never the video.
+  async function toggleShare(enabled: boolean) {
+    setShareBusy(true);
+    setShareErr(null);
+    try {
+      const res = await fetch("/api/share", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ matchId: match.id, enabled }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "Couldn't update sharing.");
+      setShared(!!data.shared);
+      if (data.token) setShareToken(data.token);
+    } catch (e: any) {
+      setShareErr(e?.message || "Couldn't update sharing.");
+    } finally {
+      setShareBusy(false);
+    }
+  }
+
+  async function copyShareUrl() {
+    if (!shareToken) return;
+    try {
+      await navigator.clipboard.writeText(`${window.location.origin}/s/${shareToken}`);
+      setShareCopied(true);
+      setTimeout(() => setShareCopied(false), 2000);
+    } catch {}
+  }
+
   async function runAnalysis() {
     setAnalyzing(true);
     setAnalysisError(null);
@@ -489,7 +526,14 @@ export default function MatchPlayer({
             </>
           )}
         </div>
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", justifyContent: "flex-end" }}>
+          <button
+            className={"btn btn-sm" + (shared ? " btn-primary" : "")}
+            onClick={() => setShareOpen((o) => !o)}
+            title="Create a public link to this match's AI summary"
+          >
+            {shared ? "🔗 Shared" : "🔗 Share link"}
+          </button>
           <button
             className="btn btn-sm"
             onClick={downloadPdf}
@@ -518,6 +562,54 @@ export default function MatchPlayer({
         <div className="card" style={{ marginTop: 12, borderColor: "rgba(248,113,113,0.4)", display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center" }}>
           <span style={{ fontSize: 13, color: "var(--poor)" }}>{pdfError}</span>
           <button className="iconbtn" onClick={() => setPdfError(null)} aria-label="Dismiss" style={{ width: 24, height: 24 }}>✕</button>
+        </div>
+      )}
+
+      {shareOpen && (
+        <div className="card" style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 10 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <strong style={{ fontSize: 14 }}>Public share link</strong>
+            <button className="iconbtn" onClick={() => setShareOpen(false)} aria-label="Close" style={{ width: 24, height: 24 }}>✕</button>
+          </div>
+          <p className="muted" style={{ fontSize: 12.5, margin: 0, lineHeight: 1.5 }}>
+            Anyone with the link can view this match&rsquo;s AI summary — ratings, skill breakdown and coach tip. Your video is never shared.
+          </p>
+          {!shot?.analysis ? (
+            <p style={{ fontSize: 12.5, margin: 0, color: "var(--warn, #fbbf24)" }}>
+              Run the AI shot breakdown first — that&rsquo;s what the shared page shows.
+            </p>
+          ) : shared && shareToken ? (
+            <>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                <input
+                  readOnly
+                  value={`${typeof window !== "undefined" ? window.location.origin : ""}/s/${shareToken}`}
+                  onFocus={(e) => e.currentTarget.select()}
+                  style={{ flex: 1, minWidth: 200, padding: "8px 10px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--text)", fontSize: 13 }}
+                />
+                <button className="btn btn-sm" onClick={copyShareUrl}>{shareCopied ? "Copied ✓" : "Copy"}</button>
+                <a className="btn btn-sm btn-ghost" href={`/s/${shareToken}`} target="_blank" rel="noreferrer">Open ↗</a>
+              </div>
+              <button
+                className="btn btn-sm btn-ghost"
+                onClick={() => toggleShare(false)}
+                disabled={shareBusy}
+                style={{ alignSelf: "flex-start", color: "var(--poor)" }}
+              >
+                {shareBusy ? "…" : "Stop sharing"}
+              </button>
+            </>
+          ) : (
+            <button
+              className="btn btn-primary btn-sm"
+              onClick={() => toggleShare(true)}
+              disabled={shareBusy}
+              style={{ alignSelf: "flex-start" }}
+            >
+              {shareBusy ? "Creating…" : "Create public link"}
+            </button>
+          )}
+          {shareErr && <span style={{ fontSize: 12.5, color: "var(--poor)" }}>{shareErr}</span>}
         </div>
       )}
 
