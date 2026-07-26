@@ -83,7 +83,7 @@ export default function MatchPlayer({
   }));
   const [isPlaying, setIsPlaying] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<"insights" | "shots" | "trajectories" | "rallies" | "players" | "bookmarks">("insights");
+  const [activeTab, setActiveTab] = useState<"coach" | "insights" | "shots" | "trajectories" | "rallies" | "players" | "bookmarks">("insights");
   const [editing, setEditing] = useState(false);
   const [metaTitle, setMetaTitle] = useState(match.title || "");
   const [metaTeam, setMetaTeam] = useState(match.team || "");
@@ -100,7 +100,6 @@ export default function MatchPlayer({
   const [shared, setShared] = useState<boolean>(!!(match as { shared?: boolean }).shared);
   const [shareToken, setShareToken] = useState<string | null>((match as { share_token?: string }).share_token ?? null);
   const [shareCopied, setShareCopied] = useState(false);
-  const [coachOpen, setCoachOpen] = useState(false);
   const [roster, setRoster] = useState<{ id: string; name: string }[]>([]);
   const [studentId, setStudentId] = useState<string | null>((match as { student_id?: string }).student_id ?? null);
 
@@ -580,13 +579,6 @@ export default function MatchPlayer({
             </select>
           )}
           <button
-            className={"btn btn-sm" + (coachOpen ? " btn-primary" : "")}
-            onClick={() => setCoachOpen((o) => !o)}
-            title="Chat with an AI coach about this match"
-          >
-            🎓 AI Coach
-          </button>
-          <button
             className={"btn btn-sm" + (shared ? " btn-primary" : "")}
             onClick={() => setShareOpen((o) => !o)}
             title="Create a public link to this match's AI summary"
@@ -672,16 +664,6 @@ export default function MatchPlayer({
         </div>
       )}
 
-      {coachOpen && (
-        <div style={{ marginTop: 12, maxWidth: 920 }}>
-          <CoachChat
-            matchId={match.id}
-            hasAnalysis={!!shot?.analysis}
-            alreadyUsed={!!runsUsed.coach}
-            onUsed={() => { markRunUsed("coach"); }}
-          />
-        </div>
-      )}
 
       <div style={{ maxWidth: 920, marginTop: 22 }}>
         {/* player */}
@@ -804,12 +786,20 @@ export default function MatchPlayer({
       )}
 
       <div className="tabs" style={{ marginTop: 18, display: "inline-flex", flexWrap: "wrap" }}>
-        {([["insights", "Insights"], ["shots", "Shots"], ["trajectories", "Trajectories"], ["rallies", "Rallies"], ["players", "Players"], ["bookmarks", "Bookmarks"]] as const).map(([k, label]) => (
+        {([["coach", "🎓 AI Coach"], ["insights", "Insights"], ["shots", "Shots"], ["trajectories", "Trajectories"], ["rallies", "Rallies"], ["players", "Players"], ["bookmarks", "Bookmarks"]] as const).map(([k, label]) => (
           <button key={k} className={"tab" + (activeTab === k ? " active" : "")} onClick={() => setActiveTab(k)}>{label}</button>
         ))}
       </div>
 
       <div style={{ marginTop: 14 }}>
+        {activeTab === "coach" && (
+          <CoachChat
+            matchId={match.id}
+            hasAnalysis={!!shot?.analysis}
+            alreadyUsed={!!runsUsed.coach}
+            onUsed={() => { markRunUsed("coach"); }}
+          />
+        )}
         {activeTab === "bookmarks" && (
           <div className="card">
             <div className="section-title" style={{ marginBottom: 4 }}>Bookmarks</div>
