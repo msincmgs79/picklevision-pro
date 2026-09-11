@@ -22,7 +22,18 @@ export async function updateSession(request: NextRequest) {
     },
   });
 
-  // touch the session so tokens stay fresh
-  await supabase.auth.getUser();
+  // Touch the session so tokens stay fresh — but NEVER let a slow or unreachable
+  // Supabase hang the middleware. The middleware runs on every request, so a hung
+  // auth call here 504s the entire site (MIDDLEWARE_INVOCATION_TIMEOUT). Cap it:
+  // if it doesn't finish quickly we just skip the refresh this request (the page
+  // still renders; the client + server components refresh the session anyway).
+  try {
+    await Promise.race([
+      supabase.auth.getUser(),
+      new Promise((_, reject) => setTimeout(() => reject(new Error("auth-timeout")), 2500)),
+    ]);
+  } catch {
+    /* Supabase slow/unreachable — proceed without refreshing this request. */
+  }
   return response;
 }
