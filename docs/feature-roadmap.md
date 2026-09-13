@@ -96,9 +96,11 @@ Claude, then switched to Gemini at the owner's call.)_
 - **✅ 4a — Trends & Matchups** _(built + LIVE 2026-07-26, `67c96f3`)_ — `/trends`: record/win%,
   streak, recent form, rating momentum, breakdown by opponent + by team. Pure frontend over
   existing matches; no migration.
-- **4b — Leaderboard (opt-in)** _(needs a decision)_ — ranking players by AI rating. Requires an
-  opt-in flag + a stored per-user rating + display name (privacy: opt-in only). [Owner] decision:
-  should it exist, and public or friends-only?
+- **✅ 4b — Leaderboard (opt-in)** _(built + LIVE 2026-09-13, `d5bd246`)_ — `/leaderboard` public
+  ranking by AI rating; **opt-in only**. Dedicated `leaderboard` table holds only safe public fields
+  (display name, rating, record) so opting in never exposes anything from `profiles`; RLS public read
+  + owner-manages-own-row. Signed-in users toggle in/out + set a display name; rating computed from
+  their own matches, self-refreshes on visit. `supabase/leaderboard.sql` ran on prod. Sidebar link.
 - **4c — DUPR integration** _(gated)_ — [Owner] needs DUPR API access first.
 
 ### Phase 5 — Auto highlight reels
