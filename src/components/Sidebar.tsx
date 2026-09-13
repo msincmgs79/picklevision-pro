@@ -17,6 +17,7 @@ const links = [
   { section: "Progress" },
   { href: "/ratings", label: "Ratings & Team", icon: "★" },
   { href: "/trends", label: "Trends & Matchups", icon: "◷" },
+  { href: "/leaderboard", label: "Leaderboard", icon: "🏆" },
   { section: "Coaching" },
   { href: "/coach", label: "Coach dashboard", icon: "◈" },
   { href: "/coach/drills", label: "Drill library", icon: "◆" },
