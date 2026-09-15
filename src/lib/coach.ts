@@ -30,12 +30,19 @@ export interface Drill {
   created_at: string;
 }
 
-// A drill assigned to a student (title/description snapshotted from the drill).
+// A drill in a player's "My Drills" list. Comes from three sources:
+//   'coach' — a coach assigned it to a roster student (coach_id + student_id set)
+//   'ai'    — generated from the player's own game breakdown (user_id + match_id)
+//   'self'  — the player added it themselves (user_id set)
+// title/description are snapshotted so the row stands alone.
 export interface DrillAssignment {
   id: string;
-  coach_id: string;
-  student_id: string;
+  coach_id: string | null;
+  student_id: string | null;
+  user_id: string | null;
   drill_id: string | null;
+  match_id: string | null;
+  source: "coach" | "ai" | "self";
   title: string;
   description: string | null;
   note: string | null;

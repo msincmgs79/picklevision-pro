@@ -13,3 +13,10 @@ export const COACH_MODEL = "gemini-2.5-flash";
 export function geminiStreamUrl(model: string): string {
   return `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse`;
 }
+
+// Non-streaming endpoint — used when we want one structured JSON response back
+// (e.g. drill generation) rather than a live token stream. Key goes in the
+// `x-goog-api-key` header, same as the streaming call.
+export function geminiGenerateUrl(model: string): string {
+  return `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
+}
