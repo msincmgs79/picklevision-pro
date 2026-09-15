@@ -12,6 +12,7 @@ import {
   shotEndpointPublic,
   trackEndpointPublic,
   playersEndpointPublic,
+  reelEndpointPublic,
   type InferenceResult,
   type ShotAnalysisResult,
   type TrackResult,
@@ -105,6 +106,8 @@ export default function MatchPlayer({
   const [reelActive, setReelActive] = useState(false);
   const [reelQueue, setReelQueue] = useState<{ start: number; end: number }[]>([]);
   const [reelIdx, setReelIdx] = useState(0);
+  const [reelDownloading, setReelDownloading] = useState(false);
+  const [reelMsg, setReelMsg] = useState<string | null>(null);
 
   const supabase = createClient();
   const fmt = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
@@ -193,6 +196,49 @@ export default function MatchPlayer({
     if (v.paused) v.play();
     else v.pause();
   }
+  // Download the highlight moments as one stitched .mp4 (backend ffmpeg via /reel).
+  async function downloadReel(segments: { start: number; end: number }[]) {
+    if (segments.length === 0 || !videoUrl || reelDownloading) return;
+    const endpoint = reelEndpointPublic();
+    if (!endpoint) {
+      setReelMsg("Video backend isn't configured.");
+      return;
+    }
+    setReelDownloading(true);
+    setReelMsg(null);
+    try {
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ videoUrl, segments }),
+      });
+      if (!res.ok) {
+        let m = "Couldn't build the reel.";
+        try {
+          m = (await res.json())?.detail || m;
+        } catch {
+          /* non-JSON error body */
+        }
+        throw new Error(m);
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const safe = (metaTitle || "match").replace(/[^\w\- ]+/g, "").trim().slice(0, 60) || "match";
+      a.download = `${safe} - highlights.mp4`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+      setReelMsg(`Downloaded ${segments.length} moment${segments.length === 1 ? "" : "s"} as a clip.`);
+    } catch (e) {
+      setReelMsg(e instanceof Error ? e.message : "Couldn't build the reel.");
+    } finally {
+      setReelDownloading(false);
+    }
+  }
+
   // Highlight reel — play a sequence of moments back-to-back, hands-free.
   function playReel(segments: { start: number; end: number }[]) {
     if (segments.length === 0) return;
@@ -1211,9 +1257,20 @@ export default function MatchPlayer({
                         >
                           ▶ Play all rallies
                         </button>
+                        <button
+                          className="btn btn-sm"
+                          disabled={ra.highlightIdx.length === 0 || !videoUrl || reelDownloading}
+                          onClick={() => downloadReel(reelSegs(ra.highlightIdx.map((i) => ra.rallies[i])))}
+                          title="Download the top moments stitched into one .mp4"
+                        >
+                          {reelDownloading ? "Building reel…" : "⬇ Download reel"}
+                        </button>
                       </>
                     )}
                   </div>
+                  {reelMsg && (
+                    <p className="muted" style={{ fontSize: 12.5, marginTop: 8 }}>{reelMsg}</p>
+                  )}
                   {ra.highlightIdx.length > 0 && (
                     <>
                       <div className="dim" style={{ fontSize: 12, margin: "16px 0 8px", textTransform: "uppercase", letterSpacing: 0.5 }}>Highlights</div>

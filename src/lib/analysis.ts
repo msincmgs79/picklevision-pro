@@ -155,6 +155,11 @@ export function playersEndpointPublic(): string | null {
   return b ? `${b}/players` : null;
 }
 
+export function reelEndpointPublic(): string | null {
+  const b = baseUrl(process.env.NEXT_PUBLIC_RAILWAY_INFERENCE_URL || "");
+  return b ? `${b}/reel` : null;
+}
+
 // Player court-coverage (Phase A): per-side net presence + a coverage heatmap grid.
 export interface CoverageSide {
   samples: number;
