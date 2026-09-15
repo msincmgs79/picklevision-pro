@@ -9,11 +9,15 @@ import json
 import base64
 import logging
 import tempfile
+import subprocess
+import shutil
 from typing import List, Tuple
 from concurrent.futures import ThreadPoolExecutor
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from starlette.background import BackgroundTask
 from pydantic import BaseModel
 import cv2
 import numpy as np
@@ -874,6 +878,114 @@ async def analyze_shots(request: ShotAnalysisRequest):
                 os.remove(video_path)
             except OSError:
                 pass
+
+
+# ---- Highlight reel (Phase 5b): cut rally moments into one downloadable clip ----
+REEL_MAX_SEGMENTS = 40      # bound the number of moments
+REEL_MAX_SECONDS = 240      # bound total reel length
+REEL_PAD = 0.6              # seconds of lead-in / tail around each moment
+REEL_SEG_TIMEOUT = 90
+REEL_CONCAT_TIMEOUT = 120
+
+
+class ReelSegment(BaseModel):
+    start: float
+    end: float
+
+
+class ReelRequest(BaseModel):
+    videoUrl: str
+    segments: List[ReelSegment] = []
+
+
+@app.post("/reel")
+async def reel(request: ReelRequest):
+    """Cut the given moments from the match video and stitch them into one
+    downloadable highlight clip (H.264, browser-safe). Video-only for now.
+
+    Each moment is extracted separately with a fast input seek (only that window
+    is decoded), then the clips are stream-concatenated — this keeps memory flat
+    even for long source videos with widely-spread moments."""
+    if not request.videoUrl:
+        raise HTTPException(status_code=400, detail="videoUrl required")
+
+    segs = []
+    total = 0.0
+    for s in request.segments:
+        start = max(0.0, float(s.start) - REEL_PAD)
+        dur = (float(s.end) + REEL_PAD) - start
+        if dur <= 0.05:
+            continue
+        segs.append((start, dur))
+        total += dur
+        if len(segs) >= REEL_MAX_SEGMENTS or total >= REEL_MAX_SECONDS:
+            break
+    if not segs:
+        raise HTTPException(status_code=400, detail="No valid moments to clip")
+
+    video_path = None
+    workdir = tempfile.mkdtemp(prefix="reel_")
+
+    def cleanup():
+        if video_path:
+            try:
+                os.remove(video_path)
+            except OSError:
+                pass
+        shutil.rmtree(workdir, ignore_errors=True)
+
+    try:
+        video_path = download_video(request.videoUrl)
+
+        seg_paths = []
+        for i, (start, dur) in enumerate(segs):
+            sp = os.path.join(workdir, f"seg_{i:03d}.mp4")
+            cmd = [
+                "ffmpeg", "-y", "-ss", f"{start:.3f}", "-i", video_path, "-t", f"{dur:.3f}",
+                "-an", "-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-pix_fmt", "yuv420p", sp,
+            ]
+            r = subprocess.run(cmd, capture_output=True, timeout=REEL_SEG_TIMEOUT)
+            if r.returncode == 0 and os.path.exists(sp) and os.path.getsize(sp) > 0:
+                seg_paths.append(sp)
+            else:
+                logger.warning(f"[REEL] segment {i} skipped: {r.stderr.decode('utf-8', 'ignore')[-200:]}")
+
+        if not seg_paths:
+            cleanup()
+            raise HTTPException(status_code=500, detail="Could not extract any clips from this video")
+
+        list_path = os.path.join(workdir, "list.txt")
+        with open(list_path, "w") as f:
+            for sp in seg_paths:
+                f.write(f"file '{sp}'\n")
+        out_path = os.path.join(workdir, "highlights.mp4")
+        cat = [
+            "ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", list_path,
+            "-c", "copy", "-movflags", "+faststart", out_path,
+        ]
+        rc = subprocess.run(cat, capture_output=True, timeout=REEL_CONCAT_TIMEOUT)
+        if rc.returncode != 0 or not os.path.exists(out_path) or os.path.getsize(out_path) == 0:
+            logger.error(f"[REEL] concat failed: {rc.stderr.decode('utf-8', 'ignore')[-400:]}")
+            cleanup()
+            raise HTTPException(status_code=500, detail="Could not assemble the reel")
+
+        logger.info(f"[REEL] {len(seg_paths)} clips -> {os.path.getsize(out_path) / 1e6:.1f} MB")
+        return FileResponse(
+            out_path,
+            media_type="video/mp4",
+            filename="picklevision-highlights.mp4",
+            background=BackgroundTask(cleanup),
+        )
+    except HTTPException:
+        cleanup()
+        raise
+    except subprocess.TimeoutExpired:
+        cleanup()
+        raise HTTPException(status_code=504, detail="The reel took too long to build")
+    except Exception as e:
+        cleanup()
+        logger.error(f"[REEL] FATAL: {type(e).__name__}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Reel failed: {e}")
 
 
 if __name__ == "__main__":
