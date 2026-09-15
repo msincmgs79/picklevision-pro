@@ -59,6 +59,8 @@ export default function StudentProgressPage() {
   const [selectedDrill, setSelectedDrill] = useState("");
   const [assignNote, setAssignNote] = useState("");
   const [assignBusy, setAssignBusy] = useState(false);
+  const [genBusy, setGenBusy] = useState(false);
+  const [genMsg, setGenMsg] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isSupabaseConfigured || !studentId) {
@@ -147,6 +149,38 @@ export default function StudentProgressPage() {
     setAssignNote("");
     await reloadAssignments();
     setAssignBusy(false);
+  }
+
+  // Coach-side: turn this student's latest analyzed match into targeted drills,
+  // assigned straight to them (they'll see them on their My Drills).
+  async function generateForStudent() {
+    if (!studentId || genBusy) return;
+    const analyzed = rows.filter((m) => m.shot_analysis?.analysis?.ratings);
+    const latest = analyzed[analyzed.length - 1]; // rows are oldest→newest
+    if (!latest) {
+      setGenMsg("No analyzed match yet for this student.");
+      return;
+    }
+    setGenBusy(true);
+    setGenMsg(null);
+    try {
+      const res = await fetch("/api/drills/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ matchId: latest.id, studentId }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setGenMsg(data.error || "Couldn't generate drills.");
+      } else {
+        const n = (data.drills as unknown[])?.length || 0;
+        setGenMsg(`Added ${n} AI drill${n === 1 ? "" : "s"} from ${data.matchTitle}.`);
+        await reloadAssignments();
+      }
+    } catch {
+      setGenMsg("Couldn't reach the drill generator. Please try again.");
+    }
+    setGenBusy(false);
   }
 
   async function toggleAssignment(a: DrillAssignment) {
@@ -268,6 +302,15 @@ export default function StudentProgressPage() {
           <div className="section-title">Drills</div>
           <Link href="/coach/drills" className="btn btn-sm">Manage drill library →</Link>
         </div>
+
+        {rollup && (
+          <div style={{ marginTop: 12 }}>
+            <button className="btn btn-primary btn-sm" onClick={generateForStudent} disabled={genBusy}>
+              {genBusy ? "Generating…" : `✨ Generate drills from ${student.name.split(" ")[0]}'s analysis`}
+            </button>
+            {genMsg && <p className="muted" style={{ fontSize: 13, marginTop: 8, marginBottom: 0 }}>{genMsg}</p>}
+          </div>
+        )}
 
         {drills.length === 0 ? (
           <p className="muted" style={{ fontSize: 13, marginTop: 10, marginBottom: 0 }}>

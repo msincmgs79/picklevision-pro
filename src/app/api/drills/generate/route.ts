@@ -44,14 +44,25 @@ export async function POST(req: Request) {
   const user = auth?.user;
   if (!user) return json({ error: "Please sign in first." }, 401);
 
-  let body: { matchId?: string } = {};
+  let body: { matchId?: string; studentId?: string } = {};
   try {
     body = await req.json();
   } catch {
     /* body optional — we'll fall back to the latest analyzed match */
   }
 
-  // Load the source match (RLS-scoped → only the caller's own matches).
+  // Coach mode: generating drills FOR a roster student (assigns them to that
+  // student). Verify the caller actually owns the student before doing anything.
+  const studentId = typeof body.studentId === "string" ? body.studentId : null;
+  if (studentId) {
+    const { data: stu } = await supabase.from("students").select("id,coach_id").eq("id", studentId).maybeSingle();
+    if (!stu || (stu as { coach_id?: string }).coach_id !== user.id) {
+      return json({ error: "That isn't your student." }, 403);
+    }
+    if (!body.matchId) return json({ error: "Pick which analyzed match to generate from." }, 400);
+  }
+
+  // Load the source match (RLS-scoped → only matches the caller can read).
   let match: MatchRow | null = null;
   if (body.matchId) {
     const { data } = await supabase
@@ -136,9 +147,11 @@ export async function POST(req: Request) {
     }));
   if (!drills.length) return json({ error: "The generator didn't return any drills. Please try again." }, 502);
 
-  // Insert as the player's own drills (RLS: "user manages own drills").
+  // Coach mode → assign to the student (coach_id + student_id, RLS "coach manages
+  // own assignments"). Self mode → the player's own drills (RLS "user manages own").
+  const ownership = studentId ? { coach_id: user.id, student_id: studentId } : { user_id: user.id };
   const rows = drills.map((d) => ({
-    user_id: user.id,
+    ...ownership,
     source: "ai",
     match_id: match!.id,
     title: d.title,
