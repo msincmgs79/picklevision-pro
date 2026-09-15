@@ -6,9 +6,11 @@ import Link from "next/link";
 import { createClient } from "../../lib/supabase/client";
 import { isSupabaseConfigured } from "../../lib/supabase/config";
 
+type Mode = "signin" | "signup" | "forgot";
+
 export default function LoginPage() {
   const router = useRouter();
-  const [mode, setMode] = useState<"signin" | "signup">("signin");
+  const [mode, setMode] = useState<Mode>("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
@@ -20,7 +22,14 @@ export default function LoginPage() {
     setBusy(true);
     const supabase = createClient();
     try {
-      if (mode === "signup") {
+      if (mode === "forgot") {
+        const { error } = await supabase.auth.resetPasswordForEmail(email, {
+          redirectTo: `${location.origin}/auth/callback?next=/reset-password`,
+        });
+        if (error) throw error;
+        // Generic message on purpose — never reveal whether an email is registered.
+        setMsg({ type: "ok", text: "If an account exists for that email, a reset link is on its way. Check your inbox." });
+      } else if (mode === "signup") {
         const { error } = await supabase.auth.signUp({
           email,
           password,
@@ -43,13 +52,18 @@ export default function LoginPage() {
     }
   }
 
+  const title = mode === "signin" ? "Sign in" : mode === "signup" ? "Create your account" : "Reset your password";
+  const sub =
+    mode === "forgot"
+      ? "Enter your email and we'll send you a link to set a new password."
+      : "Upload matches and keep your own analysis library.";
+  const cta = busy ? "…" : mode === "signin" ? "Sign in" : mode === "signup" ? "Create account" : "Send reset link";
+
   return (
     <div style={{ maxWidth: 420, margin: "40px auto" }}>
       <div className="eyebrow">Account</div>
-      <h1 className="page-title" style={{ marginTop: 6 }}>
-        {mode === "signin" ? "Sign in" : "Create your account"}
-      </h1>
-      <p className="page-sub">Upload matches and keep your own analysis library.</p>
+      <h1 className="page-title" style={{ marginTop: 6 }}>{title}</h1>
+      <p className="page-sub">{sub}</p>
 
       {!isSupabaseConfigured && (
         <div className="card" style={{ marginTop: 20, borderColor: "rgba(251,191,36,0.4)", background: "rgba(251,191,36,0.08)" }}>
@@ -73,18 +87,30 @@ export default function LoginPage() {
             style={inputStyle}
           />
         </label>
-        <label style={{ fontSize: 13, fontWeight: 600 }}>
-          Password
-          <input
-            type="password"
-            required
-            minLength={6}
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="••••••••"
-            style={inputStyle}
-          />
-        </label>
+        {mode !== "forgot" && (
+          <label style={{ fontSize: 13, fontWeight: 600 }}>
+            Password
+            <input
+              type="password"
+              required
+              minLength={6}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="••••••••"
+              style={inputStyle}
+            />
+          </label>
+        )}
+
+        {mode === "signin" && (
+          <button
+            type="button"
+            onClick={() => { setMode("forgot"); setMsg(null); }}
+            style={{ alignSelf: "flex-start", background: "none", border: "none", color: "var(--text-muted)", fontWeight: 600, fontSize: 12.5, cursor: "pointer", padding: 0 }}
+          >
+            Forgot password?
+          </button>
+        )}
 
         {msg && (
           <div style={{ fontSize: 13, fontWeight: 600, color: msg.type === "error" ? "var(--poor)" : "var(--excellent)" }}>
@@ -93,21 +119,26 @@ export default function LoginPage() {
         )}
 
         <button className="btn btn-primary" disabled={busy || !isSupabaseConfigured} style={{ justifyContent: "center", opacity: busy || !isSupabaseConfigured ? 0.6 : 1 }}>
-          {busy ? "…" : mode === "signin" ? "Sign in" : "Create account"}
+          {cta}
         </button>
       </form>
 
       <div className="muted" style={{ fontSize: 13.5, marginTop: 16, textAlign: "center" }}>
-        {mode === "signin" ? "New here? " : "Already have an account? "}
-        <button
-          onClick={() => {
-            setMode(mode === "signin" ? "signup" : "signin");
-            setMsg(null);
-          }}
-          style={{ background: "none", border: "none", color: "var(--primary)", fontWeight: 700, cursor: "pointer" }}
-        >
-          {mode === "signin" ? "Create an account" : "Sign in"}
-        </button>
+        {mode === "forgot" ? (
+          <button onClick={() => { setMode("signin"); setMsg(null); }} style={linkBtnStyle}>
+            ← Back to sign in
+          </button>
+        ) : (
+          <>
+            {mode === "signin" ? "New here? " : "Already have an account? "}
+            <button
+              onClick={() => { setMode(mode === "signin" ? "signup" : "signin"); setMsg(null); }}
+              style={linkBtnStyle}
+            >
+              {mode === "signin" ? "Create an account" : "Sign in"}
+            </button>
+          </>
+        )}
       </div>
     </div>
   );
@@ -123,4 +154,12 @@ const inputStyle: React.CSSProperties = {
   color: "var(--text)",
   fontSize: 14,
   fontWeight: 500,
+};
+
+const linkBtnStyle: React.CSSProperties = {
+  background: "none",
+  border: "none",
+  color: "var(--primary)",
+  fontWeight: 700,
+  cursor: "pointer",
 };
