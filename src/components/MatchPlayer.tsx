@@ -7,6 +7,7 @@ import { createClient } from "../lib/supabase/client";
 import { clientReadUrl, clientDelete } from "../lib/storage/client";
 import { isPlausibleBall } from "../lib/court";
 import { spendCredit } from "../lib/plan";
+import { uploadVideo } from "../lib/upload";
 import {
   inferEndpointPublic,
   shotEndpointPublic,
@@ -108,6 +109,9 @@ export default function MatchPlayer({
   const [reelIdx, setReelIdx] = useState(0);
   const [reelDownloading, setReelDownloading] = useState(false);
   const [reelMsg, setReelMsg] = useState<string | null>(null);
+  const [reelSharing, setReelSharing] = useState(false);
+  const [reelShareUrl, setReelShareUrl] = useState<string | null>(null);
+  const [reelShareCopied, setReelShareCopied] = useState(false);
 
   const supabase = createClient();
   const fmt = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
@@ -236,6 +240,69 @@ export default function MatchPlayer({
       setReelMsg(e instanceof Error ? e.message : "Couldn't build the reel.");
     } finally {
       setReelDownloading(false);
+    }
+  }
+
+  // Create a shareable /r/<token> link: build the clip, upload it to storage,
+  // then save a reel row. The public page reads it via the service role.
+  async function shareReel(segments: { start: number; end: number }[]) {
+    if (segments.length === 0 || !videoUrl || reelSharing) return;
+    const endpoint = reelEndpointPublic();
+    if (!endpoint) {
+      setReelMsg("Video backend isn't configured.");
+      return;
+    }
+    setReelSharing(true);
+    setReelMsg(null);
+    setReelShareUrl(null);
+    try {
+      const { data: auth } = await supabase.auth.getUser();
+      const uid = auth.user?.id;
+      if (!uid) throw new Error("Please sign in first.");
+
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ videoUrl, segments }),
+      });
+      if (!res.ok) {
+        let m = "Couldn't build the reel.";
+        try {
+          m = (await res.json())?.detail || m;
+        } catch {
+          /* non-JSON error body */
+        }
+        throw new Error(m);
+      }
+      const blob = await res.blob();
+
+      const key = `${uid}/reels/${crypto.randomUUID()}.mp4`;
+      const file = new File([blob], "reel.mp4", { type: "video/mp4" });
+      await uploadVideo(supabase, file, key, () => {});
+
+      const bytes = new Uint8Array(12);
+      crypto.getRandomValues(bytes);
+      let bin = "";
+      for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+      const token = btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+
+      const totalSecs = segments.reduce((s, g) => s + Math.max(0, g.end - g.start), 0);
+      const { error } = await supabase.from("reels").insert({
+        user_id: uid,
+        match_id: match.id,
+        share_token: token,
+        storage_key: key,
+        title: metaTitle || "Highlight reel",
+        seconds: Math.round(totalSecs),
+        moments: segments.length,
+      });
+      if (error) throw new Error(error.message);
+
+      setReelShareUrl(`${window.location.origin}/r/${token}`);
+    } catch (e) {
+      setReelMsg(e instanceof Error ? e.message : "Couldn't create the share link.");
+    } finally {
+      setReelSharing(false);
     }
   }
 
@@ -1265,12 +1332,44 @@ export default function MatchPlayer({
                         >
                           {reelDownloading ? "Building reel…" : "⬇ Download reel"}
                         </button>
+                        <button
+                          className="btn btn-sm"
+                          disabled={ra.highlightIdx.length === 0 || !videoUrl || reelSharing}
+                          onClick={() => shareReel(reelSegs(ra.highlightIdx.map((i) => ra.rallies[i])))}
+                          title="Create a shareable link to the highlight clip"
+                        >
+                          {reelSharing ? "Creating link…" : "🔗 Share reel"}
+                        </button>
                       </>
                     )}
                   </div>
-                  {reelMsg && (
+                  {reelShareUrl ? (
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginTop: 10 }}>
+                      <input
+                        readOnly
+                        value={reelShareUrl}
+                        onFocus={(e) => e.currentTarget.select()}
+                        style={{ flex: 1, minWidth: 200, padding: "8px 10px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--text)", fontSize: 13 }}
+                      />
+                      <button
+                        className="btn btn-sm"
+                        onClick={() => {
+                          navigator.clipboard
+                            .writeText(reelShareUrl)
+                            .then(() => {
+                              setReelShareCopied(true);
+                              setTimeout(() => setReelShareCopied(false), 2000);
+                            })
+                            .catch(() => {});
+                        }}
+                      >
+                        {reelShareCopied ? "Copied ✓" : "Copy link"}
+                      </button>
+                      <a href={reelShareUrl} target="_blank" rel="noreferrer" className="btn btn-sm">Open</a>
+                    </div>
+                  ) : reelMsg ? (
                     <p className="muted" style={{ fontSize: 12.5, marginTop: 8 }}>{reelMsg}</p>
-                  )}
+                  ) : null}
                   {ra.highlightIdx.length > 0 && (
                     <>
                       <div className="dim" style={{ fontSize: 12, margin: "16px 0 8px", textTransform: "uppercase", letterSpacing: 0.5 }}>Highlights</div>
