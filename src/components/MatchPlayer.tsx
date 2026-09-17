@@ -1216,7 +1216,7 @@ export default function MatchPlayer({
               <span style={{ display: "flex", alignItems: "center", gap: 7 }}><span style={{ width: 11, height: 11, borderRadius: "50%", background: "#94a3b8" }} /><span className="muted">not calibrated</span></span>
             </div>
             <p className="dim" style={{ fontSize: 11, marginTop: 8, lineHeight: 1.5 }}>
-              Detector: <b>{track.detector === "roboflow" ? "trained AI model" : "basic (colour)"}</b>.{" "}
+              Detector: <b>{track.detector === "local" ? "PickleVision v1 (AI)" : track.detector === "roboflow" ? "trained AI model" : "basic (colour)"}</b>.{" "}
               Each <b>dot</b> is roughly where a rally&apos;s ball was most on-court (its in/out landing); faint lines trace ball flight.{" "}
               {track.calibrated
                 ? "At this detection rate it's an approximate read, not a line judge."
