@@ -655,8 +655,14 @@ def track_full(video_path, infer_fn, target_fps, max_frames, workers=FULL_WORKER
     def flush():
         if not batch:
             return
-        with ThreadPoolExecutor(max_workers=workers) as ex:
-            results = list(ex.map(lambda tf: infer_fn(tf[1]), batch))
+        if workers <= 1:
+            # Local model path: run serially in-process (torch already uses every
+            # CPU core per frame). Matches /infer's working detect_balls_local and
+            # avoids driving one YOLO instance from a worker thread.
+            results = [infer_fn(tf[1]) for tf in batch]
+        else:
+            with ThreadPoolExecutor(max_workers=workers) as ex:
+                results = list(ex.map(lambda tf: infer_fn(tf[1]), batch))
         for (t, frame), r in zip(batch, results):
             if r:
                 h, w = frame.shape[:2]
