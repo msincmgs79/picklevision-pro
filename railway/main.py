@@ -186,6 +186,62 @@ async def health():
     return {"status": "healthy", "service": "ball-detection"}
 
 
+class SelfTestRequest(BaseModel):
+    imageB64: str | None = None
+    videoUrl: str | None = None
+
+
+@app.post("/selftest")
+async def selftest(request: SelfTestRequest):
+    """Debug: run the local v1 model on a supplied frame (base64 JPEG) or a few
+    frames of a videoUrl, on the SERVER, and report versions, frame dims, raw box
+    counts and any traceback. Isolates 'server inference broken' vs 'video-specific'."""
+    import sys as _sys, traceback as _tb
+    info = {"python": _sys.version.split()[0], "use_local_model": USE_LOCAL_MODEL,
+            "imgsz": LOCAL_IMGSZ, "conf": LOCAL_CONF, "model_path": LOCAL_MODEL_PATH,
+            "model_exists": os.path.exists(LOCAL_MODEL_PATH)}
+    try:
+        import torch as _t, numpy as _np, cv2 as _cv, ultralytics as _u
+        info.update({"torch": _t.__version__, "numpy": _np.__version__,
+                     "opencv": _cv.__version__, "ultralytics": _u.__version__})
+    except Exception as e:
+        info["import_error"] = str(e)
+    try:
+        model = _get_local_model()
+    except Exception as e:
+        return {"stage": "model_load", "error": str(e), "trace": _tb.format_exc(), "info": info}
+    frames = []
+    try:
+        if request.imageB64:
+            arr = np.frombuffer(base64.b64decode(request.imageB64), np.uint8)
+            img = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+            if img is not None:
+                frames = [img]
+        elif request.videoUrl:
+            vp = download_video(request.videoUrl)
+            fr, total, fps, dur = sample_frames(vp, max_frames=8)
+            info["video_total_frames"] = total
+            frames = [f for _, f in fr]
+            try:
+                os.remove(vp)
+            except OSError:
+                pass
+    except Exception as e:
+        return {"stage": "frames", "error": str(e), "trace": _tb.format_exc(), "info": info}
+    results = []
+    try:
+        for img in frames:
+            h, w = img.shape[:2]
+            res = model.predict(img, imgsz=LOCAL_IMGSZ, conf=LOCAL_CONF, device="cpu", verbose=False)[0]
+            boxes = [{"conf": round(float(b.conf[0]), 3),
+                      "area": int((float(b.xyxy[0][2]) - float(b.xyxy[0][0])) *
+                                  (float(b.xyxy[0][3]) - float(b.xyxy[0][1])))} for b in res.boxes]
+            results.append({"shape": [w, h], "num_boxes": len(res.boxes), "boxes": boxes[:6]})
+    except Exception as e:
+        return {"stage": "predict", "error": str(e), "trace": _tb.format_exc(), "info": info, "partial": results}
+    return {"info": info, "frames": len(frames), "results": results}
+
+
 @app.post("/infer", response_model=InferenceResponse)
 async def infer(request: InferenceRequest):
     if not request.videoUrl:
