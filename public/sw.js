@@ -2,7 +2,10 @@
 // Navigations are network-first (always fresh, falls back to an offline page);
 // hashed static assets are cache-first; everything else (Supabase, Railway,
 // RSC, videos) passes straight through to the network untouched.
-const CACHE = "pv-shell-v2";
+// Bump CACHE on every deploy that must force stale PWAs (esp. mobile home-screen
+// installs) to refresh: activate deletes all older caches, skipWaiting +
+// clients.claim take control immediately, and ServiceWorkerRegister reloads.
+const CACHE = "pv-shell-v3";
 const PRECACHE = ["/offline", "/manifest.webmanifest", "/logo.png"];
 
 self.addEventListener("install", (event) => {
