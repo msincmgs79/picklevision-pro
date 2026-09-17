@@ -37,7 +37,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-MAX_FRAMES = 150                       # frames we actually decode/analyze
+MAX_FRAMES = int(os.getenv("MAX_FRAMES", "450"))  # frames /infer decodes/analyzes across the video (env-tunable; 150 was tuned for the old fast colour blob, v1 can afford denser sampling)
 DOWNLOAD_TIMEOUT = 120                 # seconds
 MAX_DOWNLOAD_BYTES = 300 * 1024 * 1024  # 300 MB safety cap
 
