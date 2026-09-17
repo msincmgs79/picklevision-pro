@@ -13,11 +13,19 @@ RUN apt-get update && apt-get install -y \
 # Copy requirements
 COPY railway/requirements.txt .
 
-# Install Python dependencies
+# CPU-only torch first — keeps the image lean (~200MB) instead of the ~2.5GB CUDA
+# build ultralytics would otherwise pull in. Railway has no GPU, so CPU is correct.
+RUN pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cpu
+
+# Install Python dependencies (ultralytics sees torch already satisfied)
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application
 COPY railway/main.py .
+
+# Self-hosted fine-tuned ball model (v1). Loaded in-process by /track when
+# USE_LOCAL_MODEL=1 (see main.py). ~19MB.
+COPY railway/models/best.pt ./models/best.pt
 
 # Expose port
 EXPOSE 8000

@@ -4,5 +4,6 @@ pydantic==2.5.0
 inference-sdk==0.21.0
 pillow==10.1.0
 opencv-python==4.8.1.78
-numpy==1.24.3
+numpy<2
 requests==2.31.0
+ultralytics==8.4.56

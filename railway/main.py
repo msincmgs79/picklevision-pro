@@ -482,6 +482,69 @@ def track_window_roboflow(video_path, start_sec, window_sec,
     return pts, len(kept)
 
 
+# --- Self-hosted fine-tuned model (v1 yolo11s). When USE_LOCAL_MODEL=1 and the
+# weights are present, /track runs detection IN-PROCESS on Railway's CPU — no
+# Roboflow calls, no credits. Lazy-loaded on first use so the container starts
+# light (and app-sleeping only pays for memory while actually detecting). All
+# knobs are env-driven so latency/accuracy can be tuned without a code change. ---
+USE_LOCAL_MODEL = os.getenv("USE_LOCAL_MODEL", "0") == "1"
+LOCAL_MODEL_PATH = os.getenv("LOCAL_MODEL_PATH", "models/best.pt")
+LOCAL_IMGSZ = int(os.getenv("LOCAL_IMGSZ", "1280"))     # 1280 = best recall (75%); lower = faster
+LOCAL_CONF = float(os.getenv("LOCAL_CONF", "0.20"))
+LOCAL_MAX_AREA = int(os.getenv("LOCAL_MAX_AREA", "4000"))  # px^2; reject blobs too big to be a ball
+_LOCAL_YOLO = None
+
+
+def _get_local_model():
+    global _LOCAL_YOLO
+    if _LOCAL_YOLO is None:
+        from ultralytics import YOLO  # lazy import so torch only loads on first detection
+        _LOCAL_YOLO = YOLO(LOCAL_MODEL_PATH)
+        logger.info(f"[TRACK] local model loaded: {LOCAL_MODEL_PATH} imgsz={LOCAL_IMGSZ} conf={LOCAL_CONF}")
+    return _LOCAL_YOLO
+
+
+def yolo_infer(frame):
+    """Highest-confidence ball via the local fine-tuned model. Same return shape as
+    roboflow_infer: {x, y, conf} (center px) or None. Raises on load/predict error."""
+    model = _get_local_model()
+    res = model.predict(frame, imgsz=LOCAL_IMGSZ, conf=LOCAL_CONF, device="cpu", verbose=False)[0]
+    best = None
+    for b in res.boxes:
+        x1, y1, x2, y2 = (float(v) for v in b.xyxy[0])
+        if (x2 - x1) * (y2 - y1) > LOCAL_MAX_AREA:
+            continue
+        c = float(b.conf[0])
+        if best is None or c > best[2]:
+            best = ((x1 + x2) / 2.0, (y1 + y2) / 2.0, c)
+    return None if best is None else {"x": best[0], "y": best[1], "conf": best[2]}
+
+
+def yolo_infer_safe(frame):
+    try:
+        return yolo_infer(frame)
+    except Exception:
+        return None
+
+
+def track_window_local(video_path, start_sec, window_sec,
+                       target_fps=ROBOFLOW_TARGET_FPS, max_frames=ROBOFLOW_MAX_FRAMES):
+    """Windowed tracking with the local model. Serial (one model instance, no thread
+    pool) — torch already uses every CPU core per frame, so threads add contention,
+    not speed, and keep the single YOLO instance thread-safe."""
+    kept = collect_window_frames(video_path, start_sec, window_sec, target_fps, max_frames)
+    if not kept:
+        return [], 0
+    _get_local_model()  # surface load errors up-front so /track can fall back cleanly
+    pts = []
+    for t, frame in kept:
+        r = yolo_infer_safe(frame)
+        if r:
+            h, w = frame.shape[:2]
+            pts.append({"t": t, "x": r["x"], "y": r["y"], "conf": r["conf"], "w": w, "h": h})
+    return pts, len(kept)
+
+
 def video_duration(path):
     cap = cv2.VideoCapture(path)
     fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
@@ -579,7 +642,15 @@ async def track(request: TrackRequest):
             dur = video_duration(video_path)
             window = dur + 1.0
             t_fps = min(FULL_TARGET_FPS, FULL_MAX_FRAMES / max(1.0, dur))
-            if ROBOFLOW_API_KEY:
+            if USE_LOCAL_MODEL:
+                try:
+                    pts, scanned = track_full(video_path, yolo_infer_safe, t_fps, FULL_MAX_FRAMES, workers=1)
+                    detector = "local"
+                except Exception as e:
+                    logger.warning(f"[TRACK] local model failed, falling back to color: {e}")
+                    pts, scanned = track_full(video_path, detect_best_ball, t_fps, FULL_MAX_FRAMES)
+                    detector = "color (local unavailable)"
+            elif ROBOFLOW_API_KEY:
                 try:
                     fr0 = _read_first_frame(video_path)
                     if fr0 is not None:
@@ -595,7 +666,15 @@ async def track(request: TrackRequest):
         else:
             window = min(TRACK_MAX_WINDOW, max(2.0, float(request.windowSec or 20.0)))
             t_fps = ROBOFLOW_TARGET_FPS
-            if ROBOFLOW_API_KEY:
+            if USE_LOCAL_MODEL:
+                try:
+                    pts, scanned = track_window_local(video_path, start, window)
+                    detector = "local"
+                except Exception as e:
+                    logger.warning(f"[TRACK] local model failed, falling back to color: {e}")
+                    pts, scanned = track_window(video_path, start, window)
+                    detector = "color (local unavailable)"
+            elif ROBOFLOW_API_KEY:
                 try:
                     pts, scanned = track_window_roboflow(video_path, start, window)
                     detector = "roboflow"
