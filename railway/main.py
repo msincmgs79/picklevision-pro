@@ -198,7 +198,14 @@ async def infer(request: InferenceRequest):
         if not frames:
             raise ValueError("No frames could be extracted from the video")
 
-        raw = detect_balls(frames)
+        if USE_LOCAL_MODEL:
+            try:
+                raw = detect_balls_local(frames)
+            except Exception as e:
+                logger.warning(f"[INFERENCE] local model failed, falling back to colour: {e}")
+                raw = detect_balls(frames)
+        else:
+            raw = detect_balls(frames)
 
         # Court calibration: build a homography (image px -> court feet) if the
         # caller supplied 4 corners. Court is 20ft wide (X) x 44ft long (Y).
@@ -525,6 +532,22 @@ def yolo_infer_safe(frame):
         return yolo_infer(frame)
     except Exception:
         return None
+
+
+def detect_balls_local(frames):
+    """Ball detection for /infer with the fine-tuned v1 model — one best ball per
+    frame. Same dict shape as detect_balls() so /infer is a drop-in swap. Serial
+    (torch already uses every CPU core per frame). Cleaner than the colour blob
+    detector: real ball, high confidence, far fewer false positives."""
+    _get_local_model()  # surface load errors up-front so /infer can fall back
+    out = []
+    for frame_idx, frame in frames:
+        r = yolo_infer_safe(frame)
+        if r:
+            h, w = frame.shape[:2]
+            out.append({"frame": frame_idx, "x": r["x"], "y": r["y"],
+                        "confidence": r["conf"], "w": int(w), "h": int(h)})
+    return out
 
 
 def track_window_local(video_path, start_sec, window_sec,
