@@ -9,3 +9,6 @@
 alter table matches add column if not exists player_breakdown jsonb;
 alter table matches add column if not exists player_names jsonb;
 alter table matches add column if not exists player_analyzed_at timestamptz;
+-- player_ratings : { slot -> number } — the user's own rating per player, which
+-- overrides the AI suggestion. Kept separate so re-running analysis never wipes it.
+alter table matches add column if not exists player_ratings jsonb;

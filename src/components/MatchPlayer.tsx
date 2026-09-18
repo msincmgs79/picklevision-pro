@@ -84,6 +84,11 @@ export default function MatchPlayer({
   const [playerNames, setPlayerNames] = useState<Record<string, string>>(
     ((match as { player_names?: Record<string, string> }).player_names) || {}
   );
+  // User-set ratings that OVERRIDE the AI suggestion (kept separate so re-running
+  // never wipes them). slot -> rating.
+  const [playerRatings, setPlayerRatings] = useState<Record<string, number>>(
+    ((match as { player_ratings?: Record<string, number> }).player_ratings) || {}
+  );
   const [prBusy, setPrBusy] = useState(false);
   const [prErr, setPrErr] = useState<string | null>(null);
   // Which analyses have used their included (free, first) run for this match.
@@ -701,6 +706,18 @@ export default function MatchPlayer({
     setPlayerBreakdown((prev) => (prev ? prev.map((c) => (c.slot === slot ? { ...c, name } : c)) : prev));
     try {
       await supabase.from("matches").update({ player_names: next }).eq("id", match.id);
+    } catch {}
+  }
+
+  // Override a player's rating with your own (you watched the match). Empty clears
+  // it back to the AI suggestion. Persisted separately from the analysis result.
+  async function savePlayerRating(slot: string, value: number | null) {
+    const next = { ...playerRatings };
+    if (value == null || Number.isNaN(value)) delete next[slot];
+    else next[slot] = Math.max(2, Math.min(8, value));
+    setPlayerRatings(next);
+    try {
+      await supabase.from("matches").update({ player_ratings: next }).eq("id", match.id);
     } catch {}
   }
 
@@ -1333,7 +1350,7 @@ export default function MatchPlayer({
               <div>
                 <div className="section-title">Player ratings</div>
                 <div className="muted" style={{ fontSize: 13, marginTop: 2 }}>
-                  Each player broken out by court position — with an AI rating, coaching note and estimated unforced errors. Needs court calibration. First run included — re-runs use 1 credit; result is saved.
+                  Each player broken out by court position — with an AI-suggested rating you can adjust, a coaching note and estimated unforced errors. Needs court calibration. First run included — re-runs use 1 credit; result is saved.
                 </div>
               </div>
               <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
@@ -1367,8 +1384,16 @@ export default function MatchPlayer({
                         </div>
                       </div>
                       <div style={{ textAlign: "right" }}>
-                        <div style={{ fontSize: 24, fontWeight: 800, lineHeight: 1, color: "var(--accent, #a3e635)" }}>{p.rating ?? "—"}</div>
-                        <div className="dim" style={{ fontSize: 9.5, letterSpacing: 0.4 }}>AI DUPR EST</div>
+                        <input
+                          type="number" step={0.1} min={2} max={8}
+                          defaultValue={playerRatings[p.slot] ?? (p.rating ?? "")}
+                          onBlur={(e) => savePlayerRating(p.slot, e.target.value === "" ? null : parseFloat(e.target.value))}
+                          title="Your rating — overrides the AI suggestion"
+                          style={{ width: 66, textAlign: "right", fontSize: 24, fontWeight: 800, lineHeight: 1, color: "var(--accent, #a3e635)", background: "transparent", border: "none", borderBottom: "1px dashed var(--border)", padding: "0 2px" }}
+                        />
+                        <div className="dim" style={{ fontSize: 9, letterSpacing: 0.3, marginTop: 2 }}>
+                          YOUR RATING{typeof p.rating === "number" ? ` · ai ${p.rating}` : ""}
+                        </div>
                       </div>
                     </div>
 
@@ -1428,7 +1453,7 @@ export default function MatchPlayer({
             )}
             {playerBreakdown && (
               <p className="dim" style={{ fontSize: 11, marginTop: 12, lineHeight: 1.5 }}>
-                Players are split by court position (near/far side, left/right) — reliable for side, approximate when players switch sides. Ratings and *unforced errors are AI estimates from sparse frames, not official DUPR or exact counts. Type a name on any card to save it.
+                Players are split by court position (near/far side, left/right) — reliable for side, approximate when players switch sides. <b>The rating is yours to set</b> — the AI number is only a starting suggestion; tap it to change it (it saves and won&apos;t be overwritten when you re-run). Coaching notes and *unforced errors are AI estimates from sparse frames. Type a name on any card to save it.
               </p>
             )}
             {!playerBreakdown && !prBusy && (
