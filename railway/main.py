@@ -1005,27 +1005,36 @@ def gemini_breakdown(frames: List[Tuple[int, np.ndarray]], prompt: str = SHOT_PR
 # is rated. Left/right can flip on stacking/serve — approximate, not true re-ID.
 PLAYER_PROMPT = (
     "You are a professional pickleball coach analysing still frames sampled in "
-    "chronological order from ONE doubles match video (up to 4 players). Identify "
-    "each DISTINCT player by appearance and court position and rate each ONE "
-    "individually. Return STRICT JSON of this exact shape:\n"
+    "chronological order from ONE doubles match (up to 4 players). Identify each "
+    "DISTINCT player by appearance and court position, then rate each ONE.\n"
+    "CRITICAL — the four players are NOT equal in skill; your main job is to TELL "
+    "THEM APART. First decide the ranking from STRONGEST to weakest, then assign "
+    "ratings that CLEARLY SEPARATE them across the scale. Do NOT cluster everyone "
+    "near 4.0, and do NOT give a player the same number for all five sub-skills — "
+    "vary them to reflect real strengths and weaknesses. Judge skill ONLY from what "
+    "reveals ability: shot quality and selection, ball control, hands/volley speed "
+    "at the net, footwork, court awareness and composure — NOT from how much a "
+    "player runs around (a weaker player often moves MORE).\n"
+    "Return STRICT JSON of this exact shape:\n"
     '{"players": [ {"appearance": string, "side": "near"|"far", '
-    '"courtSide": "left"|"right", "ratings": {"serve": number, "return": number, '
-    '"offense": number, "defense": number, "consistency": number}, '
-    '"kitchenControl": number, "shotTypes": [{"type": string, "emphasis": string}], '
-    '"strengths": [string], "improvements": [string], "coachNote": string, '
+    '"courtSide": "left"|"right", "rank": number, '
+    '"ratings": {"serve": number, "return": number, "offense": number, '
+    '"defense": number, "consistency": number}, "kitchenControl": number, '
+    '"shotTypes": [{"type": string, "emphasis": string}], "strengths": [string], '
+    '"improvements": [string], "coachNote": string, '
     '"unforcedErrors": {"estimate": number, "notes": [string]} } ] }\n'
-    "appearance is a short visual description (e.g. 'blue shirt, black shorts'). "
-    "side: 'near' = closer to the camera / larger in frame, 'far' = further away. "
-    "courtSide is that player's left or right half from the camera's view. ratings "
-    "are AI ESTIMATES on the DUPR scale 2.0-8.0 (one decimal: 3.0 beginner, 4.0 "
-    "intermediate, 5.0 advanced, 6.0+ elite); do NOT claim to be an official DUPR. "
-    "kitchenControl is 0-100. shotTypes lists the shots that player actually plays "
-    "(serve/return/drive/drop/dink/volley/lob/smash) with emphasis 'High'/'Medium'/"
-    "'Low'. unforcedErrors.estimate is your best ROUGH count of clear unforced "
-    "errors attributable to that player from these sparse frames (0 if none seen), "
-    "with 1-2 short notes; treat it as an estimate, not an exact tally. coachNote is "
-    "ONE specific, actionable coaching sentence for that player. Return EXACTLY the "
-    "players you can distinguish (2-4). Keep arrays to 2-4 short items."
+    "rank: 1 = the strongest of the players, ascending. appearance is a short visual "
+    "description (e.g. 'blue shirt, black shorts'). side 'near' = closer to the "
+    "camera / larger in frame, 'far' = further away. courtSide is that player's left "
+    "or right half from the camera's view. ratings are AI ESTIMATES on the DUPR "
+    "scale 2.0-8.0 (one decimal: 3.0 beginner, 4.0 intermediate, 5.0 advanced, 6.0+ "
+    "elite) — USE THE FULL RANGE so the strongest and weakest players are clearly "
+    "different numbers; do NOT claim to be an official DUPR. kitchenControl is 0-100. "
+    "shotTypes lists shots that player actually plays with emphasis High/Medium/Low. "
+    "unforcedErrors.estimate is your best ROUGH count of clear unforced errors for "
+    "that player from these sparse frames (an estimate, not an exact tally). "
+    "coachNote is ONE specific, actionable sentence. Return EXACTLY the players you "
+    "can distinguish (2-4). Keep arrays to 2-4 short items."
 )
 
 
@@ -1090,6 +1099,7 @@ def merge_player_cards(slots, gplayers, names=None):
             "slot": slot["slot"], "side": slot["side"], "lr": slot["lr"],
             "name": names.get(slot["slot"], ""),
             "appearance": g.get("appearance", ""),
+            "rank": g.get("rank"),
             "rating": round(sum(vals) / len(vals), 1) if vals else None,
             "ratings": r,
             "kitchenControl": g.get("kitchenControl"),
@@ -1139,7 +1149,7 @@ async def player_breakdown(request: PlayerBreakdownRequest):
         samples, scanned = track_players(video_path, H, t_fps, PLAYERS_MAX_FRAMES)
         slots = player_slots(samples)
 
-        gframes, _t, _f, _d = sample_frames(video_path, max_frames=20)
+        gframes, _t, _f, _d = sample_frames(video_path, max_frames=40)
         gplayers = []
         try:
             gb = gemini_breakdown(gframes, PLAYER_PROMPT)
