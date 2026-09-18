@@ -963,7 +963,7 @@ SHOT_PROMPT = (
 )
 
 
-def gemini_breakdown(frames: List[Tuple[int, np.ndarray]]) -> dict:
+def gemini_breakdown(frames: List[Tuple[int, np.ndarray]], prompt: str = SHOT_PROMPT) -> dict:
     parts = []
     for _idx, frame in frames:
         ok, buf = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), 70])
@@ -976,7 +976,7 @@ def gemini_breakdown(frames: List[Tuple[int, np.ndarray]]) -> dict:
             })
     if not parts:
         raise ValueError("No frames to send to Gemini")
-    parts.append({"text": SHOT_PROMPT})
+    parts.append({"text": prompt})
 
     body = {
         "contents": [{"parts": parts}],
@@ -997,6 +997,174 @@ def gemini_breakdown(frames: List[Tuple[int, np.ndarray]]) -> dict:
     except (KeyError, IndexError):
         raise HTTPException(status_code=502, detail=f"Gemini returned no content: {str(data)[:300]}")
     return json.loads(text)
+
+
+# ---------------- Per-player breakdown (Phase 1) ----------------
+# Position-based identity: doubles players mostly hold their side, so every
+# on-court foot sample is bucketed into 4 slots (near/far x left/right) and each
+# is rated. Left/right can flip on stacking/serve — approximate, not true re-ID.
+PLAYER_PROMPT = (
+    "You are a professional pickleball coach analysing still frames sampled in "
+    "chronological order from ONE doubles match video (up to 4 players). Identify "
+    "each DISTINCT player by appearance and court position and rate each ONE "
+    "individually. Return STRICT JSON of this exact shape:\n"
+    '{"players": [ {"appearance": string, "side": "near"|"far", '
+    '"courtSide": "left"|"right", "ratings": {"serve": number, "return": number, '
+    '"offense": number, "defense": number, "consistency": number}, '
+    '"kitchenControl": number, "shotTypes": [{"type": string, "emphasis": string}], '
+    '"strengths": [string], "improvements": [string], "coachNote": string, '
+    '"unforcedErrors": {"estimate": number, "notes": [string]} } ] }\n'
+    "appearance is a short visual description (e.g. 'blue shirt, black shorts'). "
+    "side: 'near' = closer to the camera / larger in frame, 'far' = further away. "
+    "courtSide is that player's left or right half from the camera's view. ratings "
+    "are AI ESTIMATES on the DUPR scale 2.0-8.0 (one decimal: 3.0 beginner, 4.0 "
+    "intermediate, 5.0 advanced, 6.0+ elite); do NOT claim to be an official DUPR. "
+    "kitchenControl is 0-100. shotTypes lists the shots that player actually plays "
+    "(serve/return/drive/drop/dink/volley/lob/smash) with emphasis 'High'/'Medium'/"
+    "'Low'. unforcedErrors.estimate is your best ROUGH count of clear unforced "
+    "errors attributable to that player from these sparse frames (0 if none seen), "
+    "with 1-2 short notes; treat it as an estimate, not an exact tally. coachNote is "
+    "ONE specific, actionable coaching sentence for that player. Return EXACTLY the "
+    "players you can distinguish (2-4). Keep arrays to 2-4 short items."
+)
+
+
+def player_slots(samples):
+    """Bucket on-court foot samples into 4 position slots (near/far x left/right)
+    and summarise each: coverage grid, kitchen %, average net distance, movement."""
+    if not samples:
+        return []
+    avg = lambda xs: (sum(xs) / len(xs)) if xs else 0.0
+    lo = [s for s in samples if s["cy"] < 22]
+    hi = [s for s in samples if s["cy"] >= 22]
+    near_is_hi = avg([s["boxh"] for s in hi]) >= avg([s["boxh"] for s in lo])
+
+    def side_of(s):
+        return "near" if ((s["cy"] >= 22) == near_is_hi) else "far"
+
+    GW, GH = 8, 11
+    buckets = {}
+    for s in samples:
+        buckets.setdefault((side_of(s), "left" if s["cx"] < 10.0 else "right"), []).append(s)
+
+    out = []
+    for (side, lr), ss in buckets.items():
+        ss = sorted(ss, key=lambda x: x["t"])
+        grid = [[0] * GW for _ in range(GH)]
+        for s in ss:
+            gx = min(GW - 1, max(0, int(s["cx"] / 20.0 * GW)))
+            gy = min(GH - 1, max(0, int(s["cy"] / 44.0 * GH)))
+            grid[gy][gx] += 1
+        at_net = sum(1 for s in ss if abs(s["cy"] - 22) <= NVZ_FT)
+        move = sum(((a["cx"] - b["cx"]) ** 2 + (a["cy"] - b["cy"]) ** 2) ** 0.5
+                   for a, b in zip(ss, ss[1:]))
+        out.append({
+            "slot": f"{side}-{lr}", "side": side, "lr": lr, "samples": len(ss),
+            "netPct": round(100 * at_net / len(ss)) if ss else 0,
+            "avgNetDist": round(avg([abs(s["cy"] - 22) for s in ss]), 1),
+            "movementFt": round(move), "grid": grid, "gw": GW, "gh": GH,
+        })
+    order = {"near-left": 0, "near-right": 1, "far-left": 2, "far-right": 3}
+    out.sort(key=lambda p: order.get(p["slot"], 9))
+    return out
+
+
+def merge_player_cards(slots, gplayers, names=None):
+    """Attach each Gemini per-player read to the CV slot it best matches (by side,
+    then left/right); rating = mean of the 5 skill estimates."""
+    names = names or {}
+    used, cards = set(), []
+    for slot in slots:
+        pick = next((i for i, g in enumerate(gplayers) if i not in used
+                     and g.get("side") == slot["side"] and g.get("courtSide") == slot["lr"]), None)
+        if pick is None:
+            pick = next((i for i, g in enumerate(gplayers) if i not in used
+                         and g.get("side") == slot["side"]), None)
+        g = {}
+        if pick is not None:
+            used.add(pick); g = gplayers[pick]
+        r = g.get("ratings", {}) or {}
+        vals = [r[k] for k in ("serve", "return", "offense", "defense", "consistency")
+                if isinstance(r.get(k), (int, float))]
+        cards.append({
+            "slot": slot["slot"], "side": slot["side"], "lr": slot["lr"],
+            "name": names.get(slot["slot"], ""),
+            "appearance": g.get("appearance", ""),
+            "rating": round(sum(vals) / len(vals), 1) if vals else None,
+            "ratings": r,
+            "kitchenControl": g.get("kitchenControl"),
+            "coverage": {"grid": slot["grid"], "gw": slot["gw"], "gh": slot["gh"]},
+            "netPct": slot["netPct"], "avgNetDist": slot["avgNetDist"],
+            "movementFt": slot["movementFt"], "samples": slot["samples"],
+            "shotTypes": g.get("shotTypes", []) or [],
+            "strengths": g.get("strengths", []) or [],
+            "improvements": g.get("improvements", []) or [],
+            "coachNote": g.get("coachNote", ""),
+            "unforcedErrors": g.get("unforcedErrors") or {"estimate": None, "notes": []},
+        })
+    return cards
+
+
+class PlayerBreakdownRequest(BaseModel):
+    videoUrl: str
+    corners: list | None = None
+    playerNames: dict | None = None
+
+
+@app.post("/player-breakdown")
+async def player_breakdown(request: PlayerBreakdownRequest):
+    """Per-player ratings: player-position tracking (4 slots) + a per-player Gemini
+    coaching read, merged into one card per player. Requires calibration."""
+    if not request.videoUrl:
+        raise HTTPException(status_code=400, detail="videoUrl required")
+    if not request.corners or len(request.corners) != 4:
+        raise HTTPException(status_code=400, detail="Court calibration (4 corners) is required.")
+    if not ROBOFLOW_API_KEY:
+        raise HTTPException(status_code=503, detail="Roboflow is not configured.")
+    if not GEMINI_API_KEY:
+        raise HTTPException(status_code=503, detail="GEMINI_API_KEY is not configured.")
+
+    video_path = None
+    try:
+        video_path = download_video(request.videoUrl)
+        try:
+            src = np.array(request.corners, dtype=np.float32)
+            dst = np.array([[0, 0], [20, 0], [20, 44], [0, 44]], dtype=np.float32)
+            H = cv2.getPerspectiveTransform(src, dst)
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Bad corners: {e}")
+
+        dur = video_duration(video_path)
+        t_fps = min(PLAYERS_TARGET_FPS, PLAYERS_MAX_FRAMES / max(1.0, dur))
+        samples, scanned = track_players(video_path, H, t_fps, PLAYERS_MAX_FRAMES)
+        slots = player_slots(samples)
+
+        gframes, _t, _f, _d = sample_frames(video_path, max_frames=20)
+        gplayers = []
+        try:
+            gb = gemini_breakdown(gframes, PLAYER_PROMPT)
+            gplayers = gb.get("players", []) if isinstance(gb, dict) else []
+        except Exception as e:
+            logger.warning(f"[PLAYER-BREAKDOWN] Gemini failed: {e}")
+
+        return {
+            "success": True,
+            "framesScanned": scanned,
+            "detections": len(samples),
+            "players": merge_player_cards(slots, gplayers, request.playerNames),
+            "detector": "coco+gemini",
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"[PLAYER-BREAKDOWN] FATAL: {type(e).__name__}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Player breakdown failed: {e}")
+    finally:
+        if video_path:
+            try:
+                os.remove(video_path)
+            except OSError:
+                pass
 
 
 @app.post("/analyze-shots")
