@@ -721,6 +721,18 @@ export default function MatchPlayer({
     } catch {}
   }
 
+  // A skill bar's displayed value: when you've set your own overall rating, shift
+  // every sub-skill by the same delta (your rating − the AI's average) so the 5
+  // skills track your number while keeping the player's strength/weakness shape.
+  const shownSkill = (p: PlayerCard, k: string): number | undefined => {
+    const raw = (p.ratings as Record<string, number | undefined>)?.[k];
+    if (typeof raw !== "number") return undefined;
+    const userR = playerRatings[p.slot];
+    return typeof userR === "number" && typeof p.rating === "number"
+      ? Math.max(2, Math.min(8, raw + (userR - p.rating)))
+      : raw;
+  };
+
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12 }}>
@@ -1399,7 +1411,7 @@ export default function MatchPlayer({
 
                     <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 5 }}>
                       {([["serve", "Serve"], ["return", "Return"], ["offense", "Offense"], ["defense", "Defense"], ["consistency", "Consist."]] as const).map(([k, lbl]) => {
-                        const v = (p.ratings as Record<string, number | undefined>)?.[k];
+                        const v = shownSkill(p, k);
                         const pct = typeof v === "number" ? Math.max(0, Math.min(100, ((v - 2) / 6) * 100)) : 0;
                         return (
                           <div key={k} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11 }}>
