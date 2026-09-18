@@ -13,11 +13,13 @@ import {
   shotEndpointPublic,
   trackEndpointPublic,
   playersEndpointPublic,
+  playerBreakdownEndpointPublic,
   reelEndpointPublic,
   type InferenceResult,
   type ShotAnalysisResult,
   type TrackResult,
   type PlayerCoverage,
+  type PlayerCard,
   type RatingsRollup,
 } from "../lib/analysis";
 import TrajectoryMap3D from "./TrajectoryMap3D";
@@ -76,12 +78,21 @@ export default function MatchPlayer({
   const [players, setPlayers] = useState<PlayerCoverage | null>(null);
   const [playersBusy, setPlayersBusy] = useState(false);
   const [playersErr, setPlayersErr] = useState<string | null>(null);
+  const [playerBreakdown, setPlayerBreakdown] = useState<PlayerCard[] | null>(
+    ((match as { player_breakdown?: PlayerCard[] }).player_breakdown) || null
+  );
+  const [playerNames, setPlayerNames] = useState<Record<string, string>>(
+    ((match as { player_names?: Record<string, string> }).player_names) || {}
+  );
+  const [prBusy, setPrBusy] = useState(false);
+  const [prErr, setPrErr] = useState<string | null>(null);
   // Which analyses have used their included (free, first) run for this match.
   // The first run of each kind comes with the upload; re-runs spend a credit.
   const [runsUsed, setRunsUsed] = useState<Record<string, boolean>>(() => ({
     ...(((match as { analysis_runs?: Record<string, boolean> }).analysis_runs) || {}),
     ...(match.ball_analysis ? { ball: true } : {}),
     ...(match.shot_analysis ? { shot: true } : {}),
+    ...((match as { player_breakdown?: unknown }).player_breakdown ? { playerRatings: true } : {}),
   }));
   const [isPlaying, setIsPlaying] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -649,6 +660,48 @@ export default function MatchPlayer({
     } finally {
       setPlayersBusy(false);
     }
+  }
+
+  async function runPlayerBreakdown() {
+    setPrBusy(true);
+    setPrErr(null);
+    try {
+      if (!(await authorizeRun("playerRatings"))) { setPrErr(OUT_OF_CREDITS); return; }
+      const endpoint = playerBreakdownEndpointPublic();
+      if (!endpoint) throw new Error("Player analysis service URL is not configured.");
+      if (!match.video_path) throw new Error("This match has no uploaded video.");
+      if (corners.length !== 4) throw new Error("Calibrate the court first — per-player ratings need the 4 court corners.");
+      const videoUrl = await clientReadUrl(supabase, match.video_path, 900);
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ videoUrl, corners, playerNames }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.detail || data?.error || `Player analysis failed (${res.status}).`);
+      const cards: PlayerCard[] = data.players || [];
+      setPlayerBreakdown(cards);
+      await supabase
+        .from("matches")
+        .update({ player_breakdown: cards, player_analyzed_at: new Date().toISOString() })
+        .eq("id", match.id);
+      if (pushOn) notify("Player ratings ready 🏅", "Your per-player breakdown is ready to view.", `/matches/${match.id}`);
+      await markRunUsed("playerRatings");
+    } catch (e: any) {
+      setPrErr(e?.message || "Player analysis failed.");
+    } finally {
+      setPrBusy(false);
+    }
+  }
+
+  // Rename a player slot; persist independently so re-running never wipes names.
+  async function savePlayerName(slot: string, name: string) {
+    const next = { ...playerNames, [slot]: name };
+    setPlayerNames(next);
+    setPlayerBreakdown((prev) => (prev ? prev.map((c) => (c.slot === slot ? { ...c, name } : c)) : prev));
+    try {
+      await supabase.from("matches").update({ player_names: next }).eq("id", match.id);
+    } catch {}
   }
 
   return (
@@ -1269,6 +1322,120 @@ export default function MatchPlayer({
                 {corners.length === 4
                   ? "Tap “Track players” to map court coverage."
                   : "Calibrate the court first (the ⊹ Calibrate button on the video), then track players."}
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === "players" && (
+          <div className="card" style={{ borderColor: "rgba(163,230,53,0.35)", marginTop: 14 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
+              <div>
+                <div className="section-title">Player ratings</div>
+                <div className="muted" style={{ fontSize: 13, marginTop: 2 }}>
+                  Each player broken out by court position — with an AI rating, coaching note and estimated unforced errors. Needs court calibration. First run included — re-runs use 1 credit; result is saved.
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                <span className="badge badge-average" style={{ fontSize: 11 }}>beta</span>
+                <button className="btn btn-primary btn-sm" onClick={runPlayerBreakdown} disabled={prBusy || !videoUrl} style={{ opacity: prBusy || !videoUrl ? 0.6 : 1 }}>
+                  {prBusy ? "Analysing players…" : playerBreakdown ? "↻ Re-run" : "▶ Rate players"}
+                </button>
+              </div>
+            </div>
+            {prBusy && (
+              <div className="muted" style={{ marginTop: 10, fontSize: 13 }}>
+                <span className="ball-spin" style={{ marginRight: 8 }} />
+                Tracking each player and building their ratings… this can take ~1–2 minutes.
+              </div>
+            )}
+            {prErr && <div style={{ marginTop: 10, fontSize: 13, color: "var(--poor)" }}>{prErr}</div>}
+            {playerBreakdown && playerBreakdown.length > 0 && (
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 12, marginTop: 14 }}>
+                {playerBreakdown.map((p) => (
+                  <div key={p.slot} style={{ border: "1px solid var(--border)", borderRadius: 12, padding: 14 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <input
+                          defaultValue={p.name || ""}
+                          placeholder={`${p.side === "near" ? "Near" : "Far"} · ${p.lr}`}
+                          onBlur={(e) => { const v = e.target.value.trim(); if (v !== (p.name || "")) savePlayerName(p.slot, v); }}
+                          style={{ width: "100%", background: "transparent", border: "none", borderBottom: "1px dashed var(--border)", color: "var(--text)", fontSize: 15, fontWeight: 700, padding: "2px 0" }}
+                        />
+                        <div className="dim" style={{ fontSize: 11, marginTop: 3 }}>
+                          {p.side === "near" ? "Near side" : "Far side"} · {p.lr}{p.appearance ? ` · ${p.appearance}` : ""}
+                        </div>
+                      </div>
+                      <div style={{ textAlign: "right" }}>
+                        <div style={{ fontSize: 24, fontWeight: 800, lineHeight: 1, color: "var(--accent, #a3e635)" }}>{p.rating ?? "—"}</div>
+                        <div className="dim" style={{ fontSize: 9.5, letterSpacing: 0.4 }}>AI DUPR EST</div>
+                      </div>
+                    </div>
+
+                    <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 5 }}>
+                      {([["serve", "Serve"], ["return", "Return"], ["offense", "Offense"], ["defense", "Defense"], ["consistency", "Consist."]] as const).map(([k, lbl]) => {
+                        const v = (p.ratings as Record<string, number | undefined>)?.[k];
+                        const pct = typeof v === "number" ? Math.max(0, Math.min(100, ((v - 2) / 6) * 100)) : 0;
+                        return (
+                          <div key={k} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11 }}>
+                            <span className="dim" style={{ width: 54 }}>{lbl}</span>
+                            <span style={{ flex: 1, height: 5, background: "var(--border)", borderRadius: 3, overflow: "hidden" }}>
+                              <span style={{ display: "block", width: `${pct}%`, height: "100%", background: "var(--accent, #a3e635)" }} />
+                            </span>
+                            <span style={{ width: 22, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{typeof v === "number" ? v.toFixed(1) : "—"}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6, marginTop: 12 }}>
+                      <div style={{ textAlign: "center" }}><div style={{ fontSize: 15, fontWeight: 700 }}>{p.netPct}%</div><div className="dim" style={{ fontSize: 9.5 }}>AT NET</div></div>
+                      <div style={{ textAlign: "center" }}><div style={{ fontSize: 15, fontWeight: 700 }}>{p.movementFt}<span style={{ fontSize: 10 }}>ft</span></div><div className="dim" style={{ fontSize: 9.5 }}>MOVEMENT</div></div>
+                      <div style={{ textAlign: "center" }}><div style={{ fontSize: 15, fontWeight: 700, color: "var(--poor)" }}>{p.unforcedErrors?.estimate ?? "—"}</div><div className="dim" style={{ fontSize: 9.5 }}>UNFORCED*</div></div>
+                    </div>
+
+                    <div style={{ marginTop: 12 }}>
+                      <div className="dim" style={{ fontSize: 10, marginBottom: 4 }}>Court coverage</div>
+                      <CourtCoverage grid={p.coverage.grid} gw={p.coverage.gw} gh={p.coverage.gh} />
+                    </div>
+
+                    {p.strengths?.length > 0 && (
+                      <div style={{ marginTop: 12 }}>
+                        <div className="dim" style={{ fontSize: 10, marginBottom: 3, color: "var(--excellent)" }}>STRENGTHS</div>
+                        <ul style={{ margin: 0, paddingLeft: 16, fontSize: 12, lineHeight: 1.5 }}>{p.strengths.map((s, i) => <li key={i}>{s}</li>)}</ul>
+                      </div>
+                    )}
+                    {p.improvements?.length > 0 && (
+                      <div style={{ marginTop: 8 }}>
+                        <div className="dim" style={{ fontSize: 10, marginBottom: 3, color: "var(--average)" }}>WORK ON</div>
+                        <ul style={{ margin: 0, paddingLeft: 16, fontSize: 12, lineHeight: 1.5 }}>{p.improvements.map((s, i) => <li key={i}>{s}</li>)}</ul>
+                      </div>
+                    )}
+
+                    {p.coachNote && (
+                      <div style={{ marginTop: 12, fontSize: 12, lineHeight: 1.5, padding: "8px 10px", background: "rgba(163,230,53,0.08)", borderRadius: 8, borderLeft: "3px solid var(--accent, #a3e635)" }}>
+                        <b>Coach note:</b> {p.coachNote}
+                      </div>
+                    )}
+                    {p.unforcedErrors?.notes?.length > 0 && (
+                      <div className="dim" style={{ marginTop: 8, fontSize: 11, lineHeight: 1.5 }}>
+                        Unforced errors: {p.unforcedErrors.notes.join("; ")}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+            {playerBreakdown && (
+              <p className="dim" style={{ fontSize: 11, marginTop: 12, lineHeight: 1.5 }}>
+                Players are split by court position (near/far side, left/right) — reliable for side, approximate when players switch sides. Ratings and *unforced errors are AI estimates from sparse frames, not official DUPR or exact counts. Type a name on any card to save it.
+              </p>
+            )}
+            {!playerBreakdown && !prBusy && (
+              <div className="muted" style={{ marginTop: 12, fontSize: 13 }}>
+                {corners.length === 4
+                  ? "Tap “Rate players” to break the match out player-by-player."
+                  : "Calibrate the court first (the ⊹ Calibrate button on the video), then rate players."}
               </div>
             )}
           </div>

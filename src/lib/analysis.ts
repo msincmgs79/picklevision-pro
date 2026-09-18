@@ -178,3 +178,29 @@ export interface PlayerCoverage {
   netPct: number;
   detector: string;
 }
+
+// Per-player breakdown (Phase 1): one card per player (4 position slots).
+export function playerBreakdownEndpointPublic(): string | null {
+  const b = baseUrl(process.env.NEXT_PUBLIC_RAILWAY_INFERENCE_URL || "");
+  return b ? `${b}/player-breakdown` : null;
+}
+export interface PlayerCard {
+  slot: string; // "near-left" | "near-right" | "far-left" | "far-right"
+  side: "near" | "far";
+  lr: "left" | "right";
+  name: string;
+  appearance: string;
+  rating: number | null; // DUPR-scale AI estimate (mean of the 5 skills)
+  ratings: { serve?: number; return?: number; offense?: number; defense?: number; consistency?: number };
+  kitchenControl?: number;
+  coverage: { grid: number[][]; gw: number; gh: number };
+  netPct: number;
+  avgNetDist: number;
+  movementFt: number;
+  samples: number;
+  shotTypes: { type: string; emphasis: string }[];
+  strengths: string[];
+  improvements: string[];
+  coachNote: string;
+  unforcedErrors: { estimate: number | null; notes: string[] };
+}
