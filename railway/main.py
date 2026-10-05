@@ -38,8 +38,8 @@ app.add_middleware(
 )
 
 MAX_FRAMES = int(os.getenv("MAX_FRAMES", "450"))  # frames /infer decodes/analyzes across the video (env-tunable; 150 was tuned for the old fast colour blob, v1 can afford denser sampling)
-DOWNLOAD_TIMEOUT = 120                 # seconds
-MAX_DOWNLOAD_BYTES = 300 * 1024 * 1024  # 300 MB safety cap
+DOWNLOAD_TIMEOUT = int(os.getenv("DOWNLOAD_TIMEOUT", "300"))  # seconds (per-read; larger for big videos)
+MAX_DOWNLOAD_BYTES = int(os.getenv("MAX_DOWNLOAD_BYTES", str(3 * 1024 * 1024 * 1024)))  # 3 GB, matches the app's upload cap; env-tunable
 
 # Gemini (shot breakdown). Key is set on Railway as GEMINI_API_KEY.
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
