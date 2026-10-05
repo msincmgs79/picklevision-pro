@@ -39,7 +39,7 @@ export default function NewMatchPage() {
 
   function onPickFile(f: File | null) {
     if (f && f.size > MAX_VIDEO_BYTES) {
-      setError("Videos are capped at 1 GB. Please trim or compress the clip and try again.");
+      setError("Videos are capped at 3 GB. Please trim or compress the clip and try again.");
       setFile(null);
       return;
     }
@@ -74,7 +74,7 @@ export default function NewMatchPage() {
     }
 
     if (file.size > MAX_VIDEO_BYTES) {
-      setError("Videos are capped at 1 GB. Please trim or compress the clip and try again.");
+      setError("Videos are capped at 3 GB. Please trim or compress the clip and try again.");
       setStage("error");
       return;
     }
@@ -193,7 +193,7 @@ export default function NewMatchPage() {
                 <div style={{ fontSize: 40 }}>⤴</div>
                 <div style={{ fontWeight: 700, marginTop: 8 }}>Choose a video to upload</div>
                 <div className="muted" style={{ fontSize: 13, marginTop: 4 }}>
-                  MP4, MOV or WebM · up to 1 GB.
+                  MP4, MOV or WebM · up to 3 GB.
                 </div>
               </>
             )}

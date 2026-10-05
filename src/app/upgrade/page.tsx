@@ -239,7 +239,7 @@ export default function UpgradePage() {
       </div>
 
       <p className="dim" style={{ fontSize: 11.5, marginTop: 16, lineHeight: 1.6, maxWidth: 640 }}>
-        Videos are capped at 1 GB each. Storage allowances apply per plan — when you reach your limit you can free up space by deleting older matches, or upgrade. Prices in USD.
+        Videos are capped at 3 GB each. Storage allowances apply per plan — when you reach your limit you can free up space by deleting older matches, or upgrade. Prices in USD.
       </p>
     </div>
   );

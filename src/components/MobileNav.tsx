@@ -26,7 +26,7 @@ export default function MobileNav() {
           <span>{i.label}</span>
         </Link>
       ))}
-      <Link href="/record" className="mnav-fab" aria-label="Record or upload a match">
+      <Link href="/matches/new" className="mnav-fab" aria-label="Upload a match">
         <span aria-hidden="true">＋</span>
       </Link>
       {right.map((i) => (

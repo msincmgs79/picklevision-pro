@@ -117,7 +117,7 @@ export default function Landing() {
         <h2 className="section-title" style={{ textAlign: "center", fontSize: 24, marginBottom: 22 }}>How it works</h2>
         <div className="grid" style={{ gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
           {[
-            { n: "1", t: "Record & upload", d: "Film your game on a phone behind the court and upload the video (up to 1 GB)." },
+            { n: "1", t: "Record & upload", d: "Film your game on a phone behind the court and upload the video (up to 3 GB)." },
             { n: "2", t: "AI analyzes", d: "PickleVision detects the ball and players, grades your shots and maps the court." },
             { n: "3", t: "Get your breakdown", d: "Skill ratings, coaching tips, rally highlights, coverage heatmaps and a rating that tracks over time." },
           ].map((s) => (
