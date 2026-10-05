@@ -18,7 +18,7 @@ export async function uploadVideo(
 }
 
 const PART_SIZE = 10 * 1024 * 1024; // 10 MB parts
-const PART_RETRIES = 3;
+const PART_RETRIES = 6;
 
 async function storageApi(body: Record<string, unknown>): Promise<any> {
   const res = await fetch("/api/storage", {
@@ -79,6 +79,7 @@ async function putPart(
     return await new Promise<string>((resolve, reject) => {
       const xhr = new XMLHttpRequest();
       xhr.open("PUT", url);
+      xhr.timeout = 180000; // 3 min per ~10 MB part; a stalled connection fires ontimeout and is retried
       xhr.upload.onprogress = (e) => {
         if (e.lengthComputable) onPartProgress(e.loaded);
       };
@@ -90,15 +91,19 @@ async function putPart(
           reject(new Error(`Upload failed (${xhr.status}).`));
         }
       };
-      xhr.onerror = () => reject(new Error("Network error during upload."));
+      xhr.onerror = () => reject(new Error("Connection dropped mid-upload."));
+      xhr.ontimeout = () => reject(new Error("Upload stalled — connection too slow."));
       xhr.send(chunk);
     });
   } catch (err) {
     if (attempt < PART_RETRIES) {
-      await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)));
+      // Exponential backoff (2s, 4s, 8s, 16s, 30s, 30s) so a chunk survives a
+      // multi-second wifi blip or a brief app-backgrounding instead of failing
+      // the whole upload — the common killer of large phone uploads.
+      await new Promise((r) => setTimeout(r, Math.min(30000, 2000 * 2 ** attempt)));
       return putPart(url, chunk, onPartProgress, attempt + 1);
     }
-    throw err;
+    throw new Error("Upload failed after several retries — large videos upload most reliably on wifi with the app kept open, or from a computer.");
   }
 }
 

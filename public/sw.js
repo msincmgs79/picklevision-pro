@@ -5,7 +5,7 @@
 // Bump CACHE on every deploy that must force stale PWAs (esp. mobile home-screen
 // installs) to refresh: activate deletes all older caches, skipWaiting +
 // clients.claim take control immediately, and ServiceWorkerRegister reloads.
-const CACHE = "pv-shell-v5";
+const CACHE = "pv-shell-v6";
 const PRECACHE = ["/offline", "/manifest.webmanifest", "/logo.png"];
 
 self.addEventListener("install", (event) => {
