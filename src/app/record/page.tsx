@@ -151,9 +151,9 @@ export default function RecordPage() {
             {phase === "idle" && (
               <div style={{ textAlign: "center", padding: 30 }}>
                 <div style={{ fontSize: 46, marginBottom: 10 }}>📹</div>
-                <div style={{ fontWeight: 700, fontSize: 16 }}>Camera off</div>
-                <div className="muted" style={{ fontSize: 13.5, marginTop: 4, maxWidth: 320 }}>
-                  Enable your camera to record a live game, or jump straight to the analyzed demo match.
+                <div style={{ fontWeight: 700, fontSize: 16 }}>Record or upload</div>
+                <div className="muted" style={{ fontSize: 13.5, marginTop: 4, maxWidth: 340 }}>
+                  Record a live game with your camera, or upload a video you already have — both get the same AI analysis.
                 </div>
               </div>
             )}
@@ -171,7 +171,10 @@ export default function RecordPage() {
           {/* controls */}
           <div style={{ display: "flex", gap: 10, marginTop: 14, flexWrap: "wrap" }}>
             {phase === "idle" && (
-              <button className="btn btn-primary" onClick={enableCamera}>● Enable Camera</button>
+              <>
+                <button className="btn btn-primary" onClick={enableCamera}>● Record with camera</button>
+                <Link className="btn btn-primary" href="/matches/new">⤴ Upload a video file</Link>
+              </>
             )}
             {phase === "ready" && (
               <button className="btn btn-primary" onClick={startRecording}>● Start Recording</button>
