@@ -27,7 +27,8 @@ export default function RealDashboard({ real, rollup }: { real: LatestAnalysis; 
         <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
           <MatchSwitcher current={real.matchId} />
           <Link href={`/matches/${real.matchId}`} className="btn">Open match</Link>
-          <Link href="/record" className="btn btn-primary">● Record New Game</Link>
+          <Link href="/matches/new" className="btn btn-primary">⤴ Upload video</Link>
+          <Link href="/record" className="btn">● Record game</Link>
         </div>
       </div>
 
