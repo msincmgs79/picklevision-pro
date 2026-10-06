@@ -180,9 +180,15 @@ export interface PlayerCoverage {
 }
 
 // Per-player breakdown (Phase 1): one card per player (4 position slots).
+// The breakdown runs as a background job: POST /player-breakdown returns a jobId
+// immediately, then the client polls /player-breakdown-status until it's done.
 export function playerBreakdownEndpointPublic(): string | null {
   const b = baseUrl(process.env.NEXT_PUBLIC_RAILWAY_INFERENCE_URL || "");
   return b ? `${b}/player-breakdown` : null;
+}
+export function playerBreakdownStatusPublic(): string | null {
+  const b = baseUrl(process.env.NEXT_PUBLIC_RAILWAY_INFERENCE_URL || "");
+  return b ? `${b}/player-breakdown-status` : null;
 }
 export interface PlayerCard {
   slot: string; // "near-left" | "near-right" | "far-left" | "far-right"

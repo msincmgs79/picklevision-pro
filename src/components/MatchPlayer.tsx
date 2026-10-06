@@ -14,6 +14,7 @@ import {
   trackEndpointPublic,
   playersEndpointPublic,
   playerBreakdownEndpointPublic,
+  playerBreakdownStatusPublic,
   reelEndpointPublic,
   type InferenceResult,
   type ShotAnalysisResult,
@@ -677,13 +678,20 @@ export default function MatchPlayer({
       if (!match.video_path) throw new Error("This match has no uploaded video.");
       if (corners.length !== 4) throw new Error("Calibrate the court first — per-player ratings need the 4 court corners.");
       const videoUrl = await clientReadUrl(supabase, match.video_path, 900);
-      const res = await fetch(endpoint, {
+
+      // Start the background job — this returns immediately with a jobId.
+      const startRes = await fetch(endpoint, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ videoUrl, corners, playerNames }),
       });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.detail || data?.error || `Player analysis failed (${res.status}).`);
+      const startData = await startRes.json().catch(() => ({}));
+      if (!startRes.ok) throw new Error(startData?.detail || startData?.error || `Player analysis failed (${startRes.status}).`);
+
+      // Poll the job until it's done. (An older backend returns the result inline,
+      // with no jobId — handle that too so a deploy mismatch doesn't break.)
+      const data = startData?.jobId ? await pollPlayerBreakdown(startData.jobId) : startData;
+
       const cards: PlayerCard[] = data.players || [];
       setPlayerBreakdown(cards);
       await supabase
@@ -697,6 +705,36 @@ export default function MatchPlayer({
     } finally {
       setPrBusy(false);
     }
+  }
+
+  // Poll the per-player breakdown job until it finishes. Each poll is a quick
+  // request, so a multi-minute analysis never trips the browser's fetch timeout
+  // the way one long request did ("failed to fetch"). The polling also keeps the
+  // serverless backend awake until the job completes — so keep this tab open.
+  async function pollPlayerBreakdown(jobId: string): Promise<any> {
+    const statusUrl = playerBreakdownStatusPublic();
+    if (!statusUrl) throw new Error("Player analysis service URL is not configured.");
+    const INTERVAL_MS = 8000;
+    const deadline = Date.now() + 25 * 60 * 1000; // give up after 25 min
+    let misses = 0;
+    while (Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, INTERVAL_MS));
+      let res: Response;
+      try {
+        res = await fetch(`${statusUrl}?jobId=${encodeURIComponent(jobId)}`);
+      } catch {
+        if (++misses > 10) throw new Error("Lost connection to the analysis service — please try again.");
+        continue; // transient network blip — keep polling
+      }
+      misses = 0;
+      if (res.status === 404) throw new Error("The analysis job expired — please run it again.");
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) continue; // transient server hiccup — keep polling
+      if (data?.status === "error") throw new Error(data?.error || "Player analysis failed.");
+      if (data?.status === "done" || Array.isArray(data?.players)) return data;
+      // status === "running" → keep polling
+    }
+    throw new Error("Player analysis is taking longer than expected — please try again.");
   }
 
   // Rename a player slot; persist independently so re-running never wipes names.
@@ -1375,7 +1413,7 @@ export default function MatchPlayer({
             {prBusy && (
               <div className="muted" style={{ marginTop: 10, fontSize: 13 }}>
                 <span className="ball-spin" style={{ marginRight: 8 }} />
-                Tracking each player and building their ratings… this can take ~1–2 minutes.
+                Tracking each player and building their ratings… this runs in the background and can take a few minutes on a long video — keep this tab open and we&apos;ll update it when it&apos;s ready.
               </div>
             )}
             {prErr && <div style={{ marginTop: 10, fontSize: 13, color: "var(--poor)" }}>{prErr}</div>}
