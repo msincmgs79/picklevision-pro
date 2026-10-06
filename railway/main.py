@@ -408,14 +408,19 @@ def person_infer_safe(frame):
         return []
 
 
-def track_players(video_path, H, target_fps, max_frames, workers=FULL_WORKERS):
+def track_players(video_path, H, target_fps, max_frames, workers=FULL_WORKERS,
+                  start_sec=0.0, window_sec=None):
     """Memory-bounded sweep collecting every on-court player foot position, mapped
     to court feet via the homography. Mirrors track_full's streaming (one batch in
-    RAM at a time)."""
+    RAM at a time). start_sec/window_sec restrict the sweep to a time window (the
+    middle of the match) so long clips stay bounded; defaults scan the whole clip."""
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
         raise ValueError("Cannot open video file")
     fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
+    if start_sec and start_sec > 0:
+        cap.set(cv2.CAP_PROP_POS_MSEC, start_sec * 1000.0)
+    end_ms = (start_sec + window_sec) * 1000.0 if window_sec else None
     step = max(1, int(round(fps / max(0.1, target_fps))))
     samples, scanned, idx, batch = [], 0, 0, []
     bsize = max(1, workers * 3)
@@ -436,6 +441,10 @@ def track_players(video_path, H, target_fps, max_frames, workers=FULL_WORKERS):
     while scanned < max_frames:
         if not cap.grab():
             break
+        if end_ms is not None:
+            pos = cap.get(cv2.CAP_PROP_POS_MSEC)
+            if pos > 0 and pos > end_ms:
+                break
         if idx % step == 0:
             ok, frame = cap.retrieve()
             if ok and frame is not None:
@@ -683,11 +692,24 @@ INOUT_MARGIN = 1.0          # ft line-call tolerance
 # to the court. Players' feet ARE on the ground, so the homography is accurate here
 # (unlike the airborne ball). Configurable so the COCO model/version can be swapped.
 ROBOFLOW_PERSON_MODEL = os.getenv("ROBOFLOW_PERSON_MODEL", "coco/50")  # Microsoft public COCO
-PLAYERS_MAX_FRAMES = 500
+PLAYERS_MAX_FRAMES = int(os.getenv("PLAYERS_MAX_FRAMES", "300"))    # CPU person-detections cap; lower = faster
 PLAYERS_TARGET_FPS = 1.5
+PLAYERS_WINDOW_SEC = float(os.getenv("PLAYERS_WINDOW_SEC", "240"))  # middle-of-match window analysed (seconds)
+PLAYER_GEMINI_FRAMES = int(os.getenv("PLAYER_GEMINI_FRAMES", "24")) # images sent to Gemini for the per-player read
 PLAYERS_OFFCOURT_MAX = 7.0  # ft beyond lines kept as an on-court player (drops spectators/bench)
 PLAYERS_CONF_MIN = 0.35
 NVZ_FT = 7.0                # non-volley zone depth each side of the net (kitchen)
+
+
+def _mid_window(dur, win=PLAYERS_WINDOW_SEC):
+    """(start_sec, window_sec) for the middle `win` seconds of a clip — the most
+    representative stretch — or the whole clip when it is shorter. Keeps player
+    analysis bounded and fast no matter how long the match is."""
+    if dur <= 0:
+        return 0.0, win
+    if dur <= win:
+        return 0.0, dur
+    return (dur - win) / 2.0, win
 
 
 def _court_dist_outside(cx: float, cy: float) -> float:
@@ -845,7 +867,7 @@ class PlayersRequest(BaseModel):
 
 
 @app.post("/players")
-async def players(request: PlayersRequest):
+def players(request: PlayersRequest):
     """Player court-coverage: detect people, map feet to court, drop off-court
     bystanders, and summarise where players spent time (coverage heatmap + net
     presence per side). Requires court calibration."""
@@ -867,8 +889,10 @@ async def players(request: PlayersRequest):
             raise HTTPException(status_code=400, detail=f"Bad corners: {e}")
 
         dur = video_duration(video_path)
-        t_fps = min(PLAYERS_TARGET_FPS, PLAYERS_MAX_FRAMES / max(1.0, dur))
-        samples, scanned = track_players(video_path, H, t_fps, PLAYERS_MAX_FRAMES)
+        start, win = _mid_window(dur)
+        t_fps = min(PLAYERS_TARGET_FPS, PLAYERS_MAX_FRAMES / max(1.0, win))
+        samples, scanned = track_players(video_path, H, t_fps, PLAYERS_MAX_FRAMES,
+                                         start_sec=start, window_sec=win)
 
         # Coverage heatmap: court (20 wide x 44 long) binned into GW x GH cells.
         GW, GH = 10, 22
@@ -972,7 +996,7 @@ def gemini_breakdown(frames: List[Tuple[int, np.ndarray]], prompt: str = SHOT_PR
         url,
         headers={"x-goog-api-key": GEMINI_API_KEY, "Content-Type": "application/json"},
         json=body,
-        timeout=120,
+        timeout=180,
     )
     if not r.ok:
         raise HTTPException(status_code=502, detail=f"Gemini error {r.status_code}: {r.text[:300]}")
@@ -1107,7 +1131,7 @@ class PlayerBreakdownRequest(BaseModel):
 
 
 @app.post("/player-breakdown")
-async def player_breakdown(request: PlayerBreakdownRequest):
+def player_breakdown(request: PlayerBreakdownRequest):
     """Per-player ratings: player-position tracking (4 slots) + a per-player Gemini
     coaching read, merged into one card per player. Requires calibration."""
     if not request.videoUrl:
@@ -1130,11 +1154,15 @@ async def player_breakdown(request: PlayerBreakdownRequest):
             raise HTTPException(status_code=400, detail=f"Bad corners: {e}")
 
         dur = video_duration(video_path)
-        t_fps = min(PLAYERS_TARGET_FPS, PLAYERS_MAX_FRAMES / max(1.0, dur))
-        samples, scanned = track_players(video_path, H, t_fps, PLAYERS_MAX_FRAMES)
+        start, win = _mid_window(dur)
+        t_fps = min(PLAYERS_TARGET_FPS, PLAYERS_MAX_FRAMES / max(1.0, win))
+        samples, scanned = track_players(video_path, H, t_fps, PLAYERS_MAX_FRAMES,
+                                         start_sec=start, window_sec=win)
         slots = player_slots(samples)
 
-        gframes, _t, _f, _d = sample_frames(video_path, max_frames=40)
+        g_fps = max(0.1, PLAYER_GEMINI_FRAMES / max(1.0, win))
+        gframes = collect_window_frames(video_path, start, win, target_fps=g_fps,
+                                        max_frames=PLAYER_GEMINI_FRAMES)
         gplayers = []
         try:
             gb = gemini_breakdown(gframes, PLAYER_PROMPT)
