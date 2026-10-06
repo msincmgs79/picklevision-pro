@@ -47,6 +47,12 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 SHOT_KEYFRAMES = 20                     # keyframes sent to Gemini
 RATING_CALIBRATION = 0.4                 # added to each AI skill rating (user-calibrated)
+# Per-player ratings: the AI is told to use the full range and tends to OVER-spread
+# the four players. After the read we compress each player's rating toward the
+# match mean by this factor (1.0 = raw AI spread, lower = tighter). 0.55 matches
+# Martin's hand-corrected benchmark (a ~1.6-pt AI spread → a realistic ~0.9). Tune
+# via the PLAYER_SPREAD env var without a redeploy.
+PLAYER_SPREAD = float(os.getenv("PLAYER_SPREAD", "0.55"))
 
 
 class InferenceRequest(BaseModel):
@@ -992,17 +998,14 @@ PLAYER_PROMPT = (
     "You are a professional pickleball coach analysing still frames sampled in "
     "chronological order from ONE doubles match (up to 4 players). Identify each "
     "DISTINCT player by appearance and court position, then rate each ONE.\n"
-    "The four players MAY differ in skill — but they may also be close; most "
-    "recreational doubles groups sit within about one point of each other. Rank "
-    "them strongest to weakest, then let the ratings reflect the REAL size of the "
-    "gaps you can actually see: separate players clearly when one is visibly "
-    "better, but keep them close (within a few tenths) when they look similar. Do "
-    "NOT manufacture a wide spread to fill the scale. Avoid giving a player the "
-    "same number for all five sub-skills — vary them to reflect genuine strengths "
-    "and weaknesses. Judge skill ONLY from what reveals ability: shot quality and "
-    "selection, ball control, hands/volley speed at the net, footwork, court "
-    "awareness and composure — NOT from how much a player runs around (a weaker "
-    "player often moves MORE).\n"
+    "CRITICAL — the four players are NOT equal in skill; your main job is to TELL "
+    "THEM APART. First decide the ranking from STRONGEST to weakest, then assign "
+    "ratings that CLEARLY SEPARATE them across the scale. Do NOT cluster everyone "
+    "near 4.0, and do NOT give a player the same number for all five sub-skills — "
+    "vary them to reflect real strengths and weaknesses. Judge skill ONLY from what "
+    "reveals ability: shot quality and selection, ball control, hands/volley speed "
+    "at the net, footwork, court awareness and composure — NOT from how much a "
+    "player runs around (a weaker player often moves MORE).\n"
     "Return STRICT JSON of this exact shape:\n"
     '{"players": [ {"appearance": string, "side": "near"|"far", '
     '"courtSide": "left"|"right", "rank": number, '
@@ -1016,10 +1019,8 @@ PLAYER_PROMPT = (
     "camera / larger in frame, 'far' = further away. courtSide is that player's left "
     "or right half from the camera's view. ratings are AI ESTIMATES on the DUPR "
     "scale 2.0-8.0 (one decimal: 3.0 beginner, 4.0 intermediate, 5.0 advanced, 6.0+ "
-    "elite). Most rec players fall between 3.0 and 4.5; reserve 5.0+ for clearly "
-    "advanced play and 6.0+ for near-pro. Match the numbers to the level you "
-    "actually see rather than spreading them to fill the range; do NOT claim to be "
-    "an official DUPR. kitchenControl is 0-100. "
+    "elite) — USE THE FULL RANGE so the strongest and weakest players are clearly "
+    "different numbers; do NOT claim to be an official DUPR. kitchenControl is 0-100. "
     "shotTypes lists shots that player actually plays with emphasis High/Medium/Low. "
     "unforcedErrors.estimate is your best ROUGH count of clear unforced errors for "
     "that player from these sparse frames (an estimate, not an exact tally). "
@@ -1068,9 +1069,34 @@ def player_slots(samples):
     return out
 
 
+def calibrate_spread(cards):
+    """Compress per-player ratings toward the match mean so the AI stops
+    over-separating the four players (its raw reads spread too wide — e.g. 3.2-4.8
+    for a group that is really ~3.6-4.5). Each player's five sub-skills are shifted
+    by the same delta as their overall, so their strength/weakness SHAPE is kept
+    while the gaps between players shrink to a realistic size. PLAYER_SPREAD=1.0
+    leaves the raw AI output untouched; a single player (or fewer than two rated)
+    is left alone. Mutates the cards in place."""
+    if PLAYER_SPREAD >= 1.0:
+        return
+    rated = [c for c in cards if isinstance(c.get("rating"), (int, float))]
+    if len(rated) < 2:
+        return
+    mean = sum(c["rating"] for c in rated) / len(rated)
+    clamp = lambda x: round(min(8.0, max(2.0, x)), 1)
+    for c in rated:
+        delta = (PLAYER_SPREAD - 1.0) * (c["rating"] - mean)  # pull toward the mean
+        c["rating"] = clamp(c["rating"] + delta)
+        r = c.get("ratings") or {}
+        for k in ("serve", "return", "offense", "defense", "consistency"):
+            if isinstance(r.get(k), (int, float)):
+                r[k] = clamp(r[k] + delta)
+
+
 def merge_player_cards(slots, gplayers, names=None):
     """Attach each Gemini per-player read to the CV slot it best matches (by side,
-    then left/right); rating = mean of the 5 skill estimates."""
+    then left/right); rating = mean of the 5 skill estimates, then compressed
+    toward the match mean (see calibrate_spread)."""
     names = names or {}
     used, cards = set(), []
     for slot in slots:
@@ -1102,6 +1128,7 @@ def merge_player_cards(slots, gplayers, names=None):
             "coachNote": g.get("coachNote", ""),
             "unforcedErrors": g.get("unforcedErrors") or {"estimate": None, "notes": []},
         })
+    calibrate_spread(cards)
     return cards
 
 
