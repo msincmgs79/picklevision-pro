@@ -47,12 +47,6 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 SHOT_KEYFRAMES = 20                     # keyframes sent to Gemini
 RATING_CALIBRATION = 0.4                 # added to each AI skill rating (user-calibrated)
-# Per-player ratings: the AI is told to use the full range and tends to OVER-spread
-# the four players. After the read we compress each player's rating toward the
-# match mean by this factor (1.0 = raw AI spread, lower = tighter). 0.55 matches
-# Martin's hand-corrected benchmark (a ~1.6-pt AI spread → a realistic ~0.9). Tune
-# via the PLAYER_SPREAD env var without a redeploy.
-PLAYER_SPREAD = float(os.getenv("PLAYER_SPREAD", "0.55"))
 
 
 class InferenceRequest(BaseModel):
@@ -1069,34 +1063,9 @@ def player_slots(samples):
     return out
 
 
-def calibrate_spread(cards):
-    """Compress per-player ratings toward the match mean so the AI stops
-    over-separating the four players (its raw reads spread too wide — e.g. 3.2-4.8
-    for a group that is really ~3.6-4.5). Each player's five sub-skills are shifted
-    by the same delta as their overall, so their strength/weakness SHAPE is kept
-    while the gaps between players shrink to a realistic size. PLAYER_SPREAD=1.0
-    leaves the raw AI output untouched; a single player (or fewer than two rated)
-    is left alone. Mutates the cards in place."""
-    if PLAYER_SPREAD >= 1.0:
-        return
-    rated = [c for c in cards if isinstance(c.get("rating"), (int, float))]
-    if len(rated) < 2:
-        return
-    mean = sum(c["rating"] for c in rated) / len(rated)
-    clamp = lambda x: round(min(8.0, max(2.0, x)), 1)
-    for c in rated:
-        delta = (PLAYER_SPREAD - 1.0) * (c["rating"] - mean)  # pull toward the mean
-        c["rating"] = clamp(c["rating"] + delta)
-        r = c.get("ratings") or {}
-        for k in ("serve", "return", "offense", "defense", "consistency"):
-            if isinstance(r.get(k), (int, float)):
-                r[k] = clamp(r[k] + delta)
-
-
 def merge_player_cards(slots, gplayers, names=None):
     """Attach each Gemini per-player read to the CV slot it best matches (by side,
-    then left/right); rating = mean of the 5 skill estimates, then compressed
-    toward the match mean (see calibrate_spread)."""
+    then left/right); rating = mean of the 5 skill estimates."""
     names = names or {}
     used, cards = set(), []
     for slot in slots:
@@ -1128,7 +1097,6 @@ def merge_player_cards(slots, gplayers, names=None):
             "coachNote": g.get("coachNote", ""),
             "unforcedErrors": g.get("unforcedErrors") or {"estimate": None, "notes": []},
         })
-    calibrate_spread(cards)
     return cards
 
 
