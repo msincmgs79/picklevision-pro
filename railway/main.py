@@ -12,6 +12,8 @@ import tempfile
 import subprocess
 import shutil
 import threading
+import time
+import uuid
 from typing import List, Tuple
 from concurrent.futures import ThreadPoolExecutor
 
@@ -1106,28 +1108,37 @@ class PlayerBreakdownRequest(BaseModel):
     playerNames: dict | None = None
 
 
-@app.post("/player-breakdown")
-async def player_breakdown(request: PlayerBreakdownRequest):
-    """Per-player ratings: player-position tracking (4 slots) + a per-player Gemini
-    coaching read, merged into one card per player. Requires calibration."""
-    if not request.videoUrl:
-        raise HTTPException(status_code=400, detail="videoUrl required")
-    if not request.corners or len(request.corners) != 4:
-        raise HTTPException(status_code=400, detail="Court calibration (4 corners) is required.")
-    if not ROBOFLOW_API_KEY:
-        raise HTTPException(status_code=503, detail="Roboflow is not configured.")
-    if not GEMINI_API_KEY:
-        raise HTTPException(status_code=503, detail="GEMINI_API_KEY is not configured.")
+# --- Async job model for the long per-player breakdown -----------------------
+# The full-video CV sweep + Gemini read takes minutes on a big match — too long
+# for one HTTP request (the browser gives up with "failed to fetch"). So the POST
+# starts the work in a background thread and returns a job id immediately; the
+# client polls /player-breakdown-status, each call returning instantly. The
+# polling also keeps the (serverless) container awake until the job finishes.
+_PB_JOBS = {}                       # jobId -> {status, result?, error?, ts}
+_PB_JOBS_LOCK = threading.Lock()
+_PB_JOB_TTL = 3600                  # forget finished jobs after an hour
 
+
+def _pb_prune():
+    now = time.time()
+    with _PB_JOBS_LOCK:
+        for jid in [k for k, v in _PB_JOBS.items() if now - v.get("ts", now) > _PB_JOB_TTL]:
+            _PB_JOBS.pop(jid, None)
+
+
+def _run_player_breakdown(video_url, corners, player_names):
+    """The actual work: download, player-position tracking (4 slots) + a per-player
+    Gemini read, merged into one card per player. Returns the result dict. Runs in
+    a background thread (see /player-breakdown)."""
     video_path = None
     try:
-        video_path = download_video(request.videoUrl)
+        video_path = download_video(video_url)
         try:
-            src = np.array(request.corners, dtype=np.float32)
+            src = np.array(corners, dtype=np.float32)
             dst = np.array([[0, 0], [20, 0], [20, 44], [0, 44]], dtype=np.float32)
             H = cv2.getPerspectiveTransform(src, dst)
         except Exception as e:
-            raise HTTPException(status_code=400, detail=f"Bad corners: {e}")
+            raise ValueError(f"Bad corners: {e}")
 
         dur = video_duration(video_path)
         t_fps = min(PLAYERS_TARGET_FPS, PLAYERS_MAX_FRAMES / max(1.0, dur))
@@ -1144,22 +1155,66 @@ async def player_breakdown(request: PlayerBreakdownRequest):
 
         return {
             "success": True,
+            "status": "done",
             "framesScanned": scanned,
             "detections": len(samples),
-            "players": merge_player_cards(slots, gplayers, request.playerNames),
+            "players": merge_player_cards(slots, gplayers, player_names),
             "detector": "coco+gemini",
         }
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"[PLAYER-BREAKDOWN] FATAL: {type(e).__name__}: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Player breakdown failed: {e}")
     finally:
         if video_path:
             try:
                 os.remove(video_path)
             except OSError:
                 pass
+
+
+@app.post("/player-breakdown")
+def player_breakdown(request: PlayerBreakdownRequest):
+    """Start a per-player breakdown job and return its id immediately. The client
+    polls /player-breakdown-status for the result (see the job model above)."""
+    if not request.videoUrl:
+        raise HTTPException(status_code=400, detail="videoUrl required")
+    if not request.corners or len(request.corners) != 4:
+        raise HTTPException(status_code=400, detail="Court calibration (4 corners) is required.")
+    if not ROBOFLOW_API_KEY:
+        raise HTTPException(status_code=503, detail="Roboflow is not configured.")
+    if not GEMINI_API_KEY:
+        raise HTTPException(status_code=503, detail="GEMINI_API_KEY is not configured.")
+
+    _pb_prune()
+    job_id = uuid.uuid4().hex
+    video_url, corners, names = request.videoUrl, request.corners, request.playerNames
+    with _PB_JOBS_LOCK:
+        _PB_JOBS[job_id] = {"status": "running", "ts": time.time()}
+
+    def worker():
+        try:
+            result = _run_player_breakdown(video_url, corners, names)
+            with _PB_JOBS_LOCK:
+                _PB_JOBS[job_id] = {"status": "done", "result": result, "ts": time.time()}
+        except Exception as e:
+            logger.error(f"[PLAYER-BREAKDOWN] FATAL: {type(e).__name__}: {e}", exc_info=True)
+            with _PB_JOBS_LOCK:
+                _PB_JOBS[job_id] = {"status": "error", "error": str(e), "ts": time.time()}
+
+    threading.Thread(target=worker, name=f"pb-{job_id[:8]}", daemon=True).start()
+    return {"jobId": job_id, "status": "running"}
+
+
+@app.get("/player-breakdown-status")
+def player_breakdown_status(jobId: str):
+    """Poll a per-player breakdown job: {status:'running'} while it works, the full
+    result dict (status:'done') when finished, or {status:'error', error}."""
+    with _PB_JOBS_LOCK:
+        job = _PB_JOBS.get(jobId)
+    if not job:
+        raise HTTPException(status_code=404, detail="Unknown or expired job — please run it again.")
+    if job["status"] == "done":
+        return job["result"]
+    if job["status"] == "error":
+        return {"status": "error", "error": job.get("error") or "Player analysis failed."}
+    return {"status": "running"}
 
 
 @app.post("/analyze-shots")
