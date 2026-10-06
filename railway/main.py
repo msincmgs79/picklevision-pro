@@ -11,6 +11,7 @@ import logging
 import tempfile
 import subprocess
 import shutil
+import threading
 from typing import List, Tuple
 from concurrent.futures import ThreadPoolExecutor
 
@@ -372,9 +373,13 @@ def roboflow_infer_safe(frame):
 
 
 def person_infer(frame):
-    """Detect every PERSON in the frame with a COCO model. Returns each player's
-    foot point (bottom-centre of the box, which sits on the court) + box height
-    (used later to tell the near side from the far side)."""
+    """Detect every PERSON in the frame. Uses the self-hosted COCO model (no
+    Roboflow, no credits) when USE_LOCAL_PERSON=1; otherwise the Roboflow hosted
+    model. Returns each player's foot point (bottom-centre of the box, which sits
+    on the court) + box height (used to tell the near side from the far side)."""
+    if USE_LOCAL_PERSON:
+        return yolo_person_infer(frame)
+    # --- Roboflow hosted fallback (credit-gated) ---
     ok, buf = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), 70])
     b64 = base64.b64encode(buf.tobytes()).decode("ascii")
     url = f"https://detect.roboflow.com/{ROBOFLOW_PERSON_MODEL}?api_key={ROBOFLOW_API_KEY}"
@@ -525,6 +530,42 @@ def yolo_infer(frame):
         if best is None or c > best[2]:
             best = ((x1 + x2) / 2.0, (y1 + y2) / 2.0, c)
     return None if best is None else {"x": best[0], "y": best[1], "conf": best[2]}
+
+
+# --- Self-hosted person detection (replaces Roboflow for players + coverage).
+# A stock COCO person model (yolo11n by default) run IN-PROCESS on Railway's CPU
+# — no Roboflow calls, no credits, no ~40 per-frame HTTP round-trips (which caused
+# the credit_cap_exceeded 402s and large-video "failed to fetch" timeouts). Lazy-
+# loaded; a lock serialises predict() because track_players shares one model
+# across a thread pool. Env-gated: USE_LOCAL_PERSON=0 falls back to Roboflow. ---
+USE_LOCAL_PERSON = os.getenv("USE_LOCAL_PERSON", "1") == "1"
+PERSON_MODEL_PATH = os.getenv("PERSON_MODEL_PATH", "yolo11n.pt")  # stock COCO; ultralytics auto-downloads
+PERSON_IMGSZ = int(os.getenv("PERSON_IMGSZ", "640"))
+_PERSON_YOLO = None
+_PERSON_LOCK = threading.Lock()
+
+
+def _get_person_model():
+    global _PERSON_YOLO
+    if _PERSON_YOLO is None:
+        from ultralytics import YOLO  # lazy import (torch is already loaded for the ball model)
+        _PERSON_YOLO = YOLO(PERSON_MODEL_PATH)
+        logger.info(f"[PLAYERS] local person model loaded: {PERSON_MODEL_PATH} imgsz={PERSON_IMGSZ}")
+    return _PERSON_YOLO
+
+
+def yolo_person_infer(frame):
+    """Local COCO person detection — same return shape as the Roboflow person_infer:
+    [{fx, fy, boxh, conf}], foot = bottom-centre of each person box."""
+    model = _get_person_model()
+    with _PERSON_LOCK:  # one shared model instance; ultralytics predict() isn't thread-safe
+        res = model.predict(frame, imgsz=PERSON_IMGSZ, conf=PLAYERS_CONF_MIN,
+                            classes=[0], device="cpu", verbose=False)[0]
+    out = []
+    for b in res.boxes:
+        x1, y1, x2, y2 = (float(v) for v in b.xyxy[0])
+        out.append({"fx": (x1 + x2) / 2.0, "fy": y2, "boxh": y2 - y1, "conf": float(b.conf[0])})
+    return out
 
 
 def yolo_infer_safe(frame):
